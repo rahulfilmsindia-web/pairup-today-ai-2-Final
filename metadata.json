@@ -1,0 +1,6 @@
+{
+  "name": "PairUpToday",
+  "description": "Production-grade companionship and social pairing platform with client bookings, companion hosting, KYC verification, meeting OTPs, and unified cross-platform responsive experience.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

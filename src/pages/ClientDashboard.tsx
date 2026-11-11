@@ -1,0 +1,1610 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { PAIRUP_SERVICES, ServiceItem } from '../constants/services';
+import { 
+  Search, MapPin, Filter, Star, Clock, Calendar, ShieldCheck, 
+  AlertCircle, MessageSquare, PhoneCall, CheckCircle, Navigation, 
+  CreditCard, KeyRound, AlertTriangle, ChevronRight, UserCheck, X,
+  Bell, Settings, LifeBuoy, LogOut, Heart, Sparkles, User, FileText,
+  DollarSign, Compass, CheckCircle2, Sliders, Shield, Eye, ChevronLeft,
+  CalendarCheck
+} from 'lucide-react';
+
+export const ClientDashboard: React.FC = () => {
+  const { user, token, logout, bookingContext, setBookingContext } = useAuth();
+  const { t } = useLanguage();
+
+  // 16 Complete Visible Navigation Tabs per Section 7
+  type ClientTab = 
+    | 'overview' 
+    | 'profile' 
+    | 'kyc-status' 
+    | 'discover' 
+    | 'services' 
+    | 'nearby' 
+    | 'suggested' 
+    | 'search-filters' 
+    | 'upcoming' 
+    | 'history' 
+    | 'chat' 
+    | 'notifications' 
+    | 'payments' 
+    | 'help-safety' 
+    | 'settings';
+
+  const [activeTab, setActiveTab] = useState<ClientTab>('overview');
+
+  // Companions and filter state
+  const [companions, setCompanions] = useState<any[]>([]);
+  const [loadingCompanions, setLoadingCompanions] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string>('all');
+  const [maxBudgetHourly, setMaxBudgetHourly] = useState<number>(3000);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  // Booking modal state
+  const [selectedCompanion, setSelectedCompanion] = useState<any | null>(null);
+  const [bookingDate, setBookingDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  });
+  const [bookingTime, setBookingTime] = useState('14:00');
+  const [bookingDurationHours, setBookingDurationHours] = useState(2);
+  const [meetingLocation, setMeetingLocation] = useState('Central Public Cafe, MG Road');
+  const [bookingNotes, setBookingNotes] = useState('');
+  const [bookingInProgress, setBookingInProgress] = useState(false);
+  const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
+
+  // Quick View modal state
+  const [quickViewCompanion, setQuickViewCompanion] = useState<any | null>(null);
+  const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
+
+  const openQuickView = (companion: any) => {
+    setQuickViewCompanion(companion);
+    setActivePhotoIdx(0);
+  };
+
+  const closeQuickView = () => {
+    setQuickViewCompanion(null);
+    setActivePhotoIdx(0);
+  };
+
+  const allQuickViewPhotos = quickViewCompanion
+    ? [
+        quickViewCompanion.profilePhoto,
+        ...(quickViewCompanion.photos || []).filter((p: string) => p && p !== quickViewCompanion.profilePhoto)
+      ]
+    : [];
+
+  // Bookings list & chat
+  const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [activeChatBooking, setActiveChatBooking] = useState<any | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [newChatText, setNewChatText] = useState('');
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Settings state
+  const [notifSound, setNotifSound] = useState(true);
+  const [emailAlerts, setEmailAlerts] = useState(true);
+  const [emergencyPhone, setEmergencyPhone] = useState('+919876543210');
+
+  // Fetch verified LIVE companions
+  const fetchCompanions = async () => {
+    setLoadingCompanions(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('query', searchQuery);
+      if (selectedServiceId) params.append('serviceId', selectedServiceId.toString());
+      if (selectedCity && selectedCity !== 'all') params.append('city', selectedCity);
+
+      const res = await fetch(`/api/companions/search?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCompanions(data.companions || []);
+      }
+    } catch (err) {
+      console.error('Failed to load companions', err);
+    } finally {
+      setLoadingCompanions(false);
+    }
+  };
+
+  // Fetch client bookings
+  const fetchMyBookings = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`/api/bookings/my/${user.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMyBookings(data.bookings || []);
+      }
+    } catch (err) {
+      console.error('Failed to load bookings', err);
+    }
+  };
+
+  // Fetch notifications
+  const fetchNotifications = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`/api/notifications/${user.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (err) {
+      console.error('Failed to load notifications', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCompanions();
+    fetchMyBookings();
+    fetchNotifications();
+    const interval = setInterval(() => {
+      fetchMyBookings();
+      fetchNotifications();
+    }, 7000);
+    return () => clearInterval(interval);
+  }, [user, selectedServiceId, selectedCity]);
+
+  // Handle restored booking context from AuthContext
+  useEffect(() => {
+    if (bookingContext && companions.length > 0) {
+      const matchComp = companions.find(c => c.id === bookingContext.companionId);
+      if (matchComp) {
+        setSelectedCompanion(matchComp);
+        if (bookingContext.serviceId) {
+          setSelectedServiceId(bookingContext.serviceId);
+        }
+        setBookingContext(null); // Consumed
+      }
+    }
+  }, [bookingContext, companions]);
+
+  // Load chat for active chat booking
+  useEffect(() => {
+    if (!activeChatBooking) return;
+    const fetchChat = async () => {
+      try {
+        const res = await fetch(`/api/chat/${activeChatBooking.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setChatMessages(data.messages || []);
+        }
+      } catch (err) {
+        console.error('Failed to load chat', err);
+      }
+    };
+    fetchChat();
+    const chatInterval = setInterval(fetchChat, 4000);
+    return () => clearInterval(chatInterval);
+  }, [activeChatBooking]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeChatBooking || !newChatText.trim() || !user) return;
+
+    try {
+      const res = await fetch(`/api/chat/${activeChatBooking.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderId: user.id,
+          message: newChatText.trim()
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(prev => [...prev, data.message]);
+        setNewChatText('');
+      }
+    } catch (err) {
+      console.error('Failed to post message', err);
+    }
+  };
+
+  const handleCreateBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCompanion || !user) return;
+
+    // Strict Initial Listing Non-Bookable Guard
+    if (selectedCompanion.isInitialListing) {
+      setBookingError(t.profileUnavailableForBooking || 'This profile is currently unavailable for booking.');
+      return;
+    }
+
+    if (user.kycStatus !== 'APPROVED') {
+      setBookingError('Identity Verification Required: Please wait for admin KYC approval before booking.');
+      return;
+    }
+
+    setBookingError(null);
+    setBookingInProgress(true);
+
+    const endH = parseInt(bookingTime.split(':')[0], 10) + bookingDurationHours;
+    const formattedEndTime = `${String(endH % 24).padStart(2, '0')}:${bookingTime.split(':')[1]}`;
+
+    try {
+      const res = await fetch('/api/bookings/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: user.id,
+          companionId: selectedCompanion.id,
+          serviceId: selectedServiceId || selectedCompanion.services[0] || 1,
+          serviceName: PAIRUP_SERVICES.find(s => s.id === (selectedServiceId || selectedCompanion.services[0]))?.name || 'Social Companionship',
+          date: bookingDate,
+          startTime: bookingTime,
+          endTime: formattedEndTime,
+          durationHours: bookingDurationHours,
+          meetingLocation,
+          notes: bookingNotes
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setBookingError(data.error || 'Failed to confirm booking.');
+      } else {
+        setBookingSuccessMsg(`Booking ${data.booking.bookingCode} confirmed! 100% payment processed via PairUp Secure Vault.`);
+        fetchMyBookings();
+        setTimeout(() => {
+          setSelectedCompanion(null);
+          setBookingSuccessMsg(null);
+          setActiveTab('upcoming');
+        }, 1800);
+      }
+    } catch (err: any) {
+      setBookingError(err.message || 'Network error during booking confirmation.');
+    } finally {
+      setBookingInProgress(false);
+    }
+  };
+
+  const isKycApproved = user?.kycStatus === 'APPROVED';
+
+  // Derived booking filters
+  const upcomingBookings = myBookings.filter(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS');
+  const pastBookings = myBookings.filter(b => b.status === 'COMPLETED' || b.status === 'CANCELLED');
+
+  // Budget and search filtered companions
+  const filteredCompanions = companions.filter(c => {
+    const hourly = (c.rates?.hourlyPaise || 49900) / 100;
+    if (hourly > maxBudgetHourly) return false;
+    if (selectedCategory !== 'all') {
+      const s = PAIRUP_SERVICES.filter(srv => c.services?.includes(srv.id));
+      if (!s.some(item => item.category === selectedCategory)) return false;
+    }
+    return true;
+  });
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Top Status & Role Verification Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <img
+                src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
+                alt={user?.legalName}
+                className="w-14 h-14 rounded-full object-cover ring-2 ring-amber-400"
+              />
+              <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full ring-2 ring-slate-900 ${isKycApproved ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-100">
+                  {user?.legalName || 'Client Member'}
+                </h1>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-300 font-semibold">
+                  Client Member
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                {user?.phone} · Region: {user?.city || 'India'}
+              </p>
+            </div>
+          </div>
+
+          {/* EXACT KYC STATUS REQUIREMENT (SECTION 7) */}
+          <div className="flex items-center gap-3">
+            {isKycApproved ? (
+              <div className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 shadow-inner">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Client Profile Active</span>
+              </div>
+            ) : (
+              <div className="px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold flex items-center gap-2 shadow-inner">
+                <AlertCircle className="w-4 h-4" />
+                <span>Client Inactive: Wait for KYC Approval</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 100% Free Client Membership Notice (SECTION 7) */}
+        <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-amber-500/10 border border-amber-400/20 text-xs text-amber-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <UserCheck className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>
+              <strong>Client Membership is 100% FREE:</strong> Never pay subscription fees to browse or book. You only pay the transparent fee for sessions you schedule.
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+            Free Active Access (₹0)
+          </span>
+        </div>
+
+        {/* 16 Visible Navigation Tabs Bar */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2 overflow-x-auto shadow-lg scrollbar-none">
+          <div className="flex items-center gap-1.5 min-w-max text-xs font-medium">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'overview' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>Overview</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'profile' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>My Profile</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('kyc-status')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'kyc-status' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>My KYC Status</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('discover')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'discover' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Discover Companions</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('services')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'services' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>24 Services</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('nearby')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'nearby' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Nearby Companions</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('suggested')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'suggested' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Star className="w-3.5 h-3.5" />
+              <span>Suggested</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('search-filters')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'search-filters' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Search & Filters</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('upcoming')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'upcoming' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Upcoming ({upcomingBookings.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'history' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Booking History ({pastBookings.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'chat' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Secure Chat</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'notifications' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>Notifications ({notifications.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'payments' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Payments</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('help-safety')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'help-safety' ? 'bg-rose-500 text-slate-950 font-bold shadow' : 'text-rose-300 hover:bg-rose-950/40'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Help & Safety</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'settings' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (window.confirm('Log out of PairUpToday Client portal?')) {
+                  logout();
+                }
+              }}
+              className="px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-400 text-xs">Total Bookings</span>
+                <div className="text-2xl font-bold text-slate-100 mt-1">{myBookings.length}</div>
+                <span className="text-[11px] text-emerald-400 mt-1 block">Active Sessions: {upcomingBookings.length}</span>
+              </div>
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-400 text-xs">Verification Status</span>
+                <div className="text-base font-bold text-amber-400 mt-1">
+                  {isKycApproved ? 'Client Profile Active' : 'Pending Verification'}
+                </div>
+                <span className="text-[11px] text-slate-400 mt-1 block">Govt ID & Selfie</span>
+              </div>
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-400 text-xs">Client Membership</span>
+                <div className="text-2xl font-bold text-emerald-400 mt-1">100% FREE</div>
+                <span className="text-[11px] text-slate-400 mt-1 block">Zero subscription fees</span>
+              </div>
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-400 text-xs">Emergency SOS</span>
+                <div className="text-lg font-bold text-rose-400 mt-1">Police 100 / SOS 112</div>
+                <span className="text-[11px] text-slate-400 mt-1 block">Instant speed dial active</span>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-100">Ready to Discover Companions?</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Explore companions across social, travel, dining, shopping and events in your city.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setActiveTab('discover')}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 text-slate-950 font-bold text-xs shadow-md shadow-pink-500/20"
+                >
+                  Browse Companions
+                </button>
+                <button
+                  onClick={() => setActiveTab('upcoming')}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700"
+                >
+                  View Bookings
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: MY PROFILE */}
+        {activeTab === 'profile' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
+            <h3 className="text-lg font-bold text-slate-100">Client Profile Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 block mb-1">Legal Full Name</span>
+                <span className="text-sm font-bold text-slate-200">{user?.legalName}</span>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 block mb-1">Registered Phone</span>
+                <span className="text-sm font-bold text-slate-200">{user?.phone}</span>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 block mb-1">Date of Birth (Locked)</span>
+                <span className="text-sm font-bold text-slate-200">{user?.dob || 'Verified at KYC'} ({user?.age || 25} yrs)</span>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 block mb-1">Operating City</span>
+                <span className="text-sm font-bold text-slate-200">{user?.city || 'Delhi NCR, India'}</span>
+              </div>
+              <div className="md:col-span-2 p-4 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="text-slate-500 block mb-1">Introduction & Bio</span>
+                <p className="text-slate-300 leading-relaxed">{user?.bio || 'Verified PairUpToday client member exploring companionship for leisure, walking, and city experiences.'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: MY KYC STATUS */}
+        {activeTab === 'kyc-status' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
+            <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-amber-400" />
+              Identity Verification Status
+            </h3>
+
+            <div className={`p-6 rounded-2xl border ${
+              isKycApproved 
+                ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300' 
+                : 'bg-amber-950/20 border-amber-500/30 text-amber-300'
+            }`}>
+              <div className="flex items-center gap-3 mb-2">
+                {isKycApproved ? <CheckCircle2 className="w-6 h-6 text-emerald-400" /> : <AlertCircle className="w-6 h-6 text-amber-400" />}
+                <span className="text-base font-bold">
+                  {isKycApproved ? 'Client Profile Active' : 'Client Inactive: Wait for KYC Approval'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {isKycApproved 
+                  ? 'Your identity documents and live selfie have been independently verified by the PairUp Security Network administration. You can book any verified companion.' 
+                  : 'Your government ID documents are currently in review. As per security rules, companion booking features unlock immediately once our audit team approves your submission.'}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Submitted Document Checklist</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  <span>Government ID Upload</span>
+                  <span className="text-emerald-400 font-bold">✓ Submitted</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  <span>Live Facial Selfie</span>
+                  <span className="text-emerald-400 font-bold">✓ Submitted</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  <span>Legal Name & DOB Gate</span>
+                  <span className="text-emerald-400 font-bold">✓ Age 18+ Locked</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: DISCOVER COMPANIONS */}
+        {activeTab === 'discover' && (
+          <div className="space-y-6">
+            {/* Quick City & Search bar */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-900 border border-slate-800">
+              <div className="md:col-span-2 relative">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search by companion name, interest, or language..."
+                  className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <select
+                  value={selectedCity}
+                  onChange={e => setSelectedCity(e.target.value)}
+                  className="w-full py-2 px-3 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                >
+                  <option value="all">All Indian Cities</option>
+                  <option value="Delhi NCR">Delhi NCR</option>
+                  <option value="Mumbai">Mumbai</option>
+                  <option value="Bengaluru">Bengaluru</option>
+                  <option value="Kolkata">Kolkata</option>
+                  <option value="Hyderabad">Hyderabad</option>
+                  <option value="Pune">Pune</option>
+                </select>
+              </div>
+
+              <button
+                onClick={fetchCompanions}
+                className="py-2 px-4 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold hover:bg-amber-500 transition-colors"
+              >
+                Apply Search
+              </button>
+            </div>
+
+            {/* Companions Results Grid */}
+            {loadingCompanions ? (
+              <div className="py-20 text-center text-slate-500 text-xs">
+                Scanning verified companions in PairUp Verified Network...
+              </div>
+            ) : filteredCompanions.length === 0 ? (
+              <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800">
+                <p className="text-xs text-slate-400">No verified companions found matching current filters.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredCompanions.map(comp => (
+                  <div
+                    key={comp.id}
+                    className="rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-400/40 overflow-hidden shadow-xl transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="relative h-48 w-full overflow-hidden bg-slate-800">
+                        <img
+                          src={comp.profilePhoto}
+                          alt={comp.name}
+                          referrerPolicy="no-referrer"
+                          onError={(e: any) => {
+                            e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="%231e293b"/><circle cx="150" cy="80" r="40" fill="%23475569"/><circle cx="150" cy="180" r="70" fill="%23475569"/></svg>';
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+                        <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-500/90 text-slate-950 text-[10px] font-bold flex items-center gap-1 shadow">
+                          <ShieldCheck className="w-3 h-3" />
+                          <span>KYC VERIFIED</span>
+                        </div>
+                        <div className="absolute bottom-3 left-3 text-white">
+                          <div className="text-sm font-bold flex items-center gap-1.5">
+                            <span>{comp.name}</span>
+                            <span className="text-xs text-slate-300 font-normal">({comp.age} yrs)</span>
+                          </div>
+                          <div className="text-[11px] text-slate-300 flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-pink-400" />
+                            <span>{comp.address || comp.locationFormatted || comp.city}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 space-y-3">
+                        <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                          {comp.bio}
+                        </p>
+
+                        <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="text-[10px] text-slate-500 block">Hourly Rate</span>
+                            <span className="font-bold text-amber-400">
+                              ₹{(((comp.rates?.hourlyPaise ?? 49900)) / 100).toFixed(0)}/hr
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-500 block">Rating</span>
+                            <div className="flex items-center gap-1 font-bold text-slate-200">
+                              <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                              <span>{comp.rating}</span>
+                              <span className="text-slate-500">({comp.totalBookings || 0})</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 pt-0 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => openQuickView(comp)}
+                        className="w-full py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-750 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-pink-400" />
+                        <span>Quick View</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedCompanion(comp)}
+                        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 text-xs font-bold shadow-md shadow-pink-500/20 flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <span>Book</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: 24 SERVICES CATALOGUE */}
+        {activeTab === 'services' && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold text-slate-100">All 24 Authoritative Companionship Services</h3>
+            <p className="text-xs text-slate-400">Click any service to view verified companions providing that category.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {PAIRUP_SERVICES.map(s => (
+                <div
+                  key={s.id}
+                  onClick={() => {
+                    setSelectedServiceId(s.id);
+                    setActiveTab('discover');
+                  }}
+                  className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-400/40 cursor-pointer transition-all hover:bg-slate-850 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="text-xs font-bold text-amber-300 mb-1">
+                      {s.id}. {s.name}
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      {s.description}
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-500">
+                    <span className="uppercase tracking-wider">{s.category}</span>
+                    <span className="text-amber-400 font-semibold flex items-center gap-1">
+                      Find Companion <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: NEARBY COMPANIONS */}
+        {activeTab === 'nearby' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Navigation className="w-4 h-4 text-emerald-400 animate-pulse" />
+                Nearby Companions (GPS Proximity)
+              </h3>
+              <span className="text-xs text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                GPS Active · Accurate to 500m
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Listing verified companions located nearest to your registered city venue.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {companions.slice(0, 3).map(comp => (
+                <div key={comp.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img src={comp.profilePhoto} alt={comp.name} className="w-10 h-10 rounded-full object-cover" />
+                    <div>
+                      <span className="text-xs font-bold text-slate-100 block">{comp.name}</span>
+                      <span className="text-[10px] text-slate-400">{comp.address || comp.locationFormatted || comp.city} · 2.4 km away</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedCompanion(comp)}
+                    className="px-3 py-1.5 rounded-lg bg-amber-400 text-slate-950 text-xs font-bold"
+                  >
+                    Book
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 7: SUGGESTED COMPANIONS */}
+        {activeTab === 'suggested' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+              Suggested Companions (Highest Rated & Fast Response)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {companions.slice(0, 4).map(comp => (
+                <div key={comp.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img src={comp.profilePhoto} alt={comp.name} className="w-10 h-10 rounded-full object-cover" />
+                    <div>
+                      <span className="text-xs font-bold text-slate-100 block">{comp.name}</span>
+                      <span className="text-[10px] text-amber-400 flex items-center gap-1">
+                        ★ {comp.rating} (Superhost)
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedCompanion(comp)}
+                    className="px-3 py-1.5 rounded-lg bg-amber-400 text-slate-950 text-xs font-bold"
+                  >
+                    View
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 8: SEARCH & FILTERS */}
+        {activeTab === 'search-filters' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-sky-400" />
+              Advanced Filters
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Max Hourly Budget: ₹{maxBudgetHourly}</label>
+                <input
+                  type="range"
+                  min={300}
+                  max={5000}
+                  step={100}
+                  value={maxBudgetHourly}
+                  onChange={e => setMaxBudgetHourly(parseInt(e.target.value, 10))}
+                  className="w-full accent-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Category Filter</label>
+                <select
+                  value={selectedCategory}
+                  onChange={e => setSelectedCategory(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-200"
+                >
+                  <option value="all">All Categories</option>
+                  <option value="social">Social & Leisure</option>
+                  <option value="lifestyle">Lifestyle & Dining</option>
+                  <option value="travel">Travel & Sightseeing</option>
+                  <option value="wellness">Fitness & Sports</option>
+                  <option value="care">Assistance & Errands</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">City Region</label>
+                <select
+                  value={selectedCity}
+                  onChange={e => setSelectedCity(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-200"
+                >
+                  <option value="all">All Regions</option>
+                  <option value="Delhi NCR">Delhi NCR</option>
+                  <option value="Mumbai">Mumbai</option>
+                  <option value="Bengaluru">Bengaluru</option>
+                  <option value="Kolkata">Kolkata</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setActiveTab('discover')}
+              className="px-5 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs"
+            >
+              Show Filtered Companions ({filteredCompanions.length})
+            </button>
+          </div>
+        )}
+
+        {/* TAB 9: UPCOMING BOOKINGS */}
+        {activeTab === 'upcoming' && (
+          <div className="space-y-4">
+            <h3 className="text-base font-bold text-slate-100">Upcoming & Active Sessions</h3>
+            {upcomingBookings.length === 0 ? (
+              <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-400">
+                No active or upcoming bookings right now.
+              </div>
+            ) : (
+              upcomingBookings.map(b => (
+                <div key={b.id} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                    <div>
+                      <span className="font-bold text-slate-100 text-sm block">{b.serviceName} ({b.bookingCode})</span>
+                      <span className="text-slate-400">Host: {b.companionName} · {b.date} ({b.startTime} - {b.endTime})</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-bold">{b.status}</span>
+                      <button
+                        onClick={() => setActiveChatBooking(b)}
+                        className="px-3 py-1 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700"
+                      >
+                        Chat
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-500 block mb-1">Meeting Venue</span>
+                      <span className="font-medium text-slate-200">{b.meetingLocation}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/30">
+                      <span className="text-amber-400 block mb-1">1. Start OTP (Give verbally on arrival)</span>
+                      <span className="font-mono text-base font-bold text-amber-300">
+                        {b.startOtpVerified ? 'Verified ✓' : (b.startOtp || 'Available on arrival')}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/30">
+                      <span className="text-emerald-400 block mb-1">2. Completion OTP (Give at session end)</span>
+                      <span className="font-mono text-base font-bold text-emerald-300">
+                        {b.endOtpVerified ? 'Verified ✓' : (b.startOtpVerified ? (b.endOtp || 'Available in progress') : (b.endOtp || 'Unlocks after Start'))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB 10: BOOKING HISTORY */}
+        {activeTab === 'history' && (
+          <div className="space-y-4">
+            <h3 className="text-base font-bold text-slate-100">Completed & Past Sessions</h3>
+            {pastBookings.length === 0 ? (
+              <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-400">
+                No completed bookings recorded yet.
+              </div>
+            ) : (
+              pastBookings.map(b => (
+                <div key={b.id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-slate-100 block">{b.serviceName} · {b.bookingCode}</span>
+                    <span className="text-slate-400">Completed on {b.date} with {b.companionName}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-emerald-400 font-bold block">₹{(b.bookingAmountPaise / 100).toFixed(2)}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Status: {b.status}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB 11: SECURE CHAT */}
+        {activeTab === 'chat' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-pink-400" />
+              In-App Secure Chat Sessions
+            </h3>
+            <p className="text-xs text-slate-400">
+              Private chat channels are generated for confirmed bookings. Phone numbers and personal social handles are never revealed.
+            </p>
+            {myBookings.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500">No active bookings with open chat.</div>
+            ) : (
+              <div className="space-y-2">
+                {myBookings.map(b => (
+                  <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-slate-200 block">{b.companionName}</span>
+                      <span className="text-slate-500">Booking {b.bookingCode} · {b.serviceName}</span>
+                    </div>
+                    <button
+                      onClick={() => setActiveChatBooking(b)}
+                      className="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-bold"
+                    >
+                      Open Chat
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 12: NOTIFICATIONS */}
+        {activeTab === 'notifications' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Bell className="w-4 h-4 text-amber-400" />
+              In-App Notifications
+            </h3>
+            {notifications.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500">No new notifications.</div>
+            ) : (
+              <div className="space-y-2">
+                {notifications.map(n => (
+                  <div key={n.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                    <span className="font-bold text-slate-200 block mb-0.5">{n.title}</span>
+                    <p className="text-slate-400">{n.message}</p>
+                    <span className="text-[10px] text-slate-600 mt-1 block font-mono">
+                      {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 13: PAYMENTS */}
+        {activeTab === 'payments' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-emerald-400" />
+              Payments & Digital Receipts
+            </h3>
+            <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300">
+              <strong>Free Client Access Guarantee:</strong> Client registration, companion discovery, and membership are 100% free of charge. You only authorize payments for sessions you book.
+            </div>
+            <div className="space-y-2 text-xs">
+              {myBookings.map(b => (
+                <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-200 block">Session Payment: {b.bookingCode}</span>
+                    <span className="text-slate-500">Transaction ID: {b.paymentId}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-bold text-emerald-400">₹{(b.bookingAmountPaise / 100).toFixed(2)}</span>
+                    <span className="text-[10px] text-slate-500 block">100% Verified Escrow</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 14: HELP & SAFETY */}
+        {activeTab === 'help-safety' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-rose-400" />
+              Safety Protocols & Immediate Assistance
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <a href="tel:100" className="p-4 rounded-xl bg-rose-950/40 border border-rose-500/30 text-center hover:bg-rose-950/60 transition-colors">
+                <span className="text-lg font-bold text-rose-400 block mb-1">Police: 100</span>
+                <span className="text-slate-300">National Emergency Police Helpline</span>
+              </a>
+              <a href="tel:112" className="p-4 rounded-xl bg-amber-950/40 border border-amber-500/30 text-center hover:bg-amber-950/60 transition-colors">
+                <span className="text-lg font-bold text-amber-400 block mb-1">SOS: 112</span>
+                <span className="text-slate-300">All-in-One Emergency Response</span>
+              </a>
+              <a href="tel:1091" className="p-4 rounded-xl bg-sky-950/40 border border-sky-500/30 text-center hover:bg-sky-950/60 transition-colors">
+                <span className="text-lg font-bold text-sky-400 block mb-1">Helpline: 1091</span>
+                <span className="text-slate-300">Women Safety & Support Helpline</span>
+              </a>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-2">
+              <h4 className="font-bold text-slate-100">Meeting Safety Checklist:</h4>
+              <p>• Always meet in public places (cafes, malls, public avenues).</p>
+              <p>• Never share financial card PINs or cash offline.</p>
+              <p>• Confirm your session verbally with the 6-digit Start OTP only upon arrival.</p>
+              <p>• Keep in-app GPS tracking active during the full duration of your session.</p>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 15: SETTINGS */}
+        {activeTab === 'settings' && (
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6 text-xs">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Settings className="w-4 h-4 text-slate-400" />
+              Account Settings & Preferences
+            </h3>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <div>
+                  <span className="font-bold text-slate-200 block">Sound & Vibration Alerts</span>
+                  <span className="text-slate-500 text-[11px]">Audio chime when companion arrives or sends message</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifSound}
+                  onChange={e => setNotifSound(e.target.checked)}
+                  className="w-4 h-4 accent-amber-400"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <div>
+                  <span className="font-bold text-slate-200 block">Emergency SMS Contact</span>
+                  <span className="text-slate-500 text-[11px]">Auto-notify trusted contact on SOS trigger</span>
+                </div>
+                <input
+                  type="text"
+                  value={emergencyPhone}
+                  onChange={e => setEmergencyPhone(e.target.value)}
+                  className="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* QUICK VIEW PROFILE MODAL */}
+      {quickViewCompanion && (
+        <div 
+          role="dialog"
+          aria-modal="true"
+          aria-label="Quick View Profile"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeQuickView();
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-2xl my-auto bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl text-slate-100 overflow-hidden flex flex-col max-h-[92vh]"
+          >
+            {/* Modal Header */}
+            <div className="p-3.5 sm:p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between sticky top-0 z-20">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <h3 className="text-sm sm:text-base font-bold text-white truncate">
+                  {quickViewCompanion.name} ({quickViewCompanion.age} yrs)
+                </h3>
+                <span className="hidden sm:inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800 shrink-0">
+                  <MapPin className="w-3 h-3 text-pink-400" />
+                  {quickViewCompanion.locationFormatted || quickViewCompanion.address || quickViewCompanion.city}
+                </span>
+              </div>
+              <button
+                onClick={closeQuickView}
+                aria-label="Close Quick View"
+                className="p-1.5 rounded-full bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Modal Content */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+              {/* Main Photo Viewer - Complete Uncropped Display */}
+              <div className="space-y-3">
+                <div className="relative w-full flex items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden p-2 sm:p-4 min-h-[280px] sm:min-h-[380px] max-h-[58vh]">
+                  <img
+                    src={allQuickViewPhotos[activePhotoIdx] || quickViewCompanion.profilePhoto}
+                    alt={`${quickViewCompanion.name} - Photo ${activePhotoIdx + 1}`}
+                    className="max-h-[54vh] max-w-full w-auto h-auto object-contain select-none mx-auto rounded-lg shadow-2xl transition-all duration-200"
+                  />
+
+                  {/* Previous Photo Button */}
+                  {allQuickViewPhotos.length > 1 && (
+                    <button
+                      onClick={() => setActivePhotoIdx(prev => (prev > 0 ? prev - 1 : allQuickViewPhotos.length - 1))}
+                      aria-label="Previous photo"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-950/80 hover:bg-slate-900 text-white border border-slate-700/80 shadow-xl transition-all hover:scale-105 cursor-pointer z-10"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                  )}
+
+                  {/* Next Photo Button */}
+                  {allQuickViewPhotos.length > 1 && (
+                    <button
+                      onClick={() => setActivePhotoIdx(prev => (prev < allQuickViewPhotos.length - 1 ? prev + 1 : 0))}
+                      aria-label="Next photo"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-950/80 hover:bg-slate-900 text-white border border-slate-700/80 shadow-xl transition-all hover:scale-105 cursor-pointer z-10"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  )}
+
+                  {/* Floating Rate Tag */}
+                  <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-lg">
+                    <span className="text-xs sm:text-sm font-extrabold text-amber-400">
+                      ₹{Math.round(((quickViewCompanion.rates?.hourlyPaise ?? 49900)) / 100)}/hr
+                    </span>
+                  </div>
+
+                  {/* Image Counter Badge */}
+                  {allQuickViewPhotos.length > 1 && (
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-950/85 backdrop-blur-md px-3 py-1 rounded-full border border-slate-700/80 text-[11px] font-semibold text-slate-200 shadow-lg">
+                      {activePhotoIdx + 1} / {allQuickViewPhotos.length}
+                    </div>
+                  )}
+                </div>
+
+                {/* Thumbnails Strip */}
+                {allQuickViewPhotos.length > 1 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-slate-400 block">
+                      Gallery ({allQuickViewPhotos.length} photos)
+                    </span>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-800">
+                      {allQuickViewPhotos.map((photoUrl: string, idx: number) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActivePhotoIdx(idx)}
+                          aria-label={`View photo ${idx + 1}`}
+                          className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
+                            activePhotoIdx === idx
+                              ? 'border-pink-500 ring-2 ring-pink-500/30 scale-105 shadow-md shadow-pink-500/20'
+                              : 'border-slate-800 hover:border-slate-700 opacity-60 hover:opacity-100'
+                          }`}
+                        >
+                          <img
+                            src={photoUrl}
+                            alt={`${quickViewCompanion.name} thumbnail ${idx + 1}`}
+                            className="w-full h-full object-cover object-top"
+                          />
+                          {idx === 0 && (
+                            <span className="absolute bottom-0 inset-x-0 bg-pink-600/90 text-white text-[8px] font-bold py-0.5 text-center leading-tight">
+                              Profile
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Profile Details & Rates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+                <div>
+                  <span className="text-[11px] text-slate-400 block">Location</span>
+                  <div className="flex items-center gap-1.5 mt-0.5 text-xs font-semibold text-slate-200">
+                    <MapPin className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                    <span>{quickViewCompanion.locationFormatted || quickViewCompanion.address || quickViewCompanion.city}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[11px] text-slate-400 block">Verified Rating</span>
+                  <div className="flex items-center gap-1.5 mt-0.5 text-xs font-semibold text-amber-400">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>{(quickViewCompanion.rating || 4.9).toFixed(2)}</span>
+                    <span className="text-slate-400 text-[11px] font-normal">
+                      ({quickViewCompanion.totalBookings || 0} bookings)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bio */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  About Companion
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/40 p-3.5 rounded-xl border border-slate-800">
+                  {quickViewCompanion.bio}
+                </p>
+              </div>
+
+              {/* Services List */}
+              {quickViewCompanion.services && quickViewCompanion.services.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                    Available Services ({quickViewCompanion.services.length})
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {quickViewCompanion.services.map((sid: number) => {
+                      const srv = PAIRUP_SERVICES.find((s) => s.id === sid);
+                      if (!srv) return null;
+                      return (
+                        <div
+                          key={srv.id}
+                          className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-start gap-2"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-pink-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-bold text-slate-200 leading-snug">
+                              {srv.name}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="p-3.5 sm:p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3 sticky bottom-0 z-10">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400">Hourly Rate</span>
+                <span className="text-sm font-extrabold text-amber-400">
+                  ₹{Math.round(((quickViewCompanion.rates?.hourlyPaise ?? 49900)) / 100)}/hr
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={closeQuickView}
+                  className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+
+                <button
+                  onClick={() => {
+                    const comp = quickViewCompanion;
+                    closeQuickView();
+                    setSelectedCompanion(comp);
+                  }}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white text-xs font-bold shadow-md shadow-pink-500/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <CalendarCheck className="w-3.5 h-3.5" />
+                  <span>Book Now</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BOOKING MODAL */}
+      {selectedCompanion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-lg my-8 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 text-slate-100">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+              <div className="flex items-center gap-3">
+                <img
+                  src={selectedCompanion.profilePhoto}
+                  alt={selectedCompanion.name}
+                  className="w-10 h-10 rounded-full object-cover ring-1 ring-amber-400"
+                />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100">
+                    Book Companion: {selectedCompanion.name}
+                  </h3>
+                  <span className="text-xs text-amber-400">
+                    ₹{(selectedCompanion.rates?.hourlyPaise / 100).toFixed(0)}/hour
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCompanion(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {bookingError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{bookingError}</span>
+              </div>
+            )}
+
+            {bookingSuccessMsg && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{bookingSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Booking Date
+                </label>
+                <input
+                  type="date"
+                  value={bookingDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={e => setBookingDate(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={bookingTime}
+                    onChange={e => setBookingTime(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Duration (Hours)
+                  </label>
+                  <select
+                    value={bookingDurationHours}
+                    onChange={e => setBookingDurationHours(parseInt(e.target.value, 10))}
+                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                  >
+                    <option value={1}>1 Hour</option>
+                    <option value={2}>2 Hours</option>
+                    <option value={3}>3 Hours</option>
+                    <option value={4}>4 Hours (Half-Day)</option>
+                    <option value={8}>8 Hours (Full-Day)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Public Meeting Location
+                </label>
+                <input
+                  type="text"
+                  value={meetingLocation}
+                  onChange={e => setMeetingLocation(e.target.value)}
+                  placeholder="e.g. Starbucks Cafe, South City Mall"
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Experience Preferences / Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={bookingNotes}
+                  onChange={e => setBookingNotes(e.target.value)}
+                  placeholder="Any particular topics, places to visit, or walking routes..."
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              {/* Price Calculation Card */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                <div className="flex justify-between text-slate-400">
+                  <span>Companion Fee ({bookingDurationHours}h):</span>
+                  <span>₹{(((selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours) / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Admin Platform Fee (15% included):</span>
+                  <span>₹{(((selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours * 0.15) / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-slate-100 pt-1.5 border-t border-slate-800 text-sm">
+                  <span>Total Payable:</span>
+                  <span className="text-amber-400">
+                    ₹{(((selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours) / 100).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={bookingInProgress}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] disabled:opacity-50"
+              >
+                {bookingInProgress ? 'Processing Payment...' : 'Confirm & Pay via PairUp Secure Vault'}
+              </button>
+
+              <p className="text-[10px] text-center text-slate-500">
+                100% money back guarantee if cancelled before companion arrival. Meeting verified by Start & Finish OTP.
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SECURE CHAT DRAWER */}
+      {activeChatBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md h-full bg-slate-900 border-l border-slate-800 flex flex-col justify-between text-slate-100">
+            
+            {/* Header */}
+            <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-slate-100">
+                  Secure Chat · {activeChatBooking.companionName}
+                </h4>
+                <p className="text-[10px] text-emerald-400">
+                  Encrypted Session · Booking {activeChatBooking.bookingCode}
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveChatBooking(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Messages Body */}
+            <div className="p-4 flex-1 overflow-y-auto space-y-3">
+              {chatMessages.length === 0 ? (
+                <div className="text-center py-10 text-xs text-slate-500">
+                  No messages yet. Send a greeting to coordinate your meeting!
+                </div>
+              ) : (
+                chatMessages.map(m => (
+                  <div
+                    key={m.id}
+                    className={`flex flex-col ${m.senderId === user?.id ? 'items-end' : 'items-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] p-3 rounded-2xl text-xs ${
+                        m.senderId === user?.id
+                          ? 'bg-amber-400 text-slate-950 font-medium rounded-br-none'
+                          : 'bg-slate-800 text-slate-200 rounded-bl-none'
+                      }`}
+                    >
+                      <p>{m.message}</p>
+                    </div>
+                    <span className="text-[9px] text-slate-500 mt-1 px-1">
+                      {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Input Form */}
+            <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
+              <input
+                type="text"
+                value={newChatText}
+                onChange={e => setNewChatText(e.target.value)}
+                placeholder="Type secure message..."
+                className="flex-1 px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-slate-950 rounded-xl font-bold text-xs"
+              >
+                Send
+              </button>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};

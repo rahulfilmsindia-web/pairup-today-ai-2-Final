@@ -1,0 +1,297 @@
+import React, { useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { Language } from '../types';
+import { Globe, User, LogOut, ChevronDown, Menu, X } from 'lucide-react';
+
+interface HeaderProps {
+  currentPage: string;
+  setCurrentPage: (page: string) => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
+  const { language, setLanguage, t } = useLanguage();
+  const { isAuthenticated, activeRole, openAuthModal, logout } = useAuth();
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const languages: { code: Language; label: string }[] = [
+    { code: 'en', label: 'English (EN)' },
+    { code: 'bn', label: 'বাংলা (BN)' },
+    { code: 'hi', label: 'हिन्दी (HI)' }
+  ];
+
+  const handleNavClick = (page: string) => {
+    setCurrentPage(page);
+    setMobileMenuOpen(false);
+  };
+
+  return (
+    <header className="sticky top-0 z-50 w-full bg-slate-950/90 backdrop-blur-md border-b border-slate-800 text-slate-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        
+        {/* EXACT ORDER ITEMS 1 & 2: Logo and PairUpToday */}
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handleNavClick('home')}>
+          {/* 1. Exact uploaded PairUpToday Logo */}
+          <div className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-amber-400/60 shadow-lg shadow-pink-500/20 transition-transform group-hover:scale-105">
+            <img
+              src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
+              alt="PairUpToday Logo"
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          {/* 2. PairUpToday Brand Name */}
+          <div className="flex flex-col">
+            <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
+              {t.navPairUpToday}
+            </span>
+            <span className="text-[10px] text-slate-400 tracking-widest uppercase font-medium -mt-1 hidden sm:block">
+              Connect · Match · Belong
+            </span>
+          </div>
+        </div>
+
+        {/* Desktop Navigation Links (Items 3 to 8 in exact order) */}
+        <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
+          
+          {/* 3. About */}
+          <button
+            onClick={() => handleNavClick('about')}
+            className={`transition-colors hover:text-amber-400 ${
+              currentPage === 'about' ? 'text-amber-400 font-semibold' : 'text-slate-300'
+            }`}
+          >
+            {t.navAbout}
+          </button>
+
+          {/* 4. How It Works */}
+          <button
+            onClick={() => handleNavClick('how-it-works')}
+            className={`transition-colors hover:text-amber-400 ${
+              currentPage === 'how-it-works' ? 'text-amber-400 font-semibold' : 'text-slate-300'
+            }`}
+          >
+            {t.navHowItWorks}
+          </button>
+
+          {/* 5. Safety & Trust */}
+          <button
+            onClick={() => handleNavClick('safety-trust')}
+            className={`transition-colors hover:text-amber-400 ${
+              currentPage === 'safety-trust' ? 'text-amber-400 font-semibold' : 'text-slate-300'
+            }`}
+          >
+            {t.navSafetyTrust}
+          </button>
+
+          {/* 6. Language Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900/60 hover:bg-slate-800 text-xs font-semibold text-slate-200 transition-colors"
+              aria-label={t.navLanguage}
+            >
+              <Globe className="w-3.5 h-3.5 text-sky-400" />
+              <span>{languages.find(l => l.code === language)?.label.split(' ')[0]}</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {langDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-40 bg-slate-900 border border-slate-800 rounded-lg shadow-2xl py-1 z-50">
+                {languages.map(l => (
+                  <button
+                    key={l.code}
+                    onClick={() => {
+                      setLanguage(l.code);
+                      setLangDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-slate-800 ${
+                      language === l.code ? 'text-amber-400 font-semibold bg-slate-800/50' : 'text-slate-300'
+                    }`}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* If NOT authenticated: 7. Sign In and 8. Login */}
+          {!isAuthenticated ? (
+            <>
+              {/* 7. Sign In */}
+              <button
+                onClick={() => openAuthModal('signin')}
+                className="px-4 py-2 rounded-lg border border-pink-500/50 text-pink-300 hover:bg-pink-500/10 text-xs font-semibold transition-colors"
+              >
+                {t.navSignIn}
+              </button>
+
+              {/* 8. Login */}
+              <button
+                onClick={() => openAuthModal('login')}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 via-rose-500 to-sky-500 hover:from-amber-600 hover:to-sky-600 text-slate-950 text-xs font-bold shadow-md shadow-amber-500/20 transition-all hover:scale-[1.02]"
+              >
+                {t.navLogin}
+              </button>
+            </>
+          ) : (
+            /* When authenticated, preserve gateway access + direct dashboard & role status */
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleNavClick(activeRole === 'COMPANION' ? 'companion-dashboard' : 'client-dashboard')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-amber-300 font-semibold border border-slate-700 transition-colors"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>{activeRole === 'COMPANION' ? t.navCompanionBadge : t.navClientBadge}</span>
+              </button>
+
+              <button
+                onClick={() => handleNavClick(activeRole === 'COMPANION' ? 'client-dashboard' : 'companion-dashboard')}
+                title={activeRole === 'COMPANION' ? t.navSwitchToClient : t.navSwitchToCompanion}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                {activeRole === 'COMPANION' ? t.navSwitchToClient : t.navSwitchToCompanion}
+              </button>
+
+              <button
+                onClick={logout}
+                title={t.navLogout}
+                className="p-1.5 rounded-lg border border-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </nav>
+
+        {/* Mobile menu toggle button */}
+        <div className="flex md:hidden items-center gap-2">
+          {/* Quick language toggle */}
+          <button
+            onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+            className="p-2 text-slate-300 hover:text-white"
+            aria-label={t.navLanguage}
+          >
+            <Globe className="w-5 h-5 text-sky-400" />
+          </button>
+          
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-slate-300 hover:text-white focus:outline-none"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Drawer (Strictly in the exact 8 item order) */}
+      {mobileMenuOpen && (
+        <div className="md:hidden bg-slate-900 border-b border-slate-800 px-4 pt-3 pb-6 space-y-3">
+          <button
+            onClick={() => handleNavClick('home')}
+            className="w-full text-left py-2.5 text-slate-300 hover:text-amber-400 text-sm font-semibold transition-colors"
+          >
+            {t.navPairUpToday}
+          </button>
+
+          <button
+            onClick={() => handleNavClick('about')}
+            className="w-full text-left py-2.5 text-slate-300 hover:text-amber-400 text-sm font-semibold transition-colors"
+          >
+            {t.navAbout}
+          </button>
+
+          <button
+            onClick={() => handleNavClick('how-it-works')}
+            className="w-full text-left py-2.5 text-slate-300 hover:text-amber-400 text-sm font-semibold transition-colors"
+          >
+            {t.navHowItWorks}
+          </button>
+
+          <button
+            onClick={() => handleNavClick('safety-trust')}
+            className="w-full text-left py-2.5 text-slate-300 hover:text-amber-400 text-sm font-semibold transition-colors"
+          >
+            {t.navSafetyTrust}
+          </button>
+
+          <div className="py-2 border-y border-slate-800/80">
+            <label className="text-xs text-slate-400 block mb-1.5 font-medium">{t.navLanguage}</label>
+            <div className="flex gap-2">
+              {languages.map(l => (
+                <button
+                  key={l.code}
+                  onClick={() => setLanguage(l.code)}
+                  className={`px-3 py-1.5 text-xs rounded-lg border min-h-[36px] transition-colors ${
+                    language === l.code
+                      ? 'border-amber-400 text-amber-400 bg-amber-400/10 font-bold'
+                      : 'border-slate-700 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {l.label.split(' ')[0]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {!isAuthenticated ? (
+            <div className="pt-2 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openAuthModal('signin');
+                }}
+                className="w-full py-3 rounded-xl border border-pink-500/50 text-pink-300 text-xs font-bold text-center hover:bg-pink-500/10 transition-colors min-h-[44px]"
+              >
+                {t.navSignIn}
+              </button>
+
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openAuthModal('login');
+                }}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 text-xs font-bold text-center shadow-lg transition-all min-h-[44px]"
+              >
+                {t.navLogin}
+              </button>
+            </div>
+          ) : (
+            <div className="pt-2 space-y-2">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleNavClick(activeRole === 'COMPANION' ? 'companion-dashboard' : 'client-dashboard');
+                }}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 text-slate-950 font-bold text-xs min-h-[44px]"
+              >
+                {t.navDashboard} ({activeRole === 'COMPANION' ? t.navCompanionBadge : t.navClientBadge})
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleNavClick(activeRole === 'COMPANION' ? 'client-dashboard' : 'companion-dashboard');
+                }}
+                className="w-full py-2.5 rounded-xl border border-slate-700 text-amber-300 font-semibold text-xs min-h-[40px] hover:bg-slate-800"
+              >
+                {activeRole === 'COMPANION' ? t.navSwitchToClient : t.navSwitchToCompanion}
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  logout();
+                }}
+                className="w-full py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-rose-400 text-xs min-h-[40px]"
+              >
+                {t.navLogout}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </header>
+  );
+};
