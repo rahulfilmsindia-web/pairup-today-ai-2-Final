@@ -165,7 +165,7 @@ export const ClientDashboard: React.FC = () => {
         photos: allPhotos.slice(0, 6)
       });
       if (result.success) {
-        setProfileSuccessMsg('Profile updated successfully!');
+        setProfileSuccessMsg(t.profileSuccessMsg || 'Profile updated successfully!');
         setTimeout(() => setProfileSuccessMsg(null), 4000);
       } else {
         setProfileErrorMsg(result.error || 'Failed to update profile.');
@@ -687,10 +687,10 @@ export const ClientDashboard: React.FC = () => {
               <div>
                 <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
                   <User className="w-5 h-5 text-amber-400" />
-                  Public Profile & Privacy Management
+                  {t.profileSectionTitle}
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Customize your public display name, photo gallery, and introduction. Your official Government ID credentials remain private and locked.
+                  {t.profileSectionSubtitle}
                 </p>
               </div>
               <button
@@ -701,12 +701,12 @@ export const ClientDashboard: React.FC = () => {
                 {profileSaving ? (
                   <>
                     <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                    Saving Changes...
+                    {t.profileSavingBtn}
                   </>
                 ) : (
                   <>
                     <CheckCircle className="w-4 h-4" />
-                    Save Profile Changes
+                    {t.profileSaveBtn}
                   </>
                 )}
               </button>
@@ -732,48 +732,48 @@ export const ClientDashboard: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
                     <User className="w-4 h-4 text-amber-400" />
-                    Public Profile Name & Bio (প্রদর্শন নাম ও পরিচয়)
+                    {t.profileSectionTitle}
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    This public name is shown across the platform. Your legal government ID name is kept 100% confidential.
+                    {t.profileNameHelp}
                   </p>
                 </div>
                 <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-                  ✓ Privacy Protected
+                  ✓ {t.profilePrivacyBadge}
                 </span>
               </div>
 
               <div className="space-y-4 text-xs">
                 <div>
                   <label className="text-slate-200 block mb-1.5 font-bold text-xs">
-                    Profile Name (পাবলিক প্রদর্শন নাম) *
+                    {t.profileNameLabel}
                   </label>
                   <input
                     type="text"
                     value={profileNameInput}
                     onChange={(e) => setProfileNameInput(e.target.value)}
-                    placeholder="Enter public display name (e.g. Alex, Rahul, Sam)"
+                    placeholder={t.profileNamePlaceholder}
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-semibold text-sm shadow-inner"
                     required
                   />
                   <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
-                    <span>✓</span> Visible to companions and clients instead of your official Government ID name.
+                    <span>✓</span> {t.profileNameHelp}
                   </p>
                 </div>
 
                 <div>
                   <label className="text-slate-300 block mb-1.5 font-medium">
-                    Bio & Introduction (আত্মপরিচয়)
+                    {t.bioLabel}
                   </label>
                   <textarea
                     rows={3}
                     value={bioInput}
                     onChange={(e) => setBioInput(e.target.value)}
-                    placeholder="Describe what kind of companionship activities you enjoy (e.g., cafe conversations, city exploration, dining, social events)..."
+                    placeholder={t.bioPlaceholder}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 text-xs leading-relaxed"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Visible to verified companions when they review your bookings.
+                    {t.bioPlaceholder}
                   </p>
                 </div>
               </div>
@@ -785,16 +785,16 @@ export const ClientDashboard: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
                     <Camera className="w-4 h-4 text-amber-400" />
-                    Profile & Gallery Photos ({userPhotos.length}/6)
+                    {t.profilePhotosSection} ({userPhotos.length}/6)
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Upload up to 6 high quality photos. Choose any photo as your primary profile photo.
+                    {t.profilePhotosHelp}
                   </p>
                 </div>
                 {userPhotos.length < 6 && (
                   <label className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-semibold text-xs cursor-pointer flex items-center gap-1.5 transition-colors">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>Upload Photo</span>
+                    <span>{t.profileUploadBtn}</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -823,7 +823,7 @@ export const ClientDashboard: React.FC = () => {
                       />
                       {isMain ? (
                         <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 text-[10px] font-bold shadow">
-                          ★ Main Photo
+                          {t.profileMainBadge}
                         </div>
                       ) : (
                         <button
@@ -831,7 +831,7 @@ export const ClientDashboard: React.FC = () => {
                           onClick={() => handleSetMainPhoto(photo)}
                           className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-900/80 hover:bg-amber-400 hover:text-slate-950 text-slate-300 text-[9px] font-semibold opacity-0 group-hover:opacity-100 transition-all"
                         >
-                          Set Main
+                          {t.profileSetMainBtn}
                         </button>
                       )}
                       <button
@@ -849,7 +849,7 @@ export const ClientDashboard: React.FC = () => {
                 {userPhotos.length < 6 && (
                   <label className="border-2 border-dashed border-slate-800 hover:border-amber-400/60 rounded-xl flex flex-col items-center justify-center p-3 text-center cursor-pointer aspect-square bg-slate-900/40 hover:bg-slate-900/80 transition-colors">
                     <Upload className="w-5 h-5 text-slate-400 mb-1" />
-                    <span className="text-[11px] text-slate-400 font-medium">+ Add Photo</span>
+                    <span className="text-[11px] text-slate-400 font-medium">+ {t.profileUploadBtn}</span>
                     <span className="text-[9px] text-slate-500">Max 6</span>
                     <input
                       type="file"
@@ -867,17 +867,17 @@ export const ClientDashboard: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Lock className="w-4 h-4 text-slate-400" />
                 <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Verified Legal Identity (Permanently Locked)
+                  {t.profileLockedIdentityTitle}
                 </h4>
               </div>
               <p className="text-[11px] text-slate-400">
-                To prevent fraud and maintain safety, legal verification details verified with Government ID & biometric face scans cannot be modified.
+                {t.profileLockedIdentityHelp}
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-1">
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
                   <span className="text-slate-500 text-[11px] mb-1 flex items-center justify-between">
-                    Legal Full Name (Govt ID)
+                    {t.profileLegalNameLocked}
                     <Lock className="w-3 h-3 text-slate-500" />
                   </span>
                   <span className="font-semibold text-slate-300">{user?.legalName}</span>
@@ -886,7 +886,7 @@ export const ClientDashboard: React.FC = () => {
 
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
                   <span className="text-slate-500 text-[11px] mb-1 flex items-center justify-between">
-                    Date of Birth & Age
+                    {t.profileDobLocked}
                     <Lock className="w-3 h-3 text-slate-500" />
                   </span>
                   <span className="font-semibold text-slate-300">{user?.dob || 'Verified at KYC'} ({user?.age || 25} yrs)</span>
@@ -895,7 +895,7 @@ export const ClientDashboard: React.FC = () => {
 
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
                   <span className="text-slate-500 text-[11px] mb-1 flex items-center justify-between">
-                    Registered Mobile
+                    {t.profilePhoneLocked}
                     <Lock className="w-3 h-3 text-slate-500" />
                   </span>
                   <span className="font-semibold text-slate-300 font-mono">{user?.phone}</span>
@@ -914,12 +914,12 @@ export const ClientDashboard: React.FC = () => {
                 {profileSaving ? (
                   <>
                     <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                    Saving Changes...
+                    {t.profileSavingBtn}
                   </>
                 ) : (
                   <>
                     <CheckCircle className="w-4 h-4" />
-                    Save Profile Changes
+                    {t.profileSaveBtn}
                   </>
                 )}
               </button>

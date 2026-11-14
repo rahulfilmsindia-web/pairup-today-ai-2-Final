@@ -192,6 +192,25 @@ export interface TranslationDictionary {
   selfieLabel: string;
   bioLabel: string;
   bioPlaceholder: string;
+  profileNameLabel: string;
+  profileNamePlaceholder: string;
+  profileNameHelp: string;
+  profileSectionTitle: string;
+  profileSectionSubtitle: string;
+  profilePrivacyBadge: string;
+  profileSaveBtn: string;
+  profileSavingBtn: string;
+  profilePhotosSection: string;
+  profilePhotosHelp: string;
+  profileUploadBtn: string;
+  profileSetMainBtn: string;
+  profileMainBadge: string;
+  profileLockedIdentityTitle: string;
+  profileLockedIdentityHelp: string;
+  profileLegalNameLocked: string;
+  profileDobLocked: string;
+  profilePhoneLocked: string;
+  profileSuccessMsg: string;
   photosLabel: string;
   fileChooseText: string;
   fileAttachedText: string;
@@ -530,6 +549,25 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     selfieLabel: "Clear Live Selfie",
     bioLabel: "Short Introduction / Bio",
     bioPlaceholder: "Tell clients about your interests, hobbies, and personality...",
+    profileNameLabel: "Public Profile Name *",
+    profileNamePlaceholder: "Enter public display name (e.g. Alex, Rahul, Sam)",
+    profileNameHelp: "This public name protects your privacy. Your official Government ID legal name will remain strictly confidential.",
+    profileSectionTitle: "Public Profile Name & Bio",
+    profileSectionSubtitle: "Customize your public display name, photo gallery, and introduction. Your official Government ID credentials remain private and locked.",
+    profilePrivacyBadge: "Privacy Protected",
+    profileSaveBtn: "Save Profile Changes",
+    profileSavingBtn: "Saving Changes...",
+    profilePhotosSection: "Profile & Gallery Photos (Max 6)",
+    profilePhotosHelp: "Upload up to 6 high quality photos. Choose any photo as your primary profile photo.",
+    profileUploadBtn: "Upload Photo",
+    profileSetMainBtn: "Set Main",
+    profileMainBadge: "★ Main Photo",
+    profileLockedIdentityTitle: "Verified Legal Identity (Permanently Locked)",
+    profileLockedIdentityHelp: "To prevent fraud and maintain safety, legal verification details verified with Government ID cannot be modified.",
+    profileLegalNameLocked: "Legal Full Name (Govt ID)",
+    profileDobLocked: "Date of Birth & Age",
+    profilePhoneLocked: "Registered Mobile",
+    profileSuccessMsg: "Profile updated successfully!",
     photosLabel: "Profile Photos (Up to 6)",
     fileChooseText: "Choose File (Photo or PDF)",
     fileAttachedText: "Document Uploaded ✓",
@@ -867,6 +905,25 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     selfieLabel: "স্পষ্ট লাইভ সেলফি",
     bioLabel: "সংক্ষিপ্ত পরিচয়",
     bioPlaceholder: "আপনার শখ, পছন্দ এবং ব্যক্তিত্ব সম্পর্কে ক্লায়েন্টদের জানান...",
+    profileNameLabel: "প্রোফাইল প্রদর্শন নাম *",
+    profileNamePlaceholder: "পাবলিক নাম লিখুন (যেমনঃ রাহুল, প্রিয়া, সম্রাট)",
+    profileNameHelp: "এই নামটি অন্যান্যদের কাছে প্রদর্শিত হবে। আপনার সরকারি আইডি-র মূল নাম ১০০% গোপন থাকবে।",
+    profileSectionTitle: "পাবলিক প্রোফাইল নাম ও পরিচয়",
+    profileSectionSubtitle: "আপনার প্রদর্শন নাম, ছবি গ্যালারি এবং বায়ো পরিচালনা করুন। সরকারি পরিচয়পত্র সম্পূর্ণ গোপন ও সুরক্ষিত থাকে।",
+    profilePrivacyBadge: "গোপনীয়তা সুরক্ষিত",
+    profileSaveBtn: "প্রোফাইল সেভ করুন",
+    profileSavingBtn: "সেভ হচ্ছে...",
+    profilePhotosSection: "প্রোফাইল ও গ্যালারি ফটো (সর্বোচ্চ ৬)",
+    profilePhotosHelp: "সর্বোচ্চ ৬টি ছবি আপলোড করতে পারবেন। যেকোনো ছবিকে মূল প্রোফাইল ছবি হিসেবে নির্বাচন করুন।",
+    profileUploadBtn: "ছবি আপলোড করুন",
+    profileSetMainBtn: "মূল ছবি করুন",
+    profileMainBadge: "★ মূল ছবি",
+    profileLockedIdentityTitle: "যাচাইকৃত সরকারি পরিচয় (স্থায়ীভাবে লক করা)",
+    profileLockedIdentityHelp: "প্ল্যাটফর্মের নিরাপত্তা রক্ষার্থে সরকারি পরিচয়পত্র অনুযায়ী নাম ও জন্মতারিখ পরিবর্তন করা যাবে না।",
+    profileLegalNameLocked: "অফিসিয়াল বৈধ নাম (সরকারি আইডি)",
+    profileDobLocked: "জন্ম তারিখ ও বয়স",
+    profilePhoneLocked: "নিবন্ধিত ফোন নম্বর",
+    profileSuccessMsg: "প্রোফাইল সফলভাবে আপডেট হয়েছে!",
     photosLabel: "প্রোফাইল ছবি (সর্বোচ্চ ৬টি)",
     fileChooseText: "ফাইল বা ছবি নির্বাচন করুন",
     fileAttachedText: "ডকুমেন্ট আপলোড সম্পন্ন ✓",
@@ -1204,6 +1261,25 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     selfieLabel: "स्पष्ट लाइव सेल्फ़ी",
     bioLabel: "संक्षिप्त परिचय / बायो",
     bioPlaceholder: "क्लाइंट्स को अपनी रुचियों, हॉबी और व्यक्तित्व के बारे में बताएँ...",
+    profileNameLabel: "सार्वजनिक प्रोफ़ाइल नाम *",
+    profileNamePlaceholder: "प्रदर्शित नाम दर्ज करें (जैसे राहुल, प्रिया, अमन)",
+    profileNameHelp: "यह सार्वजनिक नाम अन्य उपयोगकर्ताओं को दिखेगा। आपका आधिकारिक सरकारी पहचान नाम पूरी तरह गोपनीय रहेगा।",
+    profileSectionTitle: "सार्वजनिक प्रोफ़ाइल नाम एवं परिचय",
+    profileSectionSubtitle: "अपना प्रदर्शित नाम, फ़ोटो गैलरी और बायो प्रबंधित करें। आपकी आधिकारिक सरकारी पहचान विवरण गोपनीय और सुरक्षित रहेंगे।",
+    profilePrivacyBadge: "गोपनीयता सुरक्षित",
+    profileSaveBtn: "प्रोफ़ाइल सुरक्षित करें",
+    profileSavingBtn: "सुरक्षित हो रहा है...",
+    profilePhotosSection: "प्रोफ़ाइल एवं गैलरी फ़ोटो (अधिकतम 6)",
+    profilePhotosHelp: "अधिकतम 6 फ़ोटो अपलोड करें। किसी भी फ़ोटो को मुख्य प्रोफ़ाइल फ़ोटो के रूप में चुनें।",
+    profileUploadBtn: "फ़ोटो अपलोड करें",
+    profileSetMainBtn: "मुख्य बनाएं",
+    profileMainBadge: "★ मुख्य फ़ोटो",
+    profileLockedIdentityTitle: "सत्यापित कानूनी पहचान (स्थायी रूप से लॉक)",
+    profileLockedIdentityHelp: "सुरक्षा कारणों से सरकारी पहचान पत्र से सत्यापित कानूनी विवरण बदले नहीं जा सकते।",
+    profileLegalNameLocked: "आधिकारिक कानूनी नाम (सरकारी पहचान पत्र)",
+    profileDobLocked: "जन्म तिथि एवं आयु",
+    profilePhoneLocked: "पंजीकृत मोबाइल नंबर",
+    profileSuccessMsg: "प्रोफ़ाइल सफलतापूर्वक अपडेट हो गई!",
     photosLabel: "प्रोफ़ाइल फ़ोटो (अधिकतम 6)",
     fileChooseText: "फ़ाइल या फ़ोटो चुनें",
     fileAttachedText: "दस्तावेज़ अपलोड पूर्ण ✓",
