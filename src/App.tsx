@@ -9,6 +9,7 @@ import { ServicesGrid } from './components/ServicesGrid';
 import { AboutPage } from './pages/AboutPage';
 import { HowItWorksPage } from './pages/HowItWorksPage';
 import { SafetyTrustPage } from './pages/SafetyTrustPage';
+import { TermsPage } from './pages/TermsPage';
 import { ClientDashboard } from './pages/ClientDashboard';
 import { CompanionDashboard } from './pages/CompanionDashboard';
 import { AuthGatewayModal } from './pages/AuthGatewayModal';
@@ -43,6 +44,9 @@ const MainAppContent: React.FC = () => {
         setIsAdminHostMode(false);
       } else if (path === '/safety-trust') {
         setCurrentPage('safety-trust');
+        setIsAdminHostMode(false);
+      } else if (path === '/terms' || path === '/terms-of-service') {
+        setCurrentPage('terms');
         setIsAdminHostMode(false);
       } else {
         setCurrentPage('home');
@@ -122,6 +126,8 @@ const MainAppContent: React.FC = () => {
         );
       case 'safety-trust':
         return <SafetyTrustPage />;
+      case 'terms':
+        return <TermsPage />;
       case 'client-dashboard':
         return <ClientDashboard />;
       case 'companion-dashboard':

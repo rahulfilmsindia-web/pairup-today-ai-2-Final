@@ -1,0 +1,41 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: pairuptoday-maintenance
+spec:
+  template:
+    spec:
+      taskCount: 1
+      parallelism: 1
+      template:
+        spec:
+          serviceAccountName: pairuptoday-api@PROJECT_ID.iam.gserviceaccount.com
+          maxRetries: 3
+          timeoutSeconds: 600
+          containers:
+            - image: REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/pairuptoday-api:TAG
+              command:
+                - node
+              args:
+                - maintenance-job.js
+              env:
+                - name: NODE_ENV
+                  value: production
+                - name: SUPABASE_URL
+                  value: https://PROJECT_REF.supabase.co
+                - name: FIREBASE_PROJECT_ID
+                  value: PROJECT_ID
+                - name: FIREBASE_CLIENT_EMAIL
+                  value: FIREBASE_ADMIN_SERVICE_ACCOUNT_EMAIL
+                - name: FIREBASE_DATABASE_URL
+                  value: FIREBASE_REALTIME_DATABASE_URL
+                - name: SUPABASE_SERVICE_ROLE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      key: latest
+                      name: supabase-service-role-key
+                - name: FIREBASE_PRIVATE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      key: latest
+                      name: firebase-admin-private-key

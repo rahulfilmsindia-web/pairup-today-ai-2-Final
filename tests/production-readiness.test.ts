@@ -1,6 +1,6 @@
 /**
  * PairUpToday — Production Readiness Automated Verification Suite
- * Covers 24 Core Scenarios per Section 13 Architectural Specification & Updated Business Rules
+ * Covers the core production-readiness scenarios per the current architecture and business rules.
  */
 
 import crypto from 'crypto';
@@ -18,6 +18,7 @@ import {
   verifyRazorpayPaymentSignature,
   verifyRazorpayWebhookSignature
 } from '../server/services/razorpay.js';
+import { hashPassword, verifyPassword } from '../server/services/passwords.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,7 +52,7 @@ async function runScenario(scenarioNumber: number, name: string, fn: () => void 
 }
 
 console.log('\n===============================================================');
-console.log('  PAIRUPTODAY PRODUCTION READINESS 24-SCENARIO TEST HARNESS');
+console.log('  PAIRUPTODAY PRODUCTION READINESS TEST HARNESS');
 console.log('===============================================================\n');
 
 // 1. Six-Digit OTP Generation, Server-Secret HMAC-SHA256 Hashing & Client-Exclusive Isolation
@@ -788,7 +789,7 @@ await runScenario(30, 'Newly Created Companion Profiles, Photograph Grouping, an
 
   // Verify that newly created profiles appear BEFORE existing profiles in search output
   assert(
-    serverContent.includes('const combined = [...newProfiles, ...genuineCompanions, ...existingInitial];'),
+    serverContent.includes('let combined = [...newProfiles, ...genuineCompanions, ...existingInitial];'),
     'Search endpoint strictly outputs newProfiles BEFORE existing profiles'
   );
 
@@ -818,6 +819,119 @@ await runScenario(30, 'Newly Created Companion Profiles, Photograph Grouping, an
   }
 });
 
+// 31. Durable Webhook and Push Claims & Support Stream Authorization
+await runScenario(31, 'Durable Webhook and Push Claims & Support Stream Authorization', () => {
+  const serverContent = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+  const migrationContent = fs.readFileSync(
+    path.join(rootDir, 'supabase/migrations/008_runtime_finance_and_delivery.sql'),
+    'utf-8'
+  );
+
+  assert(serverContent.includes("app.get('/api/support/messages/:conversationId/stream'"), 'User support SSE endpoint exists');
+  assert(serverContent.includes("conversation.userId !== userId"), 'User support SSE enforces conversation ownership');
+  assert(serverContent.includes("requireAdminRoles('SUPER_ADMIN', 'SUPPORT_ADMIN')"), 'Admin support SSE enforces support roles');
+  assert(migrationContent.includes('GET DIAGNOSTICS v_inserted = ROW_COUNT'), 'Webhook claims distinguish newly inserted events from active claims');
+  assert(migrationContent.includes('FOR UPDATE SKIP LOCKED'), 'Push delivery claims are concurrency-safe');
+  assert(migrationContent.includes("push_attempts < 5"), 'Push delivery retries are bounded');
+  assert(migrationContent.includes('finish_notification_push'), 'Push delivery status is durably finalized');
+});
+
+// 32. DUAL Account Role-Specific KYC Must Not Cross-Authorize Companion Activation
+await runScenario(32, 'DUAL Account Role-Specific KYC Must Not Cross-Authorize Companion Activation', () => {
+  const migrationContent = fs.readFileSync(
+    path.join(rootDir, 'supabase/migrations/006_profile_kyc_storage.sql'),
+    'utf-8'
+  );
+  const serverContent = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+
+  assert(migrationContent.includes("k.submission_role = 'COMPANION'"), 'Companion activation requires an approved Companion KYC submission');
+  assert(migrationContent.includes("role <> 'DUAL' OR p_role = 'CLIENT'"), 'Companion KYC submission does not overwrite DUAL Client KYC status');
+  assert(serverContent.includes("getUserKycSubmission(profile.userId, 'COMPANION')"), 'Public discovery validates Companion-role KYC');
+  assert(serverContent.includes("getUserKycSubmission(userId, 'COMPANION')"), 'Companion workflows validate Companion-role KYC');
+});
+
+// 33. Password Hashing Uses Scrypt and Transparently Upgrades Legacy Credentials
+await runScenario(33, 'Scrypt Password Hashing and Legacy Hash Upgrade', async () => {
+  const password = 'correct horse battery staple';
+  const modernHash = await hashPassword(password);
+  assert(modernHash.startsWith('scrypt$'), 'New password hashes use the versioned scrypt format');
+  assert((await verifyPassword(password, modernHash)).valid, 'Correct password verifies against scrypt');
+  assert(!(await verifyPassword('incorrect password', modernHash)).valid, 'Incorrect password does not verify');
+
+  const legacyHash = crypto.createHash('sha256').update(password + '_pairup_salt_2026').digest('hex');
+  const upgraded = await verifyPassword(password, legacyHash);
+  assert(upgraded.valid && upgraded.upgradedHash?.startsWith('scrypt$') === true, 'Valid legacy password returns a replacement scrypt hash');
+  assert((await verifyPassword(password, upgraded.upgradedHash!)).valid, 'Replacement hash remains verifiable');
+});
+
+// 34. Canonical Supabase Backing for All Admin Management & Overview API Routes
+await runScenario(34, 'Canonical Supabase Backing for All Admin Management & Overview API Routes', () => {
+  const serverContent = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+
+  // Verify all 9 admin endpoints are in the production Supabase whitelist
+  const requiredAdminRoutes = [
+    'GET /api/admin/overview',
+    'GET /api/admin/staff',
+    'POST /api/admin/staff/create',
+    'GET /api/admin/audit-logs',
+    'GET /api/admin/clients',
+    'GET /api/admin/companions',
+    'GET /api/admin/memberships',
+    'GET /api/admin/bookings',
+    'GET /api/admin/payments'
+  ];
+
+  for (const route of requiredAdminRoutes) {
+    assert(serverContent.includes(`'${route}'`), `Route ${route} is registered in isSupabaseBackedProductionRoute whitelist`);
+  }
+
+  // Verify that Admin Overview calls databaseAdapter and does not query db.users or db.bookings
+  const overviewRouteIdx = serverContent.indexOf("app.get('/api/admin/overview'");
+  assert(overviewRouteIdx !== -1, 'Admin overview route exists');
+  const overviewSection = serverContent.slice(overviewRouteIdx, overviewRouteIdx + 1500);
+  assert(overviewSection.includes('await databaseAdapter.listUsers()'), 'Overview queries users via databaseAdapter');
+  assert(overviewSection.includes('await databaseAdapter.listBookings()'), 'Overview queries bookings via databaseAdapter');
+  assert(overviewSection.includes('await databaseAdapter.listKycSubmissions'), 'Overview queries KYC submissions via databaseAdapter');
+
+  // Verify that Staff routes use databaseAdapter
+  const staffGetIdx = serverContent.indexOf("app.get('/api/admin/staff'");
+  assert(staffGetIdx !== -1, 'Admin staff route exists');
+  const staffGetSection = serverContent.slice(staffGetIdx, staffGetIdx + 500);
+  assert(staffGetSection.includes('await databaseAdapter.listAdminUsers()'), 'Admin staff list uses databaseAdapter');
+
+  const staffPostIdx = serverContent.indexOf("app.post('/api/admin/staff/create'");
+  assert(staffPostIdx !== -1, 'Admin staff create route exists');
+  const staffPostSection = serverContent.slice(staffPostIdx, staffPostIdx + 1500);
+  assert(staffPostSection.includes('await databaseAdapter.createAdminUser'), 'Admin staff create uses databaseAdapter');
+
+  // Verify that Clients, Companions, Memberships, Bookings, and Payments use databaseAdapter
+  const clientsRouteIdx = serverContent.indexOf("app.get('/api/admin/clients'");
+  assert(clientsRouteIdx !== -1, 'Admin clients route exists');
+  const clientsSection = serverContent.slice(clientsRouteIdx, clientsRouteIdx + 1500);
+  assert(clientsSection.includes('await databaseAdapter.listUsers()'), 'Admin clients list uses databaseAdapter');
+});
+
+// 35. Razorpay Create-Order Production Route Whitelisting & Non-Bookability Guard
+await runScenario(35, 'Razorpay Create-Order Production Route Whitelisting & Non-Bookability Guard', () => {
+  const serverContent = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+
+  assert(serverContent.includes("'POST /api/payments/razorpay/create-order'"), 'Razorpay create-order route is registered in isSupabaseBackedProductionRoute');
+  const orderRouteIdx = serverContent.indexOf("app.post('/api/payments/razorpay/create-order'");
+  assert(orderRouteIdx !== -1, 'Razorpay create-order route exists');
+  const orderSection = serverContent.slice(orderRouteIdx, orderRouteIdx + 1200);
+  assert(orderSection.includes('await databaseAdapter.getCompanionProfile(targetCompId)'), 'Initial listing guard queries companion profile via databaseAdapter');
+});
+
+// 36. Fail-Safe Rejection of JSON Fallback in Production Mode
+await runScenario(36, 'Fail-Safe Rejection of JSON Fallback in Production Mode', () => {
+  const databaseServiceContent = fs.readFileSync(path.join(rootDir, 'server/services/database.ts'), 'utf-8');
+  const supabaseServiceContent = fs.readFileSync(path.join(rootDir, 'server/services/supabase.ts'), 'utf-8');
+
+  assert(databaseServiceContent.includes("Production requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY; JSON database fallback is disabled."), 'Production database fails fast when Supabase keys missing');
+  assert(supabaseServiceContent.includes("Production startup requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."), 'Supabase service fails fast in production');
+  assert(supabaseServiceContent.includes("placeholder-project.supabase.co"), 'Safe offline test placeholder provided for development and test harnesses');
+});
+
 console.log('\n===============================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`  RESULTS: ${passedCount} / ${results.length} SCENARIOS PASSED`);
@@ -826,4 +940,3 @@ console.log('===============================================================\n')
 if (passedCount !== results.length) {
   process.exit(1);
 }
-

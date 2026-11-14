@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { apiFetch } from '../utils/api';
+import { openRazorpayCheckout } from '../utils/razorpay';
 import { PAIRUP_SERVICES } from '../constants/services';
 import { MembershipPlanType } from '../types';
 import { 
@@ -78,7 +80,7 @@ export const CompanionDashboard: React.FC = () => {
   const fetchCompanionStatus = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/companion/status/${user.id}`);
+      const res = await apiFetch(`/api/companion/status/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setStatusData(data);
@@ -107,7 +109,7 @@ export const CompanionDashboard: React.FC = () => {
   const fetchBookings = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/bookings/my/${user.id}`);
+      const res = await apiFetch(`/api/bookings/my/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setBookings(data.bookings || []);
@@ -120,7 +122,7 @@ export const CompanionDashboard: React.FC = () => {
   const fetchNotifications = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/notifications/${user.id}`);
+      const res = await apiFetch(`/api/notifications/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.notifications || []);
@@ -146,7 +148,7 @@ export const CompanionDashboard: React.FC = () => {
     if (!activeChatBooking) return;
     const fetchChat = async () => {
       try {
-        const res = await fetch(`/api/chat/${activeChatBooking.id}`);
+        const res = await apiFetch(`/api/chat/${activeChatBooking.id}`);
         if (res.ok) {
           const data = await res.json();
           setChatMessages(data.messages || []);
@@ -165,7 +167,7 @@ export const CompanionDashboard: React.FC = () => {
     if (!activeChatBooking || !newChatText.trim() || !user) return;
 
     try {
-      const res = await fetch(`/api/chat/${activeChatBooking.id}`, {
+      const res = await apiFetch(`/api/chat/${activeChatBooking.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -187,7 +189,7 @@ export const CompanionDashboard: React.FC = () => {
   const handleSaveServicesAndRates = async () => {
     if (!user) return;
     try {
-      const res = await fetch('/api/companion/services-rates', {
+      const res = await apiFetch('/api/companion/services-rates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -220,18 +222,38 @@ export const CompanionDashboard: React.FC = () => {
     if (!user) return;
     setSubscribingPlan(plan);
     try {
-      const res = await fetch('/api/companion/membership/subscribe', {
+      const res = await apiFetch('/api/companion/membership/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, plan })
       });
-      if (res.ok) {
-        fetchCompanionStatus();
-        setActionMsg(`${plan} membership activated successfully via PairUp Secure Vault!`);
-        setTimeout(() => setActionMsg(null), 3500);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not create membership payment order.');
+      const checkoutResult = await openRazorpayCheckout(
+        data.payment,
+        `${plan} Companion membership`,
+        { name: user.legalName, contact: user.phone }
+      );
+      const verifyRes = await apiFetch('/api/payments/razorpay/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          membershipPlan: plan,
+          orderId: checkoutResult.razorpay_order_id,
+          paymentId: checkoutResult.razorpay_payment_id,
+          signature: checkoutResult.razorpay_signature
+        })
+      });
+      const verification = await verifyRes.json();
+      if (!verifyRes.ok || !verification.success) {
+        throw new Error(verification.error || 'Membership payment was not confirmed by the backend.');
       }
+      await fetchCompanionStatus();
+      setActionMsg(`${plan} membership payment was verified.`);
+      setTimeout(() => setActionMsg(null), 3500);
     } catch (err) {
       console.error('Error subscribing', err);
+      alert(err instanceof Error ? err.message : 'Membership checkout failed.');
     } finally {
       setSubscribingPlan(null);
     }
@@ -244,7 +266,7 @@ export const CompanionDashboard: React.FC = () => {
     setBankSubmitting(true);
     setBankMsg(null);
     try {
-      const res = await fetch('/api/companion/bank/verify', {
+      const res = await apiFetch('/api/companion/bank/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -274,7 +296,7 @@ export const CompanionDashboard: React.FC = () => {
     if (!user) return;
     try {
       const nextPaused = !isAvailabilityPaused;
-      const res = await fetch('/api/companion/availability/toggle', {
+      const res = await apiFetch('/api/companion/availability/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, isPaused: nextPaused })
@@ -293,7 +315,7 @@ export const CompanionDashboard: React.FC = () => {
   const handleSlideMeetingArrived = async (bookingId: string) => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/bookings/${bookingId}/arrived`, {
+      const res = await apiFetch(`/api/bookings/${bookingId}/arrived`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companionId: user.id })
@@ -318,7 +340,7 @@ export const CompanionDashboard: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`/api/bookings/${bookingId}/verify-start-otp`, {
+      const res = await apiFetch(`/api/bookings/${bookingId}/verify-start-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ otp, delayMinutes: delay })
@@ -345,7 +367,7 @@ export const CompanionDashboard: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`/api/bookings/${bookingId}/complete`, {
+      const res = await apiFetch(`/api/bookings/${bookingId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completionOtp })
@@ -1045,7 +1067,7 @@ export const CompanionDashboard: React.FC = () => {
               <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-emerald-300">
                 <span className="font-bold block mb-1">Bank Account Verified ✓</span>
                 <span className="font-mono text-slate-300">
-                  Account: {statusData.profile.bankDetails.accountNumberMasked} · IFSC: {statusData.profile.bankDetails.ifsc}
+                  Account: {statusData.profile.bankDetails.accountNumberMasked || 'Unavailable'} · IFSC: {statusData.profile.bankDetails.ifsc}
                 </span>
               </div>
             )}

@@ -77,7 +77,16 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
       if (searchQuery.trim()) params.append('query', searchQuery.trim());
 
       const res = await fetch(`/api/companions/search?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load companion profiles.');
+      if (!res.ok) {
+        let message = 'Failed to load companion profiles.';
+        try {
+          const errorBody = await res.json();
+          if (typeof errorBody?.error === 'string') message = errorBody.error;
+        } catch {
+          // Keep the generic message when the server does not return JSON.
+        }
+        throw new Error(message);
+      }
       const data = await res.json();
       setCompanions(data.companions || []);
     } catch (err: any) {

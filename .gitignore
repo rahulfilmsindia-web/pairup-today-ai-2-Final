@@ -1,8 +1,12 @@
 node_modules/
 build/
 dist/
+dist-admin/
 coverage/
 .DS_Store
 *.log
+*.exe
+*.exe-*
 .env*
 !.env.example
+data/

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, KYCStatus, BookingContextData } from '../types';
+import { apiFetch } from '../utils/api';
 
 interface AuthContextType {
   user: User | null;
@@ -71,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkPhoneRegistered = async (phone: string) => {
     try {
-      const res = await fetch('/api/auth/check-phone', {
+      const res = await apiFetch('/api/auth/check-phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone })
@@ -129,7 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const requestOtp = async (phone: string, purpose = 'auth') => {
     try {
-      const res = await fetch('/api/auth/request-otp', {
+      const res = await apiFetch('/api/auth/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, purpose })
@@ -146,7 +147,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const registerWithOtp = async (phone: string, otp: string, password: string) => {
     try {
-      const res = await fetch('/api/auth/register-with-otp', {
+      const res = await apiFetch('/api/auth/register-with-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, otp, password })
@@ -168,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithPassword = async (phone: string, password: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, password })
@@ -203,9 +204,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const selectActiveRole = async (role: 'CLIENT' | 'COMPANION') => {
     if (!user) return { success: false, error: 'User not signed in' };
     try {
-      const res = await fetch('/api/auth/select-role', {
+      const res = await apiFetch('/api/auth/select-role', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userId: user.id, role })
       });
       const data = await res.json();
@@ -224,9 +225,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const submitKyc = async (formData: any) => {
     if (!user) return { success: false, error: 'User session required' };
     try {
-      const res = await fetch('/api/kyc/submit', {
+      const res = await apiFetch('/api/kyc/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ ...formData, userId: user.id })
       });
       const data = await res.json();
@@ -262,7 +263,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUserData = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/companion/status/${user.id}`);
+      const res = await apiFetch(`/api/companion/status/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setUser(prev => prev ? { ...prev, kycStatus: data.kycStatus } : null);

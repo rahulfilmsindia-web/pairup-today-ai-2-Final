@@ -26,6 +26,11 @@ export interface ApitxtBankResponse {
   isSimulated?: boolean;
 }
 
+export function isApitxtConfigured(): boolean {
+  const apiKey = process.env.APITXT_API_KEY?.trim();
+  return Boolean(apiKey && apiKey !== 'MY_APITXT_API_KEY');
+}
+
 /**
  * Normalizes Indian phone number to 91XXXXXXXXXX (for APITXT API parameter)
  */
@@ -80,7 +85,7 @@ export async function sendApitxtOtp(params: {
   apiKey?: string;
   baseUrl?: string;
 }): Promise<ApitxtOtpResponse> {
-  const apiKey = params.apiKey || process.env.APITXT_API_KEY;
+  const apiKey = (params.apiKey || process.env.APITXT_API_KEY || '').trim();
   const baseUrl = params.baseUrl || process.env.APITXT_BASE_URL || 'https://apitxt.com';
   const endpoint = `${baseUrl.replace(/\/$/, '')}/api/sendOTP`;
 
@@ -93,7 +98,7 @@ export async function sendApitxtOtp(params: {
   }
 
   // If no live API key configured in environment, fail explicitly - do NOT simulate delivery
-  if (!apiKey || apiKey === 'MY_APITXT_API_KEY' || apiKey.trim() === '') {
+  if (!apiKey || apiKey === 'MY_APITXT_API_KEY') {
     return {
       success: false,
       error: 'APITXT SMS service configuration unavailable. APITXT_API_KEY is not configured in the server environment.',
@@ -103,7 +108,7 @@ export async function sendApitxtOtp(params: {
 
   // Construct application/x-www-form-urlencoded body with template_id strictly OMITTED
   const bodyParams = new URLSearchParams();
-  bodyParams.append('authkey', apiKey.trim());
+  bodyParams.append('authkey', apiKey);
   bodyParams.append('mobile', formattedMobile);
   bodyParams.append('otp', params.otp.trim());
   bodyParams.append('channel', 'sms');
@@ -117,7 +122,8 @@ export async function sendApitxtOtp(params: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'PairUpToday-Backend/1.0'
       },
-      body: bodyParams.toString()
+      body: bodyParams.toString(),
+      signal: AbortSignal.timeout(15_000)
     });
 
     const responseText = await response.text();
@@ -127,30 +133,41 @@ export async function sendApitxtOtp(params: {
     } catch {
       return {
         success: false,
-        error: `APITXT returned non-JSON response (HTTP ${response.status}): ${responseText.slice(0, 150)}`
+        error: `APITXT returned a non-JSON response (HTTP ${response.status}).`,
+        errorCode: response.status
       };
     }
 
-    if (data.status === 'success' || data.status === 200) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return {
+        success: false,
+        error: `APITXT returned an invalid response (HTTP ${response.status}).`,
+        errorCode: response.status
+      };
+    }
+
+    if (response.ok && (data.status === 'success' || data.status === 200)) {
       return {
         success: true,
-        requestId: data.data?.request_id || `SMS-OTP-${Date.now()}`,
+        requestId: typeof data.data?.request_id === 'string' ? data.data.request_id : undefined,
         mobile: data.data?.mobile || formattedMobile,
         cost: data.data?.cost,
-        message: data.message || 'Sms OTP Sent Successfully'
+        message: typeof data.message === 'string' ? data.message : undefined
       };
     }
 
     // Provider error response
     return {
       success: false,
-      error: data.message || data.error || 'Failed to dispatch SMS through APITXT gateway.',
+      error: 'APITXT did not accept the OTP request.',
       errorCode: data.code || data.status
     };
   } catch (err: any) {
     return {
       success: false,
-      error: `Network connection to APITXT gateway failed: ${err.message}`
+      error: err?.name === 'TimeoutError'
+        ? 'APITXT request timed out.'
+        : 'Network connection to APITXT gateway failed.'
     };
   }
 }

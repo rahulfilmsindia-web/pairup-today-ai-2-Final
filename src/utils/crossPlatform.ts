@@ -14,24 +14,26 @@ export function openExternalUrl(url: string): void {
       // In native Capacitor shell, request system browser to prevent in-app webview trapping
       window.open(url, '_system');
     } else {
-      // In standard web browser
-      const newTab = window.open(url, '_blank', 'noopener,noreferrer');
-      if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
-        // If popup blocker intervened, fallback to top level navigation
-        window.location.assign(url);
-      }
+      // In standard web browser: open in separate tab without altering current window
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   } catch (err) {
-    // Graceful fallback
-    window.location.href = url;
+    console.warn('Failed to open external URL:', err);
   }
 }
 
 export function openMailtoUri(email: string = 'pairuptoday@gmail.com'): boolean {
   const mailtoUri = `mailto:${encodeURIComponent(email)}`;
   try {
-    // Direct trigger for native email client registration
-    window.location.href = mailtoUri;
+    const isCapacitor = typeof (window as any).Capacitor !== 'undefined' && 
+      typeof (window as any).Capacitor.isNativePlatform === 'function' &&
+      (window as any).Capacitor.isNativePlatform();
+
+    if (isCapacitor) {
+      window.open(mailtoUri, '_system');
+    } else {
+      window.open(mailtoUri, '_blank');
+    }
     return true;
   } catch (err) {
     console.warn('Failed to invoke mailto URI directly:', err);

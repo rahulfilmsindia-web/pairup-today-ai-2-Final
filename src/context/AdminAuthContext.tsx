@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AdminUser } from '../types';
+import { apiFetch } from '../utils/api';
 
 interface AdminAuthContextType {
   admin: AdminUser | null;
@@ -51,7 +52,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const loginStepOne = async (email: string, password: string) => {
     try {
-      const res = await fetch('/api/admin/login', {
+      const res = await apiFetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -73,7 +74,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const verifyMfaStepTwo = async (otp: string) => {
     try {
-      const res = await fetch('/api/admin/verify-mfa', {
+      const res = await apiFetch('/api/admin/verify-mfa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: pendingEmail, otp })

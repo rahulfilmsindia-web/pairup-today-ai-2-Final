@@ -51,8 +51,7 @@ export async function getPlaceAutocomplete(
   radius?: number
 ): Promise<AutocompletePrediction[]> {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('Google Maps API key not configured');
-    return [];
+    throw new Error('Google Maps API key is not configured.');
   }
 
   try {
@@ -69,19 +68,21 @@ export async function getPlaceAutocomplete(
     }
 
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`
+      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`,
+      { signal: AbortSignal.timeout(15_000) }
     );
+    if (!response.ok) throw new Error(`Google Places returned HTTP ${response.status}.`);
     const data = await response.json();
 
-    if (data.status === 'OK' && data.predictions) {
+    if (data.status === 'OK' && Array.isArray(data.predictions)) {
       return data.predictions;
     }
+    if (data.status === 'ZERO_RESULTS') return [];
 
-    console.error('Place autocomplete error:', data.status, data.error_message);
-    return [];
+    throw new Error(`Google Places autocomplete failed: ${data.status || 'invalid response'}.`);
   } catch (error) {
     console.error('Failed to fetch place autocomplete:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -93,8 +94,7 @@ export async function geocodeAddress(
   isPlaceId = false
 ): Promise<GeocodeResult | null> {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('Google Maps API key not configured');
-    return null;
+    throw new Error('Google Maps API key is not configured.');
   }
 
   try {
@@ -109,19 +109,21 @@ export async function geocodeAddress(
     }
 
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`
+      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
+      { signal: AbortSignal.timeout(15_000) }
     );
+    if (!response.ok) throw new Error(`Google Geocoding returned HTTP ${response.status}.`);
     const data = await response.json();
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
       return data.results[0];
     }
 
-    console.error('Geocoding error:', data.status, data.error_message);
-    return null;
+    if (data.status === 'ZERO_RESULTS') return null;
+    throw new Error(`Google Geocoding failed: ${data.status || 'invalid response'}.`);
   } catch (error) {
     console.error('Failed to geocode address:', error);
-    return null;
+    throw error;
   }
 }
 
@@ -133,8 +135,7 @@ export async function reverseGeocode(
   lng: number
 ): Promise<GeocodeResult | null> {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('Google Maps API key not configured');
-    return null;
+    throw new Error('Google Maps API key is not configured.');
   }
 
   try {
@@ -144,19 +145,21 @@ export async function reverseGeocode(
     });
 
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`
+      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
+      { signal: AbortSignal.timeout(15_000) }
     );
+    if (!response.ok) throw new Error(`Google reverse geocoding returned HTTP ${response.status}.`);
     const data = await response.json();
 
     if (data.status === 'OK' && data.results && data.results.length > 0) {
       return data.results[0];
     }
 
-    console.error('Reverse geocoding error:', data.status, data.error_message);
-    return null;
+    if (data.status === 'ZERO_RESULTS') return null;
+    throw new Error(`Google reverse geocoding failed: ${data.status || 'invalid response'}.`);
   } catch (error) {
     console.error('Failed to reverse geocode:', error);
-    return null;
+    throw error;
   }
 }
 
@@ -193,10 +196,9 @@ function toRad(degrees: number): number {
 export async function getDistanceMatrix(
   origins: Array<{ lat: number; lng: number }>,
   destinations: Array<{ lat: number; lng: number }>
-): Promise<DistanceMatrixResult[][] | null> {
+): Promise<DistanceMatrixResult[][]> {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('Google Maps API key not configured');
-    return null;
+    throw new Error('Google Maps API key is not configured.');
   }
 
   try {
@@ -212,19 +214,20 @@ export async function getDistanceMatrix(
     });
 
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/distancematrix/json?${params.toString()}`
+      `https://maps.googleapis.com/maps/api/distancematrix/json?${params.toString()}`,
+      { signal: AbortSignal.timeout(15_000) }
     );
+    if (!response.ok) throw new Error(`Google Distance Matrix returned HTTP ${response.status}.`);
     const data = await response.json();
 
     if (data.status === 'OK' && data.rows) {
       return data.rows.map((row: any) => row.elements);
     }
 
-    console.error('Distance Matrix error:', data.status, data.error_message);
-    return null;
+    throw new Error(`Google Distance Matrix failed: ${data.status || 'invalid response'}.`);
   } catch (error) {
     console.error('Failed to get distance matrix:', error);
-    return null;
+    throw error;
   }
 }
 

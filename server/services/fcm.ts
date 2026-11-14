@@ -1,4 +1,4 @@
-import { initializeApp, cert } from 'firebase-admin/app';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getMessaging, type Messaging, type Message, type MulticastMessage, type SendResponse } from 'firebase-admin/messaging';
 
 // FCM instance
@@ -24,9 +24,9 @@ export function initializeFCM() {
       privateKey: serviceAccountKey.replace(/\\n/g, '\n')
     };
 
-    const app = initializeApp({
+    const app = getApps().find(candidate => candidate.name === 'fcm-app') || initializeApp({
       credential: cert(serviceAccount),
-      databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
+      ...(process.env.FIREBASE_DATABASE_URL ? { databaseURL: process.env.FIREBASE_DATABASE_URL } : {})
     }, 'fcm-app');
 
     messaging = getMessaging(app);
@@ -61,8 +61,7 @@ export async function sendToDevice(
 ): Promise<boolean> {
   const fcm = getFCM();
   if (!fcm) {
-    console.warn('FCM not configured, notification not sent');
-    return false;
+    throw new Error('Firebase Cloud Messaging is not configured.');
   }
 
   try {
@@ -76,14 +75,9 @@ export async function sendToDevice(
     };
 
     await fcm.send(message);
-    console.log(`Notification sent to device: ${token}`);
     return true;
   } catch (error: any) {
-    console.error('Failed to send notification to device:', error);
-    if (error.code === 'messaging/registration-token-not-registered') {
-      console.log('Token is no longer valid, should be removed from database');
-    }
-    return false;
+    throw error;
   }
 }
 
@@ -97,46 +91,46 @@ export async function sendToMultipleDevices(
     body: string;
   },
   data?: Record<string, string>
-): Promise<{ success: number; failure: number }> {
+): Promise<{ success: number; failure: number; invalidTokens: string[] }> {
   const fcm = getFCM();
   if (!fcm) {
-    console.warn('FCM not configured, multicast notification not sent');
-    return { success: 0, failure: tokens.length };
+    throw new Error('Firebase Cloud Messaging is not configured.');
   }
+  if (tokens.length === 0) return { success: 0, failure: 0, invalidTokens: [] };
 
   try {
-    const message: MulticastMessage = {
-      tokens,
-      notification: {
-        title: notification.title,
-        body: notification.body
-      },
-      data
-    };
-
-    const response = await fcm.sendEachForMulticast(message);
-    console.log(`Multicast notification: ${response.successCount} success, ${response.failureCount} failure`);
-
-    // Clean up invalid tokens
-    if (response.failureCount > 0) {
-      const invalidTokens: string[] = [];
-      response.responses.forEach((resp: SendResponse, idx: number) => {
-        if (!resp.success) {
-          invalidTokens.push(tokens[idx]);
+    const invalidTokens: string[] = [];
+    let success = 0;
+    let failure = 0;
+    for (let offset = 0; offset < tokens.length; offset += 500) {
+      const batch = tokens.slice(offset, offset + 500);
+      const message: MulticastMessage = {
+        tokens: batch,
+        notification: {
+          title: notification.title,
+          body: notification.body
+        },
+        data
+      };
+      const response = await fcm.sendEachForMulticast(message);
+      success += response.successCount;
+      failure += response.failureCount;
+      response.responses.forEach((resp: SendResponse, index: number) => {
+        if (!resp.success && (
+          resp.error?.code === 'messaging/registration-token-not-registered' ||
+          resp.error?.code === 'messaging/invalid-registration-token'
+        )) {
+          invalidTokens.push(batch[index]);
         }
       });
-      if (invalidTokens.length > 0) {
-        console.log('Invalid tokens to remove:', invalidTokens);
-      }
     }
-
     return {
-      success: response.successCount,
-      failure: response.failureCount
+      success,
+      failure,
+      invalidTokens
     };
   } catch (error) {
-    console.error('Failed to send multicast notification:', error);
-    return { success: 0, failure: tokens.length };
+    throw error;
   }
 }
 

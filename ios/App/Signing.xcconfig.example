@@ -1,0 +1,6 @@
+// Copy to Signing.xcconfig and set the team identifier in your local file.
+// Include the local file from the Xcode project; do not commit signing values.
+CODE_SIGN_STYLE = Automatic
+PRODUCT_BUNDLE_IDENTIFIER = com.pairuptoday.app
+CODE_SIGN_ENTITLEMENTS = App/PairUpToday.entitlements
+DEVELOPMENT_TEAM = YOUR_APPLE_TEAM_ID

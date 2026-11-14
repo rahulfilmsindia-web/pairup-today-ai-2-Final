@@ -6,6 +6,7 @@ export interface TranslationDictionary {
   navAbout: string;
   navHowItWorks: string;
   navSafetyTrust: string;
+  navTerms: string;
   navLanguage: string;
   navSignIn: string;
   navLogin: string;
@@ -343,6 +344,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     navAbout: "About",
     navHowItWorks: "How It Works",
     navSafetyTrust: "Safety & Trust",
+    navTerms: "Terms of Service",
     navLanguage: "Language",
     navSignIn: "Sign In",
     navLogin: "Login",
@@ -679,6 +681,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     navAbout: "আমাদের সম্পর্কে",
     navHowItWorks: "কীভাবে কাজ করে",
     navSafetyTrust: "নিরাপত্তা ও বিশ্বাস",
+    navTerms: "শর্তাবলী (Terms)",
     navLanguage: "ভাষা",
     navSignIn: "সাইন ইন",
     navLogin: "লগইন",
@@ -1015,6 +1018,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     navAbout: "हमारे बारे में",
     navHowItWorks: "यह कैसे काम करता है",
     navSafetyTrust: "सुरक्षा एवं विश्वास",
+    navTerms: "नियम एवं शर्तें",
     navLanguage: "भाषा",
     navSignIn: "साइन इन",
     navLogin: "लॉगिन",

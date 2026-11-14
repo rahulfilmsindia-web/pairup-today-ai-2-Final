@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Sparkles, Heart, Shield, Users, ArrowRight } from 'lucide-react';
 
 interface HeroProps {
@@ -7,7 +8,8 @@ interface HeroProps {
 }
 
 export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
-  const { openAuthModal, isAuthenticated, activeRole } = useAuth();
+  const { openAuthModal } = useAuth();
+  const { t } = useLanguage();
 
   const handleCompanionCta = () => {
     // Exact requirement: Clicking the CTA must open the Companion Sign In/registration flow
@@ -32,22 +34,22 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
         {/* Subtle trust kicker */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-xs text-slate-300 mb-8 backdrop-blur-sm shadow-inner">
           <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>Verified Social Companionship Across India</span>
+          <span>{t.heroKicker}</span>
           <span className="text-slate-600">|</span>
-          <span className="text-pink-400 font-medium">100% Free for Clients</span>
+          <span className="text-pink-400 font-medium">{t.heroFreeBadge}</span>
         </div>
 
         {/* Exact Headline: "Find Your Perfect Companion, Anytime, Anywhere." */}
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-100 leading-[1.15] mb-6">
-          Find Your Perfect Companion,{' '}
+          {t.heroHeadline}{' '}
           <span className="bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
-            Anytime, Anywhere.
+            {t.heroHeadlineHighlight}
           </span>
         </h1>
 
         {/* Supporting description */}
         <p className="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
-          Whether you need a companion for a quiet café, shopping in the city, exploring cultural landmarks, or friendly conversation, PairUpToday connects you with verified individuals safely.
+          {t.heroSubheadline}
         </p>
 
         {/* Main CTA Section */}
@@ -58,12 +60,12 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
             onClick={handleCompanionCta}
             className="group relative inline-flex items-center justify-center px-8 py-4 sm:px-10 sm:py-4 text-sm sm:text-base font-extrabold uppercase tracking-wide text-slate-950 rounded-xl bg-gradient-to-r from-amber-400 via-rose-400 to-sky-400 shadow-xl shadow-pink-500/25 transition-all duration-300 hover:shadow-pink-500/40 hover:scale-[1.03] active:scale-95 animate-[pulse_3s_ease-in-out_infinite]"
           >
-            <span>YOUR TIME. YOUR CHOICE. YOUR EARNINGS. →</span>
+            <span>{t.heroCta}</span>
           </button>
 
           {/* Exact Supporting Text: "Join PairUpToday as a Companion and earn on your own terms." */}
           <p className="text-xs sm:text-sm text-slate-400 font-medium">
-            Join PairUpToday as a Companion and earn on your own terms.
+            {t.heroSupportingText}
           </p>
 
           {/* Client Discover Button */}
@@ -72,7 +74,7 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
               onClick={onExploreCompanions}
               className="inline-flex items-center gap-2 text-xs sm:text-sm text-slate-300 hover:text-amber-400 transition-colors py-2 px-4 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700"
             >
-              <span>Explore Verified Companions in your City</span>
+              <span>{t.heroExploreButton}</span>
               <ArrowRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
@@ -85,8 +87,8 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
               <Shield className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-200">100% Verified KYC</div>
-              <div className="text-[11px] text-slate-400">Govt ID & live selfie gate</div>
+              <div className="text-xs font-bold text-slate-200">{t.heroTrustKycTitle}</div>
+              <div className="text-[11px] text-slate-400">{t.heroTrustKycDesc}</div>
             </div>
           </div>
 
@@ -95,8 +97,8 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
               <Heart className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-200">Free Client Access</div>
-              <div className="text-[11px] text-slate-400">No membership fees</div>
+              <div className="text-xs font-bold text-slate-200">{t.heroTrustFreeTitle}</div>
+              <div className="text-[11px] text-slate-400">{t.heroTrustFreeDesc}</div>
             </div>
           </div>
 
@@ -105,8 +107,8 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-200">Start & Finish OTP</div>
-              <div className="text-[11px] text-slate-400">In-person meeting lock</div>
+              <div className="text-xs font-bold text-slate-200">{t.heroTrustOtpTitle}</div>
+              <div className="text-[11px] text-slate-400">{t.heroTrustOtpDesc}</div>
             </div>
           </div>
 
@@ -115,8 +117,8 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
               <Users className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-200">India 100 & 112 SOS</div>
-              <div className="text-[11px] text-slate-400">Emergency support hub</div>
+              <div className="text-xs font-bold text-slate-200">{t.heroTrustSosTitle}</div>
+              <div className="text-[11px] text-slate-400">{t.heroTrustSosDesc}</div>
             </div>
           </div>
         </div>

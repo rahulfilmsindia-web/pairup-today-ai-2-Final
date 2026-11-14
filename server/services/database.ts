@@ -1,4 +1,4 @@
-import { db, isSupabaseConfigured } from './supabase';
+import { db, isSupabaseConfigured, supabase } from './supabase';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -8,6 +8,78 @@ const __dirname = path.dirname(__filename);
 
 const DATA_DIR = path.join(__dirname, '../../data');
 const DB_FILE = path.join(DATA_DIR, 'pairuptoday_db.json');
+const OTP_DB_FILE = path.join(DATA_DIR, 'otp_challenges.json');
+const ADMIN_MFA_DB_FILE = path.join(DATA_DIR, 'admin_mfa_challenges.json');
+const localRateLimitBuckets = new Map<string, { startedAt: number; count: number }>();
+const localRevokedSessions = new Set<string>();
+const localWebhookEvents = new Map<string, any>();
+const localSensitiveMfa = new Map<string, { hash: string; expiresAt: number; attempts: number; sent: boolean }>();
+
+interface JsonOtpChallenge {
+  otpHash: string;
+  expiresAt: number;
+  attempts: number;
+  lastSentAt: number;
+  windowStartTime: number;
+  windowCount: number;
+  status: 'PENDING' | 'SENT' | 'FAILED' | 'EXPIRED' | 'LOCKED' | 'CONSUMED';
+  requestId?: string;
+}
+
+function mapCompanionProfilePatchToRow(profile: any): Record<string, unknown> {
+  const fields: Record<string, string> = {
+    services: 'services',
+    rates: 'rates',
+    availability: 'availability',
+    isLive: 'is_live',
+    rating: 'rating',
+    totalBookings: 'total_bookings',
+    address: 'address',
+    state: 'state',
+    latitude: 'latitude',
+    longitude: 'longitude',
+    isInitialListing: 'is_initial_listing',
+    isPaused: 'is_paused'
+  };
+  const row: Record<string, unknown> = {};
+  for (const [key, column] of Object.entries(fields)) {
+    if (key in profile) row[column] = profile[key];
+  }
+  return row;
+}
+
+function loadJsonOtpChallenges(): Record<string, JsonOtpChallenge> {
+  if (!fs.existsSync(OTP_DB_FILE)) return {};
+  const raw = fs.readFileSync(OTP_DB_FILE, 'utf-8');
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Local OTP challenge storage is invalid.');
+  }
+  return parsed as Record<string, JsonOtpChallenge>;
+}
+
+function saveJsonOtpChallenges(challenges: Record<string, JsonOtpChallenge>): void {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tempPath = `${OTP_DB_FILE}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tempPath, JSON.stringify(challenges), 'utf-8');
+  fs.renameSync(tempPath, OTP_DB_FILE);
+}
+
+function loadJsonAdminMfaChallenges(): Record<string, JsonOtpChallenge> {
+  if (!fs.existsSync(ADMIN_MFA_DB_FILE)) return {};
+  const parsed = JSON.parse(fs.readFileSync(ADMIN_MFA_DB_FILE, 'utf-8'));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Local administrator MFA challenge storage is invalid.');
+  }
+  return parsed as Record<string, JsonOtpChallenge>;
+}
+
+function saveJsonAdminMfaChallenges(challenges: Record<string, JsonOtpChallenge>): void {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tempPath = `${ADMIN_MFA_DB_FILE}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tempPath, JSON.stringify(challenges), 'utf-8');
+  fs.renameSync(tempPath, ADMIN_MFA_DB_FILE);
+}
 
 // JSON-based DB state (legacy fallback)
 interface DBState {
@@ -22,6 +94,8 @@ interface DBState {
   adminUsers: Record<string, any>;
   supportConversations?: Record<string, any>;
   supportMessages?: Record<string, any[]>;
+  notifications?: Record<string, any[]>;
+  firebaseDeviceTokens?: Record<string, { userId: string; platform: string }>;
   bankVerifications?: Record<string, any>;
   userLocations?: Record<string, any>;
   userPresence?: Record<string, any>;
@@ -63,6 +137,8 @@ function loadJsonDB(): DBState {
     adminUsers: {},
     supportConversations: {},
     supportMessages: {},
+    notifications: {},
+    firebaseDeviceTokens: {},
     bankVerifications: {},
     userLocations: {},
     userPresence: {},
@@ -98,20 +174,29 @@ export interface DatabaseAdapter {
 
   // KYC
   createKycSubmission(submission: any): Promise<any>;
+  submitKycSubmission(submission: any): Promise<any>;
   getKycSubmission(id: string): Promise<any | null>;
+  getUserKycSubmission(userId: string, submissionRole: 'CLIENT' | 'COMPANION'): Promise<any | null>;
   listKycSubmissions(filters?: any): Promise<any[]>;
   updateKycSubmission(id: string, updates: any): Promise<any>;
+  reviewKycSubmission(id: string, decision: 'APPROVED' | 'REJECTED', rejectionReason: string | null, adminUserId: string): Promise<any>;
+  createKycDocumentSignedUrls(id: string): Promise<Record<string, string | null> | null>;
+  uploadKycDocument(bucket: string, path: string, bytes: Buffer, contentType: string): Promise<void>;
+  deleteKycDocuments(bucket: string, paths: string[]): Promise<void>;
 
   // Companion Profiles
   getCompanionProfile(userId: string): Promise<any | null>;
   createCompanionProfile(profile: any): Promise<any>;
+  upsertCompanionProfile(profile: any): Promise<any>;
   updateCompanionProfile(userId: string, updates: any): Promise<any>;
   listCompanionProfiles(filters?: any): Promise<any[]>;
 
   // Memberships
   createMembership(membership: any): Promise<any>;
   getActiveMembership(userId: string): Promise<any | null>;
+  getMembershipByPaymentOrder(orderId: string): Promise<any | null>;
   listMemberships(filters?: any): Promise<any[]>;
+  updateMembershipOrder(id: string, orderId: string): Promise<any>;
 
   // Bank Verification
   createBankVerification(verification: any): Promise<any>;
@@ -120,10 +205,15 @@ export interface DatabaseAdapter {
 
   // Bookings
   createBooking(booking: any): Promise<any>;
+  reserveBookingPayment(booking: any): Promise<any>;
   getBooking(id: string): Promise<any | null>;
   getBookingByCode(code: string): Promise<any | null>;
+  getBookingByPaymentOrder(orderId: string): Promise<any | null>;
   listBookings(filters?: any): Promise<any[]>;
   updateBooking(id: string, updates: any): Promise<any>;
+  markBookingCompanionArrived(bookingId: string, companionId: string): Promise<any>;
+  verifyBookingOtp(bookingId: string, companionId: string, otpType: 'START' | 'COMPLETION', otpHash: string, delayMinutes?: number): Promise<any>;
+  finalizeRazorpayPayment(orderId: string, paymentId: string, amountPaise: number, startOtpHash: string, completionOtpHash: string, startOtpEncrypted: string, completionOtpEncrypted: string): Promise<any>;
 
   // Wallet
   createWalletEntry(entry: any): Promise<any>;
@@ -140,17 +230,20 @@ export interface DatabaseAdapter {
   getConversation(id: string): Promise<any | null>;
   listConversations(userId: string): Promise<any[]>;
   createMessage(message: any): Promise<any>;
-  listMessages(conversationId: string): Promise<any[]>;
+  listMessages(conversationId: string, after?: string): Promise<any[]>;
 
   // Support
   createSupportConversation(conversation: any): Promise<any>;
   getSupportConversation(id: string): Promise<any | null>;
   listSupportConversations(filters?: any): Promise<any[]>;
   createSupportMessage(message: any): Promise<any>;
-  listSupportMessages(conversationId: string): Promise<any[]>;
+  listSupportMessages(conversationId: string, after?: { createdAt: string; id: string }): Promise<any[]>;
+  updateSupportConversation(id: string, updates: any): Promise<any>;
 
   // Admin
   getAdminUser(email: string): Promise<any | null>;
+  getAdminUserById(id: string): Promise<any | null>;
+  updateAdminPasswordHash(id: string, passwordHash: string): Promise<void>;
   createAdminUser(admin: any): Promise<any>;
   listAdminUsers(): Promise<any[]>;
 
@@ -161,22 +254,217 @@ export interface DatabaseAdapter {
   // Notifications
   createNotification(notification: any): Promise<any>;
   listNotifications(userId: string): Promise<any[]>;
-  markNotificationRead(id: string): Promise<void>;
+  markNotificationRead(id: string, userId?: string): Promise<void>;
+  claimNotificationPushes(notificationId?: string, limit?: number): Promise<any[]>;
+  finishNotificationPush(id: string, success: boolean, errorMessage?: string): Promise<void>;
+  registerDeviceToken(userId: string, token: string, platform: 'WEB' | 'ANDROID' | 'IOS'): Promise<void>;
+  listDeviceTokens(userId: string): Promise<string[]>;
+  deleteDeviceToken(token: string, userId?: string): Promise<void>;
 
-  // OTP Store (in-memory only for security)
-  setOtp(phone: string, data: any): void;
-  getOtp(phone: string): any | null;
-  deleteOtp(phone: string): void;
+  // Durable location/presence records; realtime transport may additionally use Firebase.
+  upsertUserLocation(location: any): Promise<any>;
+  getUserLocation(userId: string): Promise<any | null>;
+  deleteUserLocation(userId: string): Promise<void>;
+  upsertUserPresence(presence: any): Promise<any>;
+  getUserPresence(userId: string): Promise<any | null>;
+  setBookingLocationSharing(bookingId: string, userId: string, enabled: boolean): Promise<void>;
+  getBookingLocationSharing(bookingId: string, userId: string): Promise<boolean>;
 
-  // Admin MFA Store (in-memory only for security)
-  setAdminMfa(adminId: string, data: any): void;
-  getAdminMfa(adminId: string): any | null;
-  deleteAdminMfa(adminId: string): void;
+  // OTP challenges are persisted in Supabase in production.
+  reserveOtp(phone: string, otpHash: string): Promise<OtpReservation>;
+  setOtpDeliveryResult(phone: string, sent: boolean, requestId?: string): Promise<void>;
+  verifyOtp(phone: string, otpHash: string): Promise<OtpVerificationResult>;
+  reserveAdminMfa(email: string, otpHash: string): Promise<OtpReservation>;
+  setAdminMfaDeliveryResult(email: string, sent: boolean, requestId?: string): Promise<void>;
+  verifyAdminMfa(email: string, otpHash: string): Promise<OtpVerificationResult>;
+  consumeRateLimit(bucketKey: string, limit: number, windowSeconds: number): Promise<any>;
+  isSessionRevoked(tokenId: string): Promise<boolean>;
+  revokeSession(tokenId: string, principalId: string, principalType: 'USER' | 'ADMIN', expiresAt: string): Promise<void>;
+  claimPaymentWebhookEvent(eventId: string, eventType: string, payload: any): Promise<any>;
+  completePaymentWebhookEvent(eventId: string, error?: string): Promise<void>;
+  markRazorpayOrderFailed(orderId: string, paymentId?: string): Promise<boolean>;
+  reservePaymentRefund(refund: any): Promise<any>;
+  listPaymentRefunds(filters?: any): Promise<any[]>;
+  updatePaymentRefund(idempotencyKey: string, status: string, providerRefundId?: string): Promise<any>;
+  processBookingPayout(bookingId: string, adminUserId: string, utrReference: string): Promise<any>;
+  claimScheduledJobRun(jobName: string, idempotencyKey: string): Promise<boolean>;
+  finishScheduledJobRun(jobName: string, idempotencyKey: string, error?: string): Promise<void>;
+  runScheduledMaintenance(): Promise<any>;
+  reserveAdminSensitiveMfa(adminUserId: string, action: string, otpHash: string): Promise<any>;
+  completeAdminSensitiveMfaDelivery(adminUserId: string, action: string, sent: boolean): Promise<boolean>;
+  verifyAdminSensitiveMfa(adminUserId: string, action: string, otpHash: string): Promise<string>;
+  consumeAdminSensitiveMfa(adminUserId: string, action: string): Promise<boolean>;
 }
 
-// In-memory stores for OTP and MFA (always in-memory for security)
-const otpStore: Record<string, any> = {};
-const adminMfaStore: Record<string, any> = {};
+export interface OtpReservation {
+  allowed: boolean;
+  reason?: 'cooldown' | 'rate_limit';
+  waitSeconds?: number;
+}
+
+export type OtpVerificationResult = 'verified' | 'not_found' | 'expired' | 'locked' | 'invalid';
+
+function uuidOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : undefined;
+}
+
+function mapKycSubmissionToRow(submission: any): Record<string, unknown> {
+  return {
+    ...(uuidOrUndefined(submission.id) ? { id: submission.id } : {}),
+    user_id: submission.userId,
+    submission_role: submission.userType || submission.submissionRole,
+    legal_name: submission.legalName,
+    dob: submission.dob,
+    id_type: submission.idType,
+    id_reference: submission.idReference || null,
+    id_front_document_path: submission.idFrontUrl,
+    id_back_document_path: submission.idBackUrl || null,
+    selfie_document_path: submission.selfieUrl,
+    status: submission.status || 'PENDING',
+    submitted_at: submission.submittedAt,
+    reviewed_at: submission.decidedAt || null,
+    rejection_reason: submission.rejectionReason || null,
+    reviewed_by_admin_id: uuidOrUndefined(submission.decidedByAdminId || submission.decidedBy) || null,
+    profile_bio: submission.bio || null,
+    profile_photos: submission.photos || null,
+    city: submission.city || null
+  };
+}
+
+function mapKycSubmissionFromRow(row: any): any {
+  return {
+    ...row,
+    userId: row.user_id,
+    userType: row.submission_role,
+    legalName: row.legal_name,
+    idType: row.id_type,
+    idReference: row.id_reference,
+    idFrontUrl: row.id_front_document_path,
+    idBackUrl: row.id_back_document_path,
+    selfieUrl: row.selfie_document_path,
+    submittedAt: row.submitted_at,
+    decidedAt: row.reviewed_at,
+    rejectionReason: row.rejection_reason,
+    decidedByAdminId: row.reviewed_by_admin_id,
+    bio: row.profile_bio,
+    photos: row.profile_photos
+  };
+}
+
+function mapCompanionProfileToRow(profile: any): Record<string, unknown> {
+  return {
+    ...(uuidOrUndefined(profile.id) ? { id: profile.id } : {}),
+    user_id: profile.userId || profile.user_id,
+    services: profile.services || [],
+    rates: profile.rates || {},
+    availability: profile.availability ?? null,
+    is_live: profile.isLive ?? profile.is_live ?? false,
+    rating: profile.rating ?? 0,
+    total_bookings: profile.totalBookings ?? profile.total_bookings ?? 0,
+    address: profile.address || null,
+    state: profile.state || null,
+    latitude: profile.latitude ?? null,
+    longitude: profile.longitude ?? null,
+    is_initial_listing: profile.isInitialListing ?? profile.is_initial_listing ?? false,
+    is_paused: profile.isPaused ?? profile.is_paused ?? false
+  };
+}
+
+function mapCompanionProfileFromRow(row: any): any {
+  return {
+    ...row,
+    userId: row.user_id,
+    isLive: row.is_live,
+    totalBookings: row.total_bookings,
+    isInitialListing: row.is_initial_listing,
+    isPaused: row.is_paused
+  };
+}
+
+function mapBookingToRow(booking: any): Record<string, unknown> {
+  return {
+    ...(uuidOrUndefined(booking.id) ? { id: booking.id } : {}),
+    booking_code: booking.bookingCode,
+    client_id: booking.clientId,
+    companion_id: booking.companionId,
+    service_id: booking.serviceId,
+    service_name: booking.serviceName,
+    booking_date: booking.date || booking.bookingDate,
+    start_time: booking.startTime,
+    end_time: booking.endTime,
+    duration_hours: booking.durationHours || Math.ceil((booking.slotMinutes || 60) / 60),
+    meeting_location: booking.meetingLocation,
+    meeting_address: booking.meetingAddress || null,
+    latitude: booking.latitude ?? null,
+    longitude: booking.longitude ?? null,
+    notes: booking.notes || null,
+    amount_paise: booking.bookingAmountPaise ?? booking.amountPaise,
+    status: booking.status || 'PENDING',
+    payment_order_id: booking.paymentOrderId || null,
+    payment_id: booking.paymentId || null,
+    payment_status: booking.paymentStatus || 'PENDING',
+    start_otp_hash: booking.startOtpHmac || booking.startOtpHash || null,
+    completion_otp_hash: booking.endOtpHmac || booking.completionOtpHash || null,
+    start_otp_encrypted: booking.startOtpEncrypted || null,
+    completion_otp_encrypted: booking.completionOtpEncrypted || null,
+    companion_arrived_at: booking.companionArrivedAt || null,
+    started_at: booking.startedAt || null,
+    completed_at: booking.completedAt || null,
+    delay_minutes: booking.delayMinutes || 0,
+    admin_platform_fee_paise: booking.adminPlatformFeePaise || 0,
+    companion_gross_share_paise: booking.companionGrossSharePaise || 0,
+    companion_net_share_paise: booking.companionNetSharePaise || 0,
+    late_penalty_paise: booking.latePenaltyPaise || 0,
+    client_refund_penalty_paise: booking.clientRefundPenaltyPaise || 0,
+    settlement_status: booking.settlementStatus || 'LOCKED',
+    settlement_unlock_at: booking.settlementUnlockUtc || booking.settlementUnlockAt || null,
+    start_otp_attempts: booking.startOtpAttempts || 0,
+    completion_otp_attempts: booking.endOtpAttempts || 0,
+    start_otp_verified: booking.startOtpVerified || false,
+    completion_otp_verified: booking.endOtpVerified || false,
+    payout_id: uuidOrUndefined(booking.payoutId) || null
+  };
+}
+
+function mapBookingFromRow(row: any): any {
+  return {
+    ...row,
+    bookingCode: row.booking_code,
+    clientId: row.client_id,
+    companionId: row.companion_id,
+    serviceId: row.service_id,
+    serviceName: row.service_name,
+    date: row.booking_date,
+    durationHours: row.duration_hours,
+    slotMinutes: row.duration_hours * 60,
+    meetingLocation: row.meeting_location,
+    meetingAddress: row.meeting_address,
+    bookingAmountPaise: row.amount_paise,
+    paymentOrderId: row.payment_order_id,
+    paymentId: row.payment_id,
+    paymentStatus: row.payment_status,
+    startOtpHmac: row.start_otp_hash,
+    endOtpHmac: row.completion_otp_hash,
+    startOtpEncrypted: row.start_otp_encrypted,
+    completionOtpEncrypted: row.completion_otp_encrypted,
+    companionArrivedAt: row.companion_arrived_at,
+    completedAt: row.completed_at,
+    adminPlatformFeePaise: row.admin_platform_fee_paise,
+    companionGrossSharePaise: row.companion_gross_share_paise,
+    companionNetSharePaise: row.companion_net_share_paise,
+    latePenaltyPaise: row.late_penalty_paise,
+    clientRefundPenaltyPaise: row.client_refund_penalty_paise,
+    settlementStatus: row.settlement_status,
+    settlementUnlockUtc: row.settlement_unlock_at,
+    startOtpAttempts: row.start_otp_attempts,
+    endOtpAttempts: row.completion_otp_attempts,
+    endOtpVerified: row.completion_otp_verified,
+    payoutId: row.payout_id
+  };
+}
 
 // JSON-based adapter (legacy)
 class JsonDatabaseAdapter implements DatabaseAdapter {
@@ -225,9 +513,23 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     return submission;
   }
 
+  async submitKycSubmission(submission: any): Promise<any> {
+    const db = this.getDB();
+    db.kycSubmissions[submission.id] = submission;
+    this.saveDB(db);
+    return submission;
+  }
+
   async getKycSubmission(id: string): Promise<any | null> {
     const db = this.getDB();
     return db.kycSubmissions[id] || null;
+  }
+
+  async getUserKycSubmission(userId: string, submissionRole: 'CLIENT' | 'COMPANION'): Promise<any | null> {
+    const db = this.getDB();
+    return Object.values(db.kycSubmissions).find((submission: any) =>
+      submission.userId === userId && (submission.userType || submission.submissionRole) === submissionRole
+    ) || null;
   }
 
   async listKycSubmissions(filters?: any): Promise<any[]> {
@@ -243,6 +545,51 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     return db.kycSubmissions[id];
   }
 
+  async reviewKycSubmission(id: string, decision: 'APPROVED' | 'REJECTED', rejectionReason: string | null, adminUserId: string): Promise<any> {
+    const db = this.getDB();
+    const submission = db.kycSubmissions[id];
+    if (!submission) return null;
+    submission.status = decision;
+    submission.rejectionReason = rejectionReason;
+    submission.decidedAt = new Date().toISOString();
+    submission.decidedByAdminId = adminUserId;
+    const user = db.users[submission.userId];
+    if (user) {
+      user.kycStatus = decision;
+      user.kycDecidedAt = submission.decidedAt;
+      user.kycDecidedByAdminId = adminUserId;
+      user.kycRejectionReason = rejectionReason;
+    }
+    db.auditLogs.unshift({
+      id: `log_${Date.now()}`,
+      adminId: adminUserId,
+      action: `KYC_${decision}`,
+      targetId: submission.userId,
+      details: `KYC for ${submission.legalName} (${submission.userType}) was ${decision}.`,
+      timestamp: submission.decidedAt
+    });
+    this.saveDB(db);
+    return submission;
+  }
+
+  async createKycDocumentSignedUrls(id: string): Promise<Record<string, string | null> | null> {
+    const submission = await this.getKycSubmission(id);
+    if (!submission) return null;
+    return {
+      idFrontUrl: submission.idFrontUrl,
+      idBackUrl: submission.idBackUrl || null,
+      selfieUrl: submission.selfieUrl
+    };
+  }
+
+  async uploadKycDocument(_bucket: string, _path: string, _bytes: Buffer, _contentType: string): Promise<void> {
+    throw new Error('Private KYC document uploads require configured Supabase Storage.');
+  }
+
+  async deleteKycDocuments(_bucket: string, _paths: string[]): Promise<void> {
+    throw new Error('Private KYC document cleanup requires configured Supabase Storage.');
+  }
+
   async getCompanionProfile(userId: string): Promise<any | null> {
     const db = this.getDB();
     return Object.values(db.companionProfiles).find((p: any) => p.userId === userId) || null;
@@ -255,13 +602,24 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     return profile;
   }
 
+  async upsertCompanionProfile(profile: any): Promise<any> {
+    const db = this.getDB();
+    db.companionProfiles[profile.userId] = {
+      ...(db.companionProfiles[profile.userId] || {}),
+      ...profile
+    };
+    this.saveDB(db);
+    return db.companionProfiles[profile.userId];
+  }
+
   async updateCompanionProfile(userId: string, updates: any): Promise<any> {
     const db = this.getDB();
-    const profile = Object.values(db.companionProfiles).find((p: any) => p.userId === userId);
-    if (!profile) return null;
-    db.companionProfiles[profile.id] = { ...profile, ...updates };
+    const key = Object.keys(db.companionProfiles).find(id => db.companionProfiles[id]?.userId === userId);
+    if (!key) return null;
+    const profile = db.companionProfiles[key];
+    db.companionProfiles[key] = { ...profile, ...updates };
     this.saveDB(db);
-    return db.companionProfiles[profile.id];
+    return db.companionProfiles[key];
   }
 
   async listCompanionProfiles(filters?: any): Promise<any[]> {
@@ -286,9 +644,24 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     ) || null;
   }
 
+  async getMembershipByPaymentOrder(orderId: string): Promise<any | null> {
+    const membership = Object.values(this.getDB().companionMemberships)
+      .find((item: any) => item.paymentOrderId === orderId);
+    return membership || null;
+  }
+
   async listMemberships(filters?: any): Promise<any[]> {
     const db = this.getDB();
     return Object.values(db.companionMemberships);
+  }
+
+  async updateMembershipOrder(id: string, orderId: string): Promise<any> {
+    const db = this.getDB();
+    const membership = Object.values(db.companionMemberships).find((item: any) => item.id === id);
+    if (!membership) throw new Error('Membership not found.');
+    membership.paymentOrderId = orderId;
+    this.saveDB(db);
+    return membership;
   }
 
   async createBankVerification(verification: any): Promise<any> {
@@ -328,6 +701,10 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     return booking;
   }
 
+  async reserveBookingPayment(booking: any): Promise<any> {
+    return this.createBooking(booking);
+  }
+
   async getBooking(id: string): Promise<any | null> {
     const db = this.getDB();
     return db.bookings[id] || null;
@@ -336,6 +713,11 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
   async getBookingByCode(code: string): Promise<any | null> {
     const db = this.getDB();
     return Object.values(db.bookings).find((b: any) => b.bookingCode === code) || null;
+  }
+
+  async getBookingByPaymentOrder(orderId: string): Promise<any | null> {
+    const booking = Object.values(this.getDB().bookings).find((item: any) => item.paymentOrderId === orderId);
+    return booking || null;
   }
 
   async listBookings(filters?: any): Promise<any[]> {
@@ -349,6 +731,26 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     db.bookings[id] = { ...db.bookings[id], ...updates };
     this.saveDB(db);
     return db.bookings[id];
+  }
+
+  async markBookingCompanionArrived(_bookingId: string, _companionId: string): Promise<any> {
+    throw new Error('Atomic booking arrival requires Supabase.');
+  }
+
+  async verifyBookingOtp(_bookingId: string, _companionId: string, _otpType: 'START' | 'COMPLETION', _otpHash: string, _delayMinutes = 0): Promise<any> {
+    throw new Error('Atomic booking OTP verification requires Supabase.');
+  }
+
+  async finalizeRazorpayPayment(
+    _orderId: string,
+    _paymentId: string,
+    _amountPaise: number,
+    _startOtpHash: string,
+    _completionOtpHash: string,
+    _startOtpEncrypted: string,
+    _completionOtpEncrypted: string
+  ): Promise<any> {
+    throw new Error('Atomic payment finalization requires the Supabase database.');
   }
 
   async createWalletEntry(entry: any): Promise<any> {
@@ -443,10 +845,10 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     return message;
   }
 
-  async listMessages(conversationId: string): Promise<any[]> {
+  async listMessages(conversationId: string, after?: string): Promise<any[]> {
     const db = this.getDB();
     if (!db.chatMessages || !db.chatMessages[conversationId]) return [];
-    return db.chatMessages[conversationId];
+    return after ? db.chatMessages[conversationId].filter((message: any) => message.timestamp > after || message.createdAt > after) : db.chatMessages[conversationId];
   }
 
   async createSupportConversation(conversation: any): Promise<any> {
@@ -481,15 +883,43 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     return message;
   }
 
-  async listSupportMessages(conversationId: string): Promise<any[]> {
+  async listSupportMessages(conversationId: string, after?: { createdAt: string; id: string }): Promise<any[]> {
     const db = this.getDB();
     if (!db.supportMessages || !db.supportMessages[conversationId]) return [];
-    return db.supportMessages[conversationId];
+    return after
+      ? db.supportMessages[conversationId].filter((message: any) => {
+        const createdAt = message.createdAt || message.created_at;
+        const id = message.id || '';
+        return createdAt > after.createdAt || (createdAt === after.createdAt && id > after.id);
+      })
+      : db.supportMessages[conversationId];
+  }
+
+  async updateSupportConversation(id: string, updates: any): Promise<any> {
+    const conversation = await this.getSupportConversation(id);
+    if (!conversation) return null;
+    const updated = { ...conversation, ...updates, updatedAt: new Date().toISOString() };
+    this.getDB().supportConversations![id] = updated;
+    this.saveDB(this.getDB());
+    return updated;
   }
 
   async getAdminUser(email: string): Promise<any | null> {
     const db = this.getDB();
-    return Object.values(db.adminUsers).find((a: any) => a.email === email) || null;
+    return Object.values(db.adminUsers).find((a: any) => a.email.toLowerCase() === email.toLowerCase()) || null;
+  }
+
+  async getAdminUserById(id: string): Promise<any | null> {
+    const db = this.getDB();
+    return db.adminUsers[id] || null;
+  }
+
+  async updateAdminPasswordHash(id: string, passwordHash: string): Promise<void> {
+    const db = this.getDB();
+    const admin = db.adminUsers[id];
+    if (!admin) throw new Error('Administrator account no longer exists.');
+    db.adminUsers[id] = { ...admin, passwordHash };
+    this.saveDB(db);
   }
 
   async createAdminUser(admin: any): Promise<any> {
@@ -516,67 +946,451 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
   }
 
   async createNotification(notification: any): Promise<any> {
-    // For JSON DB, notifications are not persisted (optional feature)
-    return notification;
+    const db = this.getDB();
+    db.notifications ||= {};
+    const item = {
+      ...notification,
+      id: notification.id || crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      pushDeliveryStatus: 'PENDING',
+      pushAttempts: 0,
+      pushRetryAt: new Date().toISOString()
+    };
+    (db.notifications[notification.userId] ||= []).unshift(item);
+    this.saveDB(db);
+    return item;
   }
 
   async listNotifications(userId: string): Promise<any[]> {
-    return [];
+    return this.getDB().notifications?.[userId] || [];
   }
 
-  async markNotificationRead(id: string): Promise<void> {
-    // No-op for JSON DB
+  async markNotificationRead(id: string, userId?: string): Promise<void> {
+    const db = this.getDB();
+    const notifications = userId ? db.notifications?.[userId] || [] : Object.values(db.notifications || {}).flat();
+    const item = notifications.find((entry: any) => entry.id === id);
+    if (!item) throw new Error('Notification was not found.');
+    item.readAt = new Date().toISOString();
+    this.saveDB(db);
   }
 
-  setOtp(phone: string, data: any): void {
-    otpStore[phone] = data;
+  async claimNotificationPushes(notificationId?: string, limit = 100): Promise<any[]> {
+    const db = this.getDB();
+    const now = Date.now();
+    const notifications = Object.values(db.notifications || {}).flat() as any[];
+    const candidates = notifications
+      .filter(notification =>
+        (!notificationId || notification.id === notificationId) &&
+        notification.pushDeliveryStatus !== 'SENT' &&
+        notification.pushDeliveryStatus !== 'FAILED' &&
+        (notification.pushAttempts || 0) < 5 &&
+        (!notification.pushRetryAt || Date.parse(notification.pushRetryAt) <= now) &&
+        (notification.pushDeliveryStatus !== 'PROCESSING' ||
+          !notification.pushClaimedAt ||
+          Date.parse(notification.pushClaimedAt) <= now - 10 * 60 * 1000)
+      )
+      .slice(0, Math.min(500, Math.max(1, limit)));
+    for (const notification of candidates) {
+      notification.pushDeliveryStatus = 'PROCESSING';
+      notification.pushAttempts = (notification.pushAttempts || 0) + 1;
+      notification.pushClaimedAt = new Date(now).toISOString();
+    }
+    if (candidates.length) this.saveDB(db);
+    return candidates.map(notification => ({
+      notification,
+      deviceTokens: Object.entries(db.firebaseDeviceTokens || {})
+        .filter(([, token]: [string, any]) => token.userId === notification.userId)
+        .map(([token]) => token)
+    }));
   }
 
-  getOtp(phone: string): any | null {
-    return otpStore[phone] || null;
+  async finishNotificationPush(id: string, success: boolean, errorMessage?: string): Promise<void> {
+    const db = this.getDB();
+    const notifications = Object.values(db.notifications || {}).flat() as any[];
+    const notification = notifications.find(entry => entry.id === id);
+    if (!notification || notification.pushDeliveryStatus !== 'PROCESSING') {
+      throw new Error('Notification push claim was not found.');
+    }
+    notification.pushDeliveryStatus = success
+      ? 'SENT'
+      : (notification.pushAttempts >= 5 ? 'FAILED' : 'PENDING');
+    notification.pushClaimedAt = null;
+    notification.pushRetryAt = new Date(Date.now() + Math.min(3600, 30 * (2 ** Math.max(0, notification.pushAttempts - 1))) * 1000).toISOString();
+    notification.pushLastError = success ? null : (errorMessage || 'Push delivery failed.').slice(0, 1000);
+    if (success) notification.pushSentAt = new Date().toISOString();
+    this.saveDB(db);
   }
 
-  deleteOtp(phone: string): void {
-    delete otpStore[phone];
+  async registerDeviceToken(userId: string, token: string, platform: 'WEB' | 'ANDROID' | 'IOS'): Promise<void> {
+    const db = this.getDB();
+    db.firebaseDeviceTokens ||= {};
+    db.firebaseDeviceTokens[token] = { userId, platform };
+    this.saveDB(db);
   }
 
-  setAdminMfa(adminId: string, data: any): void {
-    adminMfaStore[adminId] = data;
+  async listDeviceTokens(userId: string): Promise<string[]> {
+    return Object.entries(this.getDB().firebaseDeviceTokens || {})
+      .filter(([, entry]) => entry.userId === userId)
+      .map(([token]) => token);
   }
 
-  getAdminMfa(adminId: string): any | null {
-    return adminMfaStore[adminId] || null;
+  async deleteDeviceToken(token: string, userId?: string): Promise<void> {
+    const db = this.getDB();
+    if (db.firebaseDeviceTokens?.[token] && (!userId || db.firebaseDeviceTokens[token].userId === userId)) {
+      delete db.firebaseDeviceTokens[token];
+    }
+    this.saveDB(db);
   }
 
-  deleteAdminMfa(adminId: string): void {
-    delete adminMfaStore[adminId];
+  async upsertUserLocation(location: any): Promise<any> {
+    const db = this.getDB();
+    db.userLocations ||= {};
+    db.userLocations[location.userId] = location;
+    this.saveDB(db);
+    return location;
   }
+
+  async getUserLocation(userId: string): Promise<any | null> {
+    return this.getDB().userLocations?.[userId] || null;
+  }
+
+  async deleteUserLocation(userId: string): Promise<void> {
+    const db = this.getDB();
+    if (db.userLocations) delete db.userLocations[userId];
+    this.saveDB(db);
+  }
+
+  async upsertUserPresence(presence: any): Promise<any> {
+    const db = this.getDB();
+    db.userPresence ||= {};
+    db.userPresence[presence.userId] = presence;
+    this.saveDB(db);
+    return presence;
+  }
+
+  async getUserPresence(userId: string): Promise<any | null> {
+    return this.getDB().userPresence?.[userId] || null;
+  }
+
+  async setBookingLocationSharing(bookingId: string, userId: string, enabled: boolean): Promise<void> {
+    const locations = this.getDB().userLocations || (this.getDB().userLocations = {});
+    locations[`${bookingId}:${userId}`] = { bookingId, userId, sharingEnabled: enabled, updatedAt: new Date().toISOString() };
+    this.saveDB(this.getDB());
+  }
+
+  async getBookingLocationSharing(bookingId: string, userId: string): Promise<boolean> {
+    return this.getDB().userLocations?.[`${bookingId}:${userId}`]?.sharingEnabled === true;
+  }
+
+  async consumeRateLimit(bucketKey: string, limit: number, windowSeconds: number): Promise<any> {
+    const now = Date.now();
+    let bucket = localRateLimitBuckets.get(bucketKey);
+    if (!bucket || now - bucket.startedAt >= windowSeconds * 1000) {
+      bucket = { startedAt: now, count: 0 };
+      localRateLimitBuckets.set(bucketKey, bucket);
+    }
+    bucket.count++;
+    return { allowed: bucket.count <= limit, retryAfterSeconds: Math.max(1, Math.ceil((bucket.startedAt + windowSeconds * 1000 - now) / 1000)) };
+  }
+
+  async isSessionRevoked(tokenId: string): Promise<boolean> {
+    return localRevokedSessions.has(tokenId);
+  }
+
+  async revokeSession(tokenId: string): Promise<void> {
+    localRevokedSessions.add(tokenId);
+  }
+
+  async claimPaymentWebhookEvent(eventId: string, eventType: string, payload: any): Promise<any> {
+    const previous = localWebhookEvents.get(eventId);
+    if (previous?.processed) return { claimed: false, processed: true };
+    localWebhookEvents.set(eventId, { eventType, payload, processed: false });
+    return { claimed: true, processed: false };
+  }
+
+  async completePaymentWebhookEvent(eventId: string, error?: string): Promise<void> {
+    const event = localWebhookEvents.get(eventId);
+    if (!event) throw new Error('Payment webhook event claim was not found.');
+    event.processed = !error;
+  }
+
+  async markRazorpayOrderFailed(): Promise<boolean> {
+    throw new Error('Razorpay reconciliation requires Supabase.');
+  }
+
+  async reservePaymentRefund(): Promise<any> {
+    throw new Error('Payment refunds require Supabase.');
+  }
+
+  async listPaymentRefunds(): Promise<any[]> {
+    throw new Error('Payment refunds require Supabase.');
+  }
+
+  async updatePaymentRefund(): Promise<any> {
+    throw new Error('Payment refunds require Supabase.');
+  }
+
+  async processBookingPayout(): Promise<any> {
+    throw new Error('Payout processing requires Supabase.');
+  }
+
+  async claimScheduledJobRun(): Promise<boolean> {
+    throw new Error('Scheduled jobs require Supabase.');
+  }
+
+  async finishScheduledJobRun(): Promise<void> {
+    throw new Error('Scheduled jobs require Supabase.');
+  }
+
+  async runScheduledMaintenance(): Promise<any> {
+    throw new Error('Scheduled maintenance requires Supabase.');
+  }
+
+  async reserveAdminSensitiveMfa(): Promise<any> {
+    throw new Error('Sensitive administrator MFA requires Supabase.');
+  }
+
+  async completeAdminSensitiveMfaDelivery(): Promise<boolean> {
+    throw new Error('Sensitive administrator MFA requires Supabase.');
+  }
+
+  async verifyAdminSensitiveMfa(): Promise<string> {
+    throw new Error('Sensitive administrator MFA requires Supabase.');
+  }
+
+  async consumeAdminSensitiveMfa(): Promise<boolean> {
+    throw new Error('Sensitive administrator MFA requires Supabase.');
+  }
+
+  async reserveOtp(phone: string, otpHash: string): Promise<OtpReservation> {
+    const challenges = loadJsonOtpChallenges();
+    const now = Date.now();
+    const current = challenges[phone];
+
+    if (current && now - current.lastSentAt < 60_000) {
+      return {
+        allowed: false,
+        reason: 'cooldown',
+        waitSeconds: Math.ceil((60_000 - (now - current.lastSentAt)) / 1000)
+      };
+    }
+
+    const inWindow = Boolean(current && now - current.windowStartTime < 60_000);
+    if (inWindow && current.windowCount >= 3) {
+      return {
+        allowed: false,
+        reason: 'rate_limit',
+        waitSeconds: Math.ceil((60_000 - (now - current.windowStartTime)) / 1000)
+      };
+    }
+
+    const windowStartTime = current && inWindow ? current.windowStartTime : now;
+    const windowCount = current && inWindow ? current.windowCount + 1 : 1;
+    challenges[phone] = {
+      otpHash,
+      expiresAt: now + 5 * 60_000,
+      attempts: 0,
+      lastSentAt: now,
+      windowStartTime,
+      windowCount,
+      status: 'PENDING'
+    };
+    saveJsonOtpChallenges(challenges);
+    return { allowed: true };
+  }
+
+  async setOtpDeliveryResult(phone: string, sent: boolean, requestId?: string): Promise<void> {
+    const challenges = loadJsonOtpChallenges();
+    const record = challenges[phone];
+    if (!record || record.status !== 'PENDING') {
+      throw new Error('OTP challenge was not pending delivery.');
+    }
+    record.status = sent ? 'SENT' : 'FAILED';
+    if (requestId) record.requestId = requestId;
+    saveJsonOtpChallenges(challenges);
+  }
+
+  async verifyOtp(phone: string, otpHash: string): Promise<OtpVerificationResult> {
+    const challenges = loadJsonOtpChallenges();
+    const record = challenges[phone];
+    if (!record) return 'not_found';
+    if (record.status === 'LOCKED') return 'locked';
+    if (record.status !== 'SENT') return 'not_found';
+
+    const now = Date.now();
+    if (now >= record.expiresAt) {
+      record.status = 'EXPIRED';
+      saveJsonOtpChallenges(challenges);
+      return 'expired';
+    }
+    if (record.attempts >= 4) {
+      record.status = 'LOCKED';
+      saveJsonOtpChallenges(challenges);
+      return 'locked';
+    }
+    if (record.otpHash !== otpHash) {
+      record.attempts += 1;
+      if (record.attempts >= 4) record.status = 'LOCKED';
+      saveJsonOtpChallenges(challenges);
+      return record.status === 'LOCKED' ? 'locked' : 'invalid';
+    }
+
+    record.status = 'CONSUMED';
+    saveJsonOtpChallenges(challenges);
+    return 'verified';
+  }
+
+  async reserveAdminMfa(email: string, otpHash: string): Promise<OtpReservation> {
+    const challenges = loadJsonAdminMfaChallenges();
+    const now = Date.now();
+    const current = challenges[email];
+    if (current && now - current.lastSentAt < 60_000) {
+      return { allowed: false, reason: 'cooldown', waitSeconds: Math.ceil((60_000 - (now - current.lastSentAt)) / 1000) };
+    }
+    const inWindow = Boolean(current && now - current.windowStartTime < 60_000);
+    if (inWindow && current!.windowCount >= 3) {
+      return { allowed: false, reason: 'rate_limit', waitSeconds: Math.ceil((60_000 - (now - current!.windowStartTime)) / 1000) };
+    }
+    challenges[email] = {
+      otpHash,
+      expiresAt: now + 5 * 60_000,
+      attempts: 0,
+      lastSentAt: now,
+      windowStartTime: inWindow ? current!.windowStartTime : now,
+      windowCount: inWindow ? current!.windowCount + 1 : 1,
+      status: 'PENDING'
+    };
+    saveJsonAdminMfaChallenges(challenges);
+    return { allowed: true };
+  }
+
+  async setAdminMfaDeliveryResult(email: string, sent: boolean, requestId?: string): Promise<void> {
+    const challenges = loadJsonAdminMfaChallenges();
+    const record = challenges[email];
+    if (!record || record.status !== 'PENDING') throw new Error('Administrator MFA challenge was not pending delivery.');
+    record.status = sent ? 'SENT' : 'FAILED';
+    if (requestId) record.requestId = requestId;
+    saveJsonAdminMfaChallenges(challenges);
+  }
+
+  async verifyAdminMfa(email: string, otpHash: string): Promise<OtpVerificationResult> {
+    const challenges = loadJsonAdminMfaChallenges();
+    const record = challenges[email];
+    if (!record) return 'not_found';
+    if (record.status === 'LOCKED') return 'locked';
+    if (record.status !== 'SENT') return 'not_found';
+    if (Date.now() >= record.expiresAt) {
+      record.status = 'EXPIRED';
+      saveJsonAdminMfaChallenges(challenges);
+      return 'expired';
+    }
+    if (record.attempts >= 4) {
+      record.status = 'LOCKED';
+      saveJsonAdminMfaChallenges(challenges);
+      return 'locked';
+    }
+    if (record.otpHash !== otpHash) {
+      record.attempts += 1;
+      if (record.attempts >= 4) record.status = 'LOCKED';
+      saveJsonAdminMfaChallenges(challenges);
+      return record.status === 'LOCKED' ? 'locked' : 'invalid';
+    }
+    record.status = 'CONSUMED';
+    saveJsonAdminMfaChallenges(challenges);
+    return 'verified';
+  }
+
 }
 
 // Supabase-based adapter (production)
 class SupabaseDatabaseAdapter implements DatabaseAdapter {
   async getUser(id: string): Promise<any | null> {
-    const { data, error } = await db.users().select('*').eq('id', id).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.users().select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data ? this.mapUser(data) : null;
   }
 
   async getUserByPhone(phone: string): Promise<any | null> {
-    const { data, error } = await db.users().select('*').eq('phone', phone).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.users().select('*').eq('phone', phone).maybeSingle();
+    if (error) throw error;
+    return data ? this.mapUser(data) : null;
   }
 
   async createUser(user: any): Promise<any> {
-    const { data, error } = await db.users().insert(user).select().single();
+    const { data, error } = await db.users().insert({
+      id: user.id,
+      phone: user.phone,
+      password_hash: user.passwordHash,
+      legal_name: user.legalName || null,
+      email: user.email || null,
+      role: user.role,
+      active_role: user.activeRole,
+      kyc_status: user.kycStatus || 'NOT_SUBMITTED',
+      dob: user.dob || null,
+      age: user.age || null,
+      bio: user.bio || null,
+      photos: user.photos || null,
+      city: user.city || null,
+      state: user.state || null,
+      address: user.address || null,
+      created_at: user.createdAt || new Date().toISOString()
+    }).select().single();
     if (error) throw error;
-    return data;
+    return this.mapUser(data);
+  }
+
+  private mapUser(user: any): any {
+    if (!user) return null;
+    return {
+      ...user,
+      passwordHash: user.password_hash,
+      legalName: user.legal_name,
+      activeRole: user.active_role,
+      kycStatus: user.kyc_status,
+      kycRejectionReason: user.kyc_rejection_reason,
+      profilePhoto: user.profile_photo,
+      kycSubmittedAt: user.kyc_submitted_at,
+      kycDecidedAt: user.kyc_decided_at,
+      kycDecidedBy: user.kyc_decided_by,
+      kycDecidedByAdminId: user.kyc_decided_by_admin_id,
+      dob: user.dob,
+      age: user.age,
+      bio: user.bio,
+      photos: user.photos,
+      city: user.city,
+      state: user.state,
+      address: user.address,
+      createdAt: user.created_at
+    };
   }
 
   async updateUser(id: string, updates: any): Promise<any> {
-    const { data, error } = await db.users().update(updates).eq('id', id).select().single();
+    const columnNames: Record<string, string> = {
+      activeRole: 'active_role',
+      kycStatus: 'kyc_status',
+      legalName: 'legal_name',
+      kycSubmittedAt: 'kyc_submitted_at',
+      kycDecidedAt: 'kyc_decided_at',
+      kycDecidedBy: 'kyc_decided_by',
+      kycDecidedByAdminId: 'kyc_decided_by_admin_id',
+      kycRejectionReason: 'kyc_rejection_reason',
+      profilePhoto: 'profile_photo',
+      dob: 'dob',
+      age: 'age',
+      bio: 'bio',
+      photos: 'photos',
+      city: 'city',
+      state: 'state',
+      address: 'address',
+      createdAt: 'created_at',
+      passwordHash: 'password_hash'
+    };
+    const rowUpdates = Object.fromEntries(
+      Object.entries(updates).map(([key, value]) => [columnNames[key] || key, value])
+    );
+    const { data, error } = await db.users().update(rowUpdates).eq('id', id).select().single();
     if (error) throw error;
-    return data;
+    return this.mapUser(data);
   }
 
   async listUsers(filters?: any): Promise<any[]> {
@@ -585,19 +1399,50 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     if (filters?.kycStatus) query = query.eq('kyc_status', filters.kycStatus);
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map((user: any) => this.mapUser(user));
   }
 
   async createKycSubmission(submission: any): Promise<any> {
-    const { data, error } = await db.kycSubmissions().insert(submission).select().single();
+    const { data, error } = await db.kycSubmissions().insert(mapKycSubmissionToRow(submission)).select().single();
     if (error) throw error;
-    return data;
+    return mapKycSubmissionFromRow(data);
+  }
+
+  async submitKycSubmission(submission: any): Promise<any> {
+    const { data, error } = await supabase.rpc('submit_profile_kyc', {
+      p_user_id: submission.userId,
+      p_submission_id: submission.id,
+      p_role: submission.userType,
+      p_legal_name: submission.legalName,
+      p_dob: submission.dob,
+      p_id_type: submission.idType,
+      p_id_front_path: submission.idFrontUrl,
+      p_id_back_path: submission.idBackUrl || null,
+      p_selfie_path: submission.selfieUrl,
+      p_bio: submission.bio || null,
+      p_photos: submission.photos || null,
+      p_city: submission.city || null
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object') {
+      throw new Error('Supabase returned an invalid KYC submission response.');
+    }
+    return mapKycSubmissionFromRow(data);
   }
 
   async getKycSubmission(id: string): Promise<any | null> {
-    const { data, error } = await db.kycSubmissions().select('*').eq('id', id).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.kycSubmissions().select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data ? mapKycSubmissionFromRow(data) : null;
+  }
+
+  async getUserKycSubmission(userId: string, submissionRole: 'CLIENT' | 'COMPANION'): Promise<any | null> {
+    const { data, error } = await db.kycSubmissions().select('*')
+      .eq('user_id', userId)
+      .eq('submission_role', submissionRole)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? mapKycSubmissionFromRow(data) : null;
   }
 
   async listKycSubmissions(filters?: any): Promise<any[]> {
@@ -606,46 +1451,151 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     if (filters?.submissionRole) query = query.eq('submission_role', filters.submissionRole);
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map(mapKycSubmissionFromRow);
   }
 
   async updateKycSubmission(id: string, updates: any): Promise<any> {
-    const { data, error } = await db.kycSubmissions().update(updates).eq('id', id).select().single();
+    const rowUpdates: Record<string, unknown> = {};
+    const fields: Record<string, string> = {
+      legalName: 'legal_name',
+      dob: 'dob',
+      idType: 'id_type',
+      idReference: 'id_reference',
+      idFrontUrl: 'id_front_document_path',
+      idBackUrl: 'id_back_document_path',
+      selfieUrl: 'selfie_document_path',
+      status: 'status',
+      decidedAt: 'reviewed_at',
+      decidedByAdminId: 'reviewed_by_admin_id',
+      rejectionReason: 'rejection_reason',
+      bio: 'profile_bio',
+      photos: 'profile_photos',
+      city: 'city'
+    };
+    for (const [key, column] of Object.entries(fields)) {
+      if (key in updates) rowUpdates[column] = updates[key];
+    }
+    const { data, error } = await db.kycSubmissions().update(rowUpdates).eq('id', id).select().single();
     if (error) throw error;
-    return data;
+    return mapKycSubmissionFromRow(data);
+  }
+
+  async reviewKycSubmission(
+    id: string,
+    decision: 'APPROVED' | 'REJECTED',
+    rejectionReason: string | null,
+    adminUserId: string
+  ): Promise<any> {
+    const { data, error } = await supabase.rpc('review_profile_kyc', {
+      p_submission_id: id,
+      p_decision: decision,
+      p_rejection_reason: rejectionReason,
+      p_admin_user_id: adminUserId
+    });
+    if (error) throw error;
+    if (!data?.submission) throw new Error('Supabase returned an invalid KYC review response.');
+    return mapKycSubmissionFromRow(data.submission);
+  }
+
+  async createKycDocumentSignedUrls(id: string): Promise<Record<string, string | null> | null> {
+    const submission = await this.getKycSubmission(id);
+    if (!submission) return null;
+    const bucket = submission.userType === 'COMPANION' ? 'companion-kyc-documents' : 'client-kyc-documents';
+    const documents: Record<string, string | null> = {
+      idFrontUrl: submission.idFrontUrl || null,
+      idBackUrl: submission.idBackUrl || null,
+      selfieUrl: submission.selfieUrl || null
+    };
+    for (const [key, objectPath] of Object.entries(documents)) {
+      if (!objectPath) continue;
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(objectPath, 300);
+      if (error) throw error;
+      documents[key] = data.signedUrl;
+    }
+    return documents;
+  }
+
+  async uploadKycDocument(bucket: string, objectPath: string, bytes: Buffer, contentType: string): Promise<void> {
+    if (bucket !== 'client-kyc-documents' && bucket !== 'companion-kyc-documents') {
+      throw new Error('Invalid private KYC storage bucket.');
+    }
+    const { error } = await supabase.storage.from(bucket).upload(objectPath, bytes, {
+      contentType,
+      upsert: false
+    });
+    if (error) throw error;
+  }
+
+  async deleteKycDocuments(bucket: string, paths: string[]): Promise<void> {
+    if (bucket !== 'client-kyc-documents' && bucket !== 'companion-kyc-documents') {
+      throw new Error('Invalid private KYC storage bucket.');
+    }
+    if (paths.length === 0) return;
+    const { error } = await supabase.storage.from(bucket).remove(paths);
+    if (error) throw error;
   }
 
   async getCompanionProfile(userId: string): Promise<any | null> {
-    const { data, error } = await db.companionProfiles().select('*').eq('user_id', userId).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.companionProfiles().select('*').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    return data ? mapCompanionProfileFromRow(data) : null;
   }
 
   async createCompanionProfile(profile: any): Promise<any> {
-    const { data, error } = await db.companionProfiles().insert(profile).select().single();
+    const { data, error } = await db.companionProfiles()
+      .upsert(mapCompanionProfileToRow(profile), { onConflict: 'user_id' })
+      .select().single();
     if (error) throw error;
-    return data;
+    return mapCompanionProfileFromRow(data);
+  }
+
+  async upsertCompanionProfile(profile: any): Promise<any> {
+    return this.createCompanionProfile(profile);
   }
 
   async updateCompanionProfile(userId: string, updates: any): Promise<any> {
-    const { data, error } = await db.companionProfiles().update(updates).eq('user_id', userId).select().single();
+    const rowUpdates = mapCompanionProfilePatchToRow(updates);
+    const { data, error } = await db.companionProfiles().update(rowUpdates).eq('user_id', userId).select().single();
     if (error) throw error;
-    return data;
+    return mapCompanionProfileFromRow(data);
   }
 
   async listCompanionProfiles(filters?: any): Promise<any[]> {
     let query = db.companionProfiles().select('*');
     if (filters?.isLive !== undefined) query = query.eq('is_live', filters.isLive);
     if (filters?.state) query = query.eq('state', filters.state);
+    if (Number.isInteger(filters?.limit) && filters.limit > 0) query = query.limit(filters.limit);
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map(mapCompanionProfileFromRow);
   }
 
   async createMembership(membership: any): Promise<any> {
-    const { data, error } = await db.companionMemberships().insert(membership).select().single();
+    const { data, error } = await db.companionMemberships().insert({
+      ...(uuidOrUndefined(membership.id) ? { id: membership.id } : {}),
+      user_id: membership.userId,
+      plan: membership.plan,
+      amount_paise: membership.pricePaise ?? membership.amountPaise,
+      currency: membership.currency || 'INR',
+      start_date: membership.startDate,
+      expiry_date: membership.expiryDate,
+      payment_order_id: membership.paymentOrderId || null,
+      payment_id: membership.paymentId || null,
+      payment_status: membership.paymentStatus || 'PENDING',
+      paid_at: membership.paidAt || null
+    }).select().single();
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      userId: data.user_id,
+      pricePaise: data.amount_paise,
+      startDate: data.start_date,
+      expiryDate: data.expiry_date,
+      paymentOrderId: data.payment_order_id,
+      paymentId: data.payment_id,
+      paymentStatus: data.payment_status,
+      isActive: data.payment_status === 'PAID' && new Date(data.expiry_date) > new Date()
+    };
   }
 
   async getActiveMembership(userId: string): Promise<any | null> {
@@ -657,9 +1607,35 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       .gt('expiry_date', now)
       .order('expiry_date', { ascending: false })
       .limit(1)
-      .single();
-    if (error) return null;
-    return data;
+      .maybeSingle();
+    if (error) throw error;
+    return data ? {
+      ...data,
+      userId: data.user_id,
+      pricePaise: data.amount_paise,
+      startDate: data.start_date,
+      expiryDate: data.expiry_date,
+      paymentOrderId: data.payment_order_id,
+      paymentId: data.payment_id,
+      paymentStatus: data.payment_status,
+      isActive: true
+    } : null;
+  }
+
+  async getMembershipByPaymentOrder(orderId: string): Promise<any | null> {
+    const { data, error } = await db.companionMemberships()
+      .select('*').eq('payment_order_id', orderId).maybeSingle();
+    if (error) throw error;
+    return data ? {
+      ...data,
+      userId: data.user_id,
+      pricePaise: data.amount_paise,
+      startDate: data.start_date,
+      expiryDate: data.expiry_date,
+      paymentOrderId: data.payment_order_id,
+      paymentId: data.payment_id,
+      paymentStatus: data.payment_status
+    } : null;
   }
 
   async listMemberships(filters?: any): Promise<any[]> {
@@ -667,70 +1643,266 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     if (filters?.userId) query = query.eq('user_id', filters.userId);
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      ...row,
+      userId: row.user_id,
+      pricePaise: row.amount_paise,
+      startDate: row.start_date,
+      expiryDate: row.expiry_date,
+      paymentOrderId: row.payment_order_id,
+      paymentId: row.payment_id,
+      paymentStatus: row.payment_status
+    }));
+  }
+
+  async updateMembershipOrder(id: string, orderId: string): Promise<any> {
+    const { data, error } = await db.companionMemberships()
+      .update({ payment_order_id: orderId }).eq('id', id).select().single();
+    if (error) throw error;
+    return {
+      ...data,
+      userId: data.user_id,
+      pricePaise: data.amount_paise,
+      startDate: data.start_date,
+      expiryDate: data.expiry_date,
+      paymentOrderId: data.payment_order_id,
+      paymentId: data.payment_id,
+      paymentStatus: data.payment_status
+    };
   }
 
   async createBankVerification(verification: any): Promise<any> {
-    const { data, error } = await db.bankVerifications().insert(verification).select().single();
+    const { data, error } = await db.bankVerifications().upsert({
+      ...(uuidOrUndefined(verification.id) ? { id: verification.id } : {}),
+      user_id: verification.userId,
+      account_number_encrypted: verification.accountNumberEncrypted,
+      account_number_last4: verification.accountNumberLast4,
+      ifsc: verification.ifsc,
+      bank_name: verification.bankName || null,
+      account_holder_name: verification.accountHolderName,
+      verification_status: verification.verificationStatus || 'PENDING',
+      name_at_bank: verification.nameAtBank || null,
+      name_matched: verification.nameMatched ?? null,
+      provider_request_id: verification.providerRequestId || null,
+      verified_at: verification.verifiedAt || null
+    }, { onConflict: 'user_id' }).select().single();
     if (error) throw error;
     return data;
   }
 
   async getBankVerification(userId: string): Promise<any | null> {
-    const { data, error } = await db.bankVerifications().select('*').eq('user_id', userId).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.bankVerifications().select('*').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    return data ? {
+      ...data,
+      userId: data.user_id,
+      accountNumberEncrypted: data.account_number_encrypted,
+      accountNumberMasked: data.account_number_last4 ? `••••${data.account_number_last4}` : null,
+      accountNumberLast4: data.account_number_last4,
+      bankName: data.bank_name,
+      accountHolderName: data.account_holder_name,
+      verificationStatus: data.verification_status,
+      nameAtBank: data.name_at_bank,
+      nameMatched: data.name_matched,
+      providerRequestId: data.provider_request_id,
+      verifiedAt: data.verified_at
+    } : null;
   }
 
   async updateBankVerification(userId: string, updates: any): Promise<any> {
-    const { data, error } = await db.bankVerifications().update(updates).eq('user_id', userId).select().single();
+    const rowUpdates: Record<string, unknown> = {};
+    const fields: Record<string, string> = {
+      accountNumberEncrypted: 'account_number_encrypted',
+      ifsc: 'ifsc',
+      accountHolderName: 'account_holder_name',
+      verificationStatus: 'verification_status',
+      nameAtBank: 'name_at_bank',
+      nameMatched: 'name_matched',
+      providerRequestId: 'provider_request_id',
+      verifiedAt: 'verified_at'
+    };
+    for (const [key, column] of Object.entries(fields)) {
+      if (key in updates) rowUpdates[column] = updates[key];
+    }
+    const { data, error } = await db.bankVerifications().update(rowUpdates).eq('user_id', userId).select().single();
     if (error) throw error;
     return data;
   }
 
   async createBooking(booking: any): Promise<any> {
-    const { data, error } = await db.bookings().insert(booking).select().single();
+    const { data, error } = await db.bookings().insert(mapBookingToRow(booking)).select().single();
     if (error) throw error;
-    return data;
+    return mapBookingFromRow(data);
+  }
+
+  async reserveBookingPayment(booking: any): Promise<any> {
+    const { data, error } = await supabase.rpc('reserve_booking_payment', {
+      p_booking_id: booking.id,
+      p_booking_code: booking.bookingCode,
+      p_client_id: booking.clientId,
+      p_companion_id: booking.companionId,
+      p_service_id: booking.serviceId,
+      p_service_name: booking.serviceName,
+      p_booking_date: booking.date,
+      p_start_time: booking.startTime,
+      p_end_time: booking.endTime,
+      p_duration_hours: booking.durationHours,
+      p_meeting_location: booking.meetingLocation,
+      p_notes: booking.notes || null
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object') throw new Error('Supabase returned an invalid booking reservation.');
+    return mapBookingFromRow(data);
   }
 
   async getBooking(id: string): Promise<any | null> {
-    const { data, error } = await db.bookings().select('*').eq('id', id).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.bookings().select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data ? mapBookingFromRow(data) : null;
   }
 
   async getBookingByCode(code: string): Promise<any | null> {
-    const { data, error } = await db.bookings().select('*').eq('booking_code', code).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.bookings().select('*').eq('booking_code', code).maybeSingle();
+    if (error) throw error;
+    return data ? mapBookingFromRow(data) : null;
+  }
+
+  async getBookingByPaymentOrder(orderId: string): Promise<any | null> {
+    const { data, error } = await db.bookings().select('*').eq('payment_order_id', orderId).maybeSingle();
+    if (error) throw error;
+    return data ? mapBookingFromRow(data) : null;
   }
 
   async listBookings(filters?: any): Promise<any[]> {
     let query = db.bookings().select('*');
-    if (filters?.clientId) query = query.eq('client_id', filters.clientId);
-    if (filters?.companionId) query = query.eq('companion_id', filters.companionId);
+    if (filters?.participantId) {
+      query = query.or(`client_id.eq.${filters.participantId},companion_id.eq.${filters.participantId}`);
+    } else {
+      if (filters?.clientId) query = query.eq('client_id', filters.clientId);
+      if (filters?.companionId) query = query.eq('companion_id', filters.companionId);
+    }
     if (filters?.status) query = query.eq('status', filters.status);
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map(mapBookingFromRow);
   }
 
   async updateBooking(id: string, updates: any): Promise<any> {
-    const { data, error } = await db.bookings().update(updates).eq('id', id).select().single();
+    const fields: Record<string, string> = {
+      bookingCode: 'booking_code',
+      status: 'status',
+      paymentOrderId: 'payment_order_id',
+      paymentId: 'payment_id',
+      paymentStatus: 'payment_status',
+      startOtpHmac: 'start_otp_hash',
+      endOtpHmac: 'completion_otp_hash',
+      startOtpAttempts: 'start_otp_attempts',
+      endOtpAttempts: 'completion_otp_attempts',
+      startOtpVerified: 'start_otp_verified',
+      endOtpVerified: 'completion_otp_verified',
+      companionArrivedAt: 'companion_arrived_at',
+      startedAt: 'started_at',
+      completedAt: 'completed_at',
+      delayMinutes: 'delay_minutes',
+      latePenaltyPaise: 'late_penalty_paise',
+      companionNetSharePaise: 'companion_net_share_paise',
+      clientRefundPenaltyPaise: 'client_refund_penalty_paise',
+      settlementStatus: 'settlement_status',
+      settlementUnlockUtc: 'settlement_unlock_at',
+      payoutId: 'payout_id'
+    };
+    const rowUpdates = Object.fromEntries(
+      Object.entries(updates)
+        .filter(([key]) => fields[key])
+        .map(([key, value]) => [fields[key], value])
+    );
+    if (Object.keys(rowUpdates).length === 0) throw new Error('No supported booking fields were provided for update.');
+    const { data, error } = await db.bookings().update(rowUpdates).eq('id', id).select().single();
     if (error) throw error;
-    return data;
+    return mapBookingFromRow(data);
+  }
+
+  async markBookingCompanionArrived(bookingId: string, companionId: string): Promise<any> {
+    const { data, error } = await supabase.rpc('mark_booking_companion_arrived', {
+      p_booking_id: bookingId,
+      p_companion_id: companionId
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object') throw new Error('Supabase returned an invalid booking arrival response.');
+    return mapBookingFromRow(data);
+  }
+
+  async verifyBookingOtp(
+    bookingId: string,
+    companionId: string,
+    otpType: 'START' | 'COMPLETION',
+    otpHash: string,
+    delayMinutes = 0
+  ): Promise<any> {
+    const { data, error } = await supabase.rpc('verify_booking_otp', {
+      p_booking_id: bookingId,
+      p_companion_id: companionId,
+      p_otp_type: otpType,
+      p_otp_hash: otpHash,
+      p_delay_minutes: delayMinutes
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object') throw new Error('Supabase returned an invalid booking OTP response.');
+    return {
+      ...data,
+      booking: data.booking ? mapBookingFromRow(data.booking) : undefined
+    };
+  }
+
+  async finalizeRazorpayPayment(
+    orderId: string,
+    paymentId: string,
+    amountPaise: number,
+    startOtpHash: string,
+    completionOtpHash: string,
+    startOtpEncrypted: string,
+    completionOtpEncrypted: string
+  ): Promise<any> {
+    const { data, error } = await supabase.rpc('finalize_razorpay_payment', {
+      p_order_id: orderId,
+      p_payment_id: paymentId,
+      p_amount_paise: amountPaise,
+      p_start_otp_hash: startOtpHash,
+      p_completion_otp_hash: completionOtpHash,
+      p_start_otp_encrypted: startOtpEncrypted,
+      p_completion_otp_encrypted: completionOtpEncrypted
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object' || !data.record) throw new Error('Supabase returned an invalid payment finalization response.');
+    return {
+      type: data.type,
+      duplicate: Boolean(data.duplicate),
+      record: data.type === 'BOOKING' ? mapBookingFromRow(data.record) : data.record
+    };
   }
 
   async createWalletEntry(entry: any): Promise<any> {
-    const { data, error } = await db.walletLedger().insert(entry).select().single();
+    const { data, error } = await db.walletLedger().insert({
+      ...(uuidOrUndefined(entry.id) ? { id: entry.id } : {}),
+      user_id: entry.userId,
+      booking_id: entry.bookingId || null,
+      transaction_type: entry.transactionType,
+      gross_amount_paise: entry.grossAmountPaise ?? null,
+      commission_paise: entry.commissionPaise ?? null,
+      penalty_paise: entry.penaltyPaise ?? null,
+      net_amount_paise: entry.netAmountPaise ?? null,
+      balance_locked_until: entry.balanceLockedUntil || null,
+      balance_status: entry.balanceStatus || 'AVAILABLE',
+      description: entry.description || null,
+      idempotency_key: entry.idempotencyKey || null
+    }).select().single();
     if (error) throw error;
     return data;
   }
 
   async getWalletBalance(userId: string): Promise<any> {
     const { data, error } = await db.walletLedger().select('*').eq('user_id', userId);
-    if (error) return { available: 0, locked: 0, total: 0 };
+    if (error) throw error;
     let available = 0;
     let locked = 0;
     for (const entry of data || []) {
@@ -746,13 +1918,49 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   async listWalletEntries(userId: string): Promise<any[]> {
     const { data, error } = await db.walletLedger().select('*').eq('user_id', userId);
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      ...row,
+      userId: row.user_id,
+      bookingId: row.booking_id,
+      transactionType: row.transaction_type,
+      grossAmountPaise: row.gross_amount_paise,
+      commissionPaise: row.commission_paise,
+      penaltyPaise: row.penalty_paise,
+      netAmountPaise: row.net_amount_paise,
+      balanceLockedUntil: row.balance_locked_until,
+      balanceStatus: row.balance_status
+    }));
   }
 
   async createPayout(payout: any): Promise<any> {
-    const { data, error } = await db.payouts().insert(payout).select().single();
+    const { data, error } = await db.payouts().insert({
+      ...(uuidOrUndefined(payout.id) ? { id: payout.id } : {}),
+      user_id: payout.userId || payout.companionId,
+      booking_id: payout.bookingId || null,
+      total_amount_paise: payout.totalAmountPaise ?? payout.amountPaise,
+      commission_paise: payout.commissionPaise || 0,
+      penalty_paise: payout.penaltyPaise || 0,
+      net_amount_paise: payout.netAmountPaise ?? payout.amountPaise,
+      payout_status: payout.payoutStatus || 'PENDING',
+      utr_reference: payout.utrReference || payout.utrNumber || null,
+      admin_user_id: payout.adminId || null,
+      processed_at: payout.processedAt || payout.paymentTimestamp || null,
+      idempotency_key: payout.idempotencyKey || null
+    }).select().single();
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      userId: data.user_id,
+      bookingId: data.booking_id,
+      totalAmountPaise: data.total_amount_paise,
+      commissionPaise: data.commission_paise,
+      penaltyPaise: data.penalty_paise,
+      netAmountPaise: data.net_amount_paise,
+      payoutStatus: data.payout_status,
+      utrReference: data.utr_reference,
+      adminUserId: data.admin_user_id,
+      processedAt: data.processed_at
+    };
   }
 
   async listPayouts(filters?: any): Promise<any[]> {
@@ -761,25 +1969,62 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     if (filters?.status) query = query.eq('payout_status', filters.status);
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      ...row,
+      userId: row.user_id,
+      bookingId: row.booking_id,
+      totalAmountPaise: row.total_amount_paise,
+      commissionPaise: row.commission_paise,
+      penaltyPaise: row.penalty_paise,
+      netAmountPaise: row.net_amount_paise,
+      payoutStatus: row.payout_status,
+      utrReference: row.utr_reference,
+      adminUserId: row.admin_user_id,
+      processedAt: row.processed_at
+    }));
   }
 
   async updatePayout(id: string, updates: any): Promise<any> {
-    const { data, error } = await db.payouts().update(updates).eq('id', id).select().single();
+    const rowUpdates: Record<string, unknown> = {};
+    const fields: Record<string, string> = {
+      payoutStatus: 'payout_status',
+      utrReference: 'utr_reference',
+      adminUserId: 'admin_user_id',
+      processedAt: 'processed_at'
+    };
+    for (const [key, column] of Object.entries(fields)) {
+      if (key in updates) rowUpdates[column] = updates[key];
+    }
+    const { data, error } = await db.payouts().update(rowUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   }
 
   async createConversation(conversation: any): Promise<any> {
-    const { data, error } = await db.chatConversations().insert(conversation).select().single();
+    const { data, error } = await db.chatConversations().insert({
+      ...(uuidOrUndefined(conversation.id) ? { id: conversation.id } : {}),
+      booking_id: conversation.bookingId || null,
+      participant_a: conversation.participantA,
+      participant_b: conversation.participantB
+    }).select().single();
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      bookingId: data.booking_id,
+      participantA: data.participant_a,
+      participantB: data.participant_b
+    };
   }
 
   async getConversation(id: string): Promise<any | null> {
-    const { data, error } = await db.chatConversations().select('*').eq('id', id).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.chatConversations().select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data ? {
+      ...data,
+      bookingId: data.booking_id,
+      participantA: data.participant_a,
+      participantB: data.participant_b
+    } : null;
   }
 
   async listConversations(userId: string): Promise<any[]> {
@@ -787,31 +2032,60 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       .select('*')
       .or(`participant_a.eq.${userId},participant_b.eq.${userId}`);
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      ...row,
+      bookingId: row.booking_id,
+      participantA: row.participant_a,
+      participantB: row.participant_b
+    }));
   }
 
   async createMessage(message: any): Promise<any> {
-    const { data, error } = await db.chatMessages().insert(message).select().single();
+    const { data, error } = await db.chatMessages().insert({
+      ...(uuidOrUndefined(message.id) ? { id: message.id } : {}),
+      conversation_id: message.conversationId,
+      sender_id: message.senderId,
+      message: message.message
+    }).select().single();
     if (error) throw error;
-    return data;
+    return { ...data, conversationId: data.conversation_id, senderId: data.sender_id };
   }
 
-  async listMessages(conversationId: string): Promise<any[]> {
-    const { data, error } = await db.chatMessages().select('*').eq('conversation_id', conversationId).order('created_at', { ascending: true });
+  async listMessages(conversationId: string, after?: string): Promise<any[]> {
+    let query = db.chatMessages().select('*').eq('conversation_id', conversationId).order('created_at', { ascending: true }).limit(200);
+    if (after) query = query.gt('created_at', after);
+    const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      ...row,
+      conversationId: row.conversation_id,
+      senderId: row.sender_id
+    }));
   }
 
   async createSupportConversation(conversation: any): Promise<any> {
-    const { data, error } = await db.supportConversations().insert(conversation).select().single();
+    const { data, error } = await db.supportConversations().insert({
+      ...(uuidOrUndefined(conversation.id) ? { id: conversation.id } : {}),
+      user_id: conversation.userId,
+      status: conversation.status || 'OPEN',
+      subject: conversation.subject || null
+    }).select().single();
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      userId: data.user_id,
+      assignedAdminId: data.assigned_admin_user_id || data.assigned_admin_id
+    };
   }
 
   async getSupportConversation(id: string): Promise<any | null> {
-    const { data, error } = await db.supportConversations().select('*').eq('id', id).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.supportConversations().select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data ? {
+      ...data,
+      userId: data.user_id,
+      assignedAdminId: data.assigned_admin_user_id || data.assigned_admin_id
+    } : null;
   }
 
   async listSupportConversations(filters?: any): Promise<any[]> {
@@ -820,46 +2094,122 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     if (filters?.status) query = query.eq('status', filters.status);
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      ...row,
+      userId: row.user_id,
+      assignedAdminId: row.assigned_admin_user_id || row.assigned_admin_id
+    }));
   }
 
   async createSupportMessage(message: any): Promise<any> {
-    const { data, error } = await db.supportMessages().insert(message).select().single();
+    const { data, error } = await db.supportMessages().insert({
+      ...(uuidOrUndefined(message.id) ? { id: message.id } : {}),
+      conversation_id: message.conversationId,
+      sender_id: message.isAdmin ? null : message.senderId,
+      admin_user_id: message.isAdmin ? message.adminUserId || message.senderId : null,
+      is_admin: message.isAdmin || false,
+      message: message.message
+    }).select().single();
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      conversationId: data.conversation_id,
+      senderId: data.sender_id,
+      adminUserId: data.admin_user_id,
+      isAdmin: data.is_admin
+    };
   }
 
-  async listSupportMessages(conversationId: string): Promise<any[]> {
-    const { data, error } = await db.supportMessages().select('*').eq('conversation_id', conversationId).order('created_at', { ascending: true });
+  async listSupportMessages(conversationId: string, after?: { createdAt: string; id: string }): Promise<any[]> {
+    let query = db.supportMessages().select('*').eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true }).order('id', { ascending: true }).limit(200);
+    if (after) {
+      query = query.or(`created_at.gt.${after.createdAt},and(created_at.eq.${after.createdAt},id.gt.${after.id})`);
+    }
+    const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+    return (data || []).map((row: any) => ({
+      ...row,
+      conversationId: row.conversation_id,
+      senderId: row.sender_id,
+      adminUserId: row.admin_user_id,
+      isAdmin: row.is_admin
+    }));
+  }
+
+  async updateSupportConversation(id: string, updates: any): Promise<any> {
+    const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if ('status' in updates) row.status = updates.status;
+    if ('assignedAdminId' in updates) row.assigned_admin_user_id = updates.assignedAdminId;
+    const { data, error } = await db.supportConversations().update(row).eq('id', id).select().single();
+    if (error) throw error;
+    return { ...data, userId: data.user_id, assignedAdminId: data.assigned_admin_user_id || data.assigned_admin_id };
   }
 
   async getAdminUser(email: string): Promise<any | null> {
-    const { data, error } = await db.adminUsers().select('*').eq('email', email).single();
-    if (error) return null;
-    return data;
+    const { data, error } = await db.adminUsers().select('*').eq('email', email.toLowerCase()).eq('is_active', true).maybeSingle();
+    if (error) throw error;
+    return data ? this.mapAdminUser(data) : null;
+  }
+
+  async getAdminUserById(id: string): Promise<any | null> {
+    const { data, error } = await db.adminUsers().select('*').eq('id', id).eq('is_active', true).maybeSingle();
+    if (error) throw error;
+    return data ? this.mapAdminUser(data) : null;
+  }
+
+  async updateAdminPasswordHash(id: string, passwordHash: string): Promise<void> {
+    const { error } = await db.adminUsers().update({ password_hash: passwordHash }).eq('id', id);
+    if (error) throw error;
+  }
+
+  private mapAdminUser(admin: any): any {
+    return {
+      ...admin,
+      passwordHash: admin.password_hash,
+      name: admin.legal_name
+    };
   }
 
   async createAdminUser(admin: any): Promise<any> {
-    const { data, error } = await db.adminUsers().insert(admin).select().single();
+    const { data, error } = await db.adminUsers().insert({
+      ...(uuidOrUndefined(admin.id) ? { id: admin.id } : {}),
+      email: admin.email.toLowerCase(),
+      phone: admin.phone,
+      password_hash: admin.passwordHash,
+      role: admin.role,
+      legal_name: admin.name || admin.legalName,
+      is_active: admin.isActive ?? true
+    }).select().single();
     if (error) throw error;
-    return data;
+    return this.mapAdminUser(data);
   }
 
   async listAdminUsers(): Promise<any[]> {
     const { data, error } = await db.adminUsers().select('*');
     if (error) throw error;
-    return data || [];
+    return (data || []).map((admin: any) => this.mapAdminUser(admin));
   }
 
   async createAuditLog(log: any): Promise<void> {
-    await db.auditLogs().insert(log);
+    const { error } = await db.auditLogs().insert({
+      ...(uuidOrUndefined(log.id) ? { id: log.id } : {}),
+      admin_id: null,
+      admin_user_id: uuidOrUndefined(log.adminUserId || log.adminId) || null,
+      user_id: log.userId || null,
+      action: log.action,
+      entity_type: log.entityType || null,
+      entity_id: uuidOrUndefined(log.entityId || log.targetId) || null,
+      details: log.details ? { message: log.details } : null,
+      ip_address: log.ipAddress || null,
+      user_agent: log.userAgent || null
+    });
+    if (error) throw error;
   }
 
   async listAuditLogs(filters?: any): Promise<any[]> {
     let query = db.auditLogs().select('*');
-    if (filters?.adminId) query = query.eq('admin_id', filters.adminId);
+    if (filters?.adminId) query = query.or(`admin_id.eq.${filters.adminId},admin_user_id.eq.${filters.adminId}`);
     if (filters?.userId) query = query.eq('user_id', filters.userId);
     if (filters?.action) query = query.eq('action', filters.action);
     const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
@@ -868,51 +2218,405 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async createNotification(notification: any): Promise<any> {
-    const { data, error } = await db.notifications().insert(notification).select().single();
+    const { data, error } = await db.notifications().insert({
+      ...(uuidOrUndefined(notification.id) ? { id: notification.id } : {}),
+      user_id: notification.userId,
+      type: notification.type || 'GENERAL',
+      title: notification.title,
+      body: notification.body || null,
+      data: notification.data || null,
+      read_at: notification.readAt || null
+    }).select().single();
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      userId: data.user_id,
+      readAt: data.read_at,
+      createdAt: data.created_at
+    };
   }
 
   async listNotifications(userId: string): Promise<any[]> {
     const { data, error } = await db.notifications().select('*').eq('user_id', userId).order('created_at', { ascending: false });
     if (error) throw error;
+    return (data || []).map((row: any) => ({
+      ...row,
+      userId: row.user_id,
+      readAt: row.read_at,
+      createdAt: row.created_at
+    }));
+  }
+
+  async markNotificationRead(id: string, userId?: string): Promise<void> {
+    let query = db.notifications()
+      .update({ read_at: new Date().toISOString() }, { count: 'exact' })
+      .eq('id', id);
+    if (userId) query = query.eq('user_id', userId);
+    const { error, count } = await query;
+    if (error) throw error;
+    if (count === 0) throw new Error('Notification was not found.');
+  }
+
+  async claimNotificationPushes(notificationId?: string, limit = 100): Promise<any[]> {
+    const { data, error } = await db.rpc('claim_notification_pushes', {
+      p_notification_id: notificationId || null,
+      p_limit: Math.min(500, Math.max(1, Math.trunc(limit)))
+    });
+    if (error) throw error;
+    return (data || []).map((row: any) => ({
+      notification: row.notification,
+      deviceTokens: row.device_tokens || []
+    }));
+  }
+
+  async finishNotificationPush(id: string, success: boolean, errorMessage?: string): Promise<void> {
+    const { data, error } = await db.rpc('finish_notification_push', {
+      p_notification_id: id,
+      p_success: success,
+      p_error: errorMessage || null
+    });
+    if (error) throw error;
+    if (data !== true) throw new Error('Supabase did not complete the notification push claim.');
+  }
+
+  async registerDeviceToken(userId: string, token: string, platform: 'WEB' | 'ANDROID' | 'IOS'): Promise<void> {
+    const { error } = await db.firebaseDeviceTokens().upsert({
+      user_id: userId,
+      token,
+      platform,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'token' });
+    if (error) throw error;
+  }
+
+  async listDeviceTokens(userId: string): Promise<string[]> {
+    const { data, error } = await db.firebaseDeviceTokens().select('token').eq('user_id', userId);
+    if (error) throw error;
+    return (data || []).map((row: any) => row.token);
+  }
+
+  async deleteDeviceToken(token: string, userId?: string): Promise<void> {
+    let query = db.firebaseDeviceTokens().delete().eq('token', token);
+    if (userId) query = query.eq('user_id', userId);
+    const { error } = await query;
+    if (error) throw error;
+  }
+
+  async upsertUserLocation(location: any): Promise<any> {
+    const { data, error } = await db.userLocations().upsert({
+      user_id: location.userId,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      booking_id: location.bookingId || null,
+      sharing_enabled: location.sharingEnabled ?? false,
+      updated_at: location.updatedAt || new Date().toISOString()
+    }, { onConflict: 'user_id' }).select().single();
+    if (error) throw error;
+    return {
+      userId: data.user_id,
+      latitude: Number(data.latitude),
+      longitude: Number(data.longitude),
+      bookingId: data.booking_id,
+      sharingEnabled: data.sharing_enabled,
+      updatedAt: data.updated_at
+    };
+  }
+
+  async getUserLocation(userId: string): Promise<any | null> {
+    const { data, error } = await db.userLocations().select('*').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    return data ? {
+      userId: data.user_id,
+      latitude: Number(data.latitude),
+      longitude: Number(data.longitude),
+      bookingId: data.booking_id,
+      sharingEnabled: data.sharing_enabled,
+      updatedAt: data.updated_at
+    } : null;
+  }
+
+  async deleteUserLocation(userId: string): Promise<void> {
+    const { error, count } = await db.userLocations().delete({ count: 'exact' }).eq('user_id', userId);
+    if (error) throw error;
+    if (count === 0) throw new Error('User location was not found.');
+  }
+
+  async upsertUserPresence(presence: any): Promise<any> {
+    const { data, error } = await db.userPresence().upsert({
+      user_id: presence.userId,
+      is_online: presence.online,
+      last_seen_at: presence.lastSeen || new Date().toISOString()
+    }, { onConflict: 'user_id' }).select().single();
+    if (error) throw error;
+    return { userId: data.user_id, online: data.is_online, lastSeen: data.last_seen_at };
+  }
+
+  async getUserPresence(userId: string): Promise<any | null> {
+    const { data, error } = await db.userPresence().select('*').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    return data ? { userId: data.user_id, online: data.is_online, lastSeen: data.last_seen_at } : null;
+  }
+
+  async setBookingLocationSharing(bookingId: string, userId: string, enabled: boolean): Promise<void> {
+    const { error } = await supabase.from('booking_location_sharing').upsert({
+      booking_id: bookingId,
+      user_id: userId,
+      sharing_enabled: enabled,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'booking_id,user_id' });
+    if (error) throw error;
+  }
+
+  async getBookingLocationSharing(bookingId: string, userId: string): Promise<boolean> {
+    const { data, error } = await supabase.from('booking_location_sharing')
+      .select('sharing_enabled').eq('booking_id', bookingId).eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    return data?.sharing_enabled === true;
+  }
+
+  async consumeRateLimit(bucketKey: string, limit: number, windowSeconds: number): Promise<any> {
+    const { data, error } = await supabase.rpc('consume_api_rate_limit', {
+      p_bucket_key: bucketKey, p_limit: limit, p_window_seconds: windowSeconds
+    });
+    if (error) throw error;
+    if (typeof data?.allowed !== 'boolean') throw new Error('Supabase returned an invalid rate-limit response.');
+    return data;
+  }
+
+  async isSessionRevoked(tokenId: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('is_session_revoked', { p_token_id: tokenId });
+    if (error) throw error;
+    if (typeof data !== 'boolean') throw new Error('Supabase returned an invalid session status.');
+    return data;
+  }
+
+  async revokeSession(tokenId: string, principalId: string, principalType: 'USER' | 'ADMIN', expiresAt: string): Promise<void> {
+    const { error } = await supabase.rpc('revoke_session', {
+      p_token_id: tokenId, p_principal_id: principalId, p_principal_type: principalType, p_expires_at: expiresAt
+    });
+    if (error) throw error;
+  }
+
+  async claimPaymentWebhookEvent(eventId: string, eventType: string, payload: any): Promise<any> {
+    const { data, error } = await supabase.rpc('claim_payment_webhook_event', {
+      p_event_id: eventId, p_event_type: eventType, p_payload: payload
+    });
+    if (error) throw error;
+    if (!data || typeof data.claimed !== 'boolean' || typeof data.processed !== 'boolean') {
+      throw new Error('Supabase returned an invalid webhook event claim.');
+    }
+    return data;
+  }
+
+  async completePaymentWebhookEvent(eventId: string, errorMessage?: string): Promise<void> {
+    const { error } = await supabase.rpc('complete_payment_webhook_event', {
+      p_event_id: eventId, p_error: errorMessage || null
+    });
+    if (error) throw error;
+  }
+
+  async markRazorpayOrderFailed(orderId: string, paymentId?: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('mark_razorpay_order_failed', {
+      p_order_id: orderId, p_payment_id: paymentId || null
+    });
+    if (error) throw error;
+    if (typeof data !== 'boolean') throw new Error('Supabase returned an invalid payment failure result.');
+    return data;
+  }
+
+  async reservePaymentRefund(refund: any): Promise<any> {
+    const { data, error } = await supabase.rpc('reserve_payment_refund', {
+      p_booking_id: refund.bookingId || null,
+      p_membership_id: refund.membershipId || null,
+      p_payment_id: refund.paymentId,
+      p_amount_paise: refund.amountPaise,
+      p_idempotency_key: refund.idempotencyKey,
+      p_reason: refund.reason,
+      p_admin_user_id: refund.adminUserId
+    });
+    if (error) throw error;
+    if (!data?.id || data.idempotency_key !== refund.idempotencyKey) {
+      throw new Error('Supabase returned an invalid refund reservation.');
+    }
+    return data;
+  }
+
+  async listPaymentRefunds(filters?: any): Promise<any[]> {
+    let query = db.paymentRefunds().select('*');
+    if (filters?.status) query = query.eq('status', filters.status);
+    if (filters?.bookingId) query = query.eq('booking_id', filters.bookingId);
+    if (filters?.paymentId) query = query.eq('payment_id', filters.paymentId);
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(200);
+    if (error) throw error;
     return data || [];
   }
 
-  async markNotificationRead(id: string): Promise<void> {
-    await db.notifications().update({ read_at: new Date().toISOString() }).eq('id', id);
+  async updatePaymentRefund(idempotencyKey: string, status: string, providerRefundId?: string): Promise<any> {
+    const { data, error } = await supabase.rpc('update_payment_refund', {
+      p_idempotency_key: idempotencyKey, p_status: status, p_provider_refund_id: providerRefundId || null
+    });
+    if (error) throw error;
+    return data;
   }
 
-  setOtp(phone: string, data: any): void {
-    otpStore[phone] = data;
+  async processBookingPayout(bookingId: string, adminUserId: string, utrReference: string): Promise<any> {
+    const { data, error } = await supabase.rpc('process_booking_payout', {
+      p_booking_id: bookingId, p_admin_user_id: adminUserId, p_utr_reference: utrReference
+    });
+    if (error) throw error;
+    if (!data?.id) throw new Error('Supabase returned an invalid payout result.');
+    return data;
   }
 
-  getOtp(phone: string): any | null {
-    return otpStore[phone] || null;
+  async claimScheduledJobRun(jobName: string, idempotencyKey: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('claim_scheduled_job_run', {
+      p_job_name: jobName, p_idempotency_key: idempotencyKey
+    });
+    if (error) throw error;
+    if (typeof data !== 'boolean') throw new Error('Supabase returned an invalid scheduled-job claim.');
+    return data;
   }
 
-  deleteOtp(phone: string): void {
-    delete otpStore[phone];
+  async finishScheduledJobRun(jobName: string, idempotencyKey: string, errorMessage?: string): Promise<void> {
+    const { error } = await supabase.rpc('finish_scheduled_job_run', {
+      p_job_name: jobName, p_idempotency_key: idempotencyKey, p_error: errorMessage || null
+    });
+    if (error) throw error;
   }
 
-  setAdminMfa(adminId: string, data: any): void {
-    adminMfaStore[adminId] = data;
+  async runScheduledMaintenance(): Promise<any> {
+    const { data, error } = await supabase.rpc('run_scheduled_maintenance');
+    if (error) throw error;
+    if (!data || typeof data !== 'object') throw new Error('Supabase returned an invalid scheduled-maintenance result.');
+    return data;
   }
 
-  getAdminMfa(adminId: string): any | null {
-    return adminMfaStore[adminId] || null;
+  async reserveAdminSensitiveMfa(adminUserId: string, action: string, otpHash: string): Promise<any> {
+    const { data, error } = await supabase.rpc('reserve_admin_sensitive_mfa', {
+      p_admin_user_id: adminUserId, p_action: action, p_otp_hash: otpHash
+    });
+    if (error) throw error;
+    if (typeof data?.allowed !== 'boolean') throw new Error('Supabase returned an invalid sensitive MFA reservation.');
+    return data;
   }
 
-  deleteAdminMfa(adminId: string): void {
-    delete adminMfaStore[adminId];
+  async completeAdminSensitiveMfaDelivery(adminUserId: string, action: string, sent: boolean): Promise<boolean> {
+    const { data, error } = await supabase.rpc('complete_admin_sensitive_mfa_delivery', {
+      p_admin_user_id: adminUserId, p_action: action, p_sent: sent
+    });
+    if (error) throw error;
+    if (typeof data !== 'boolean') throw new Error('Supabase returned an invalid sensitive MFA delivery result.');
+    return data;
   }
+
+  async verifyAdminSensitiveMfa(adminUserId: string, action: string, otpHash: string): Promise<string> {
+    const { data, error } = await supabase.rpc('verify_admin_sensitive_mfa', {
+      p_admin_user_id: adminUserId, p_action: action, p_otp_hash: otpHash
+    });
+    if (error) throw error;
+    if (!['verified', 'not_found', 'expired', 'locked', 'invalid'].includes(data)) {
+      throw new Error('Supabase returned an invalid sensitive MFA verification result.');
+    }
+    return data;
+  }
+
+  async consumeAdminSensitiveMfa(adminUserId: string, action: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('consume_admin_sensitive_mfa', {
+      p_admin_user_id: adminUserId, p_action: action
+    });
+    if (error) throw error;
+    if (typeof data !== 'boolean') throw new Error('Supabase returned an invalid sensitive Admin MFA result.');
+    return data;
+  }
+
+  async reserveOtp(phone: string, otpHash: string): Promise<OtpReservation> {
+    const { data, error } = await supabase.rpc('reserve_auth_otp', {
+      p_phone: phone,
+      p_otp_hash: otpHash
+    });
+    if (error) throw error;
+    if (!data || typeof data.allowed !== 'boolean') {
+      throw new Error('Supabase returned an invalid OTP reservation response.');
+    }
+    return {
+      allowed: data.allowed,
+      reason: data.reason === 'cooldown' || data.reason === 'rate_limit' ? data.reason : undefined,
+      waitSeconds: typeof data.waitSeconds === 'number' ? data.waitSeconds : undefined
+    };
+  }
+
+  async setOtpDeliveryResult(phone: string, sent: boolean, requestId?: string): Promise<void> {
+    const { data, error } = await supabase.rpc('complete_auth_otp_delivery', {
+      p_phone: phone,
+      p_sent: sent,
+      p_request_id: requestId || null
+    });
+    if (error) throw error;
+    if (!data) throw new Error('OTP challenge was not pending delivery.');
+  }
+
+  async verifyOtp(phone: string, otpHash: string): Promise<OtpVerificationResult> {
+    const { data, error } = await supabase.rpc('verify_auth_otp', {
+      p_phone: phone,
+      p_otp_hash: otpHash
+    });
+    if (error) throw error;
+    if (data === 'verified' || data === 'not_found' || data === 'expired' || data === 'locked' || data === 'invalid') {
+      return data;
+    }
+    throw new Error('Supabase returned an invalid OTP verification response.');
+  }
+
+  async reserveAdminMfa(email: string, otpHash: string): Promise<OtpReservation> {
+    const { data, error } = await supabase.rpc('reserve_admin_mfa', {
+      p_email: email,
+      p_otp_hash: otpHash
+    });
+    if (error) throw error;
+    if (!data || typeof data.allowed !== 'boolean') {
+      throw new Error('Supabase returned an invalid administrator MFA reservation response.');
+    }
+    return {
+      allowed: data.allowed,
+      reason: data.reason === 'cooldown' || data.reason === 'rate_limit' ? data.reason : undefined,
+      waitSeconds: typeof data.waitSeconds === 'number' ? data.waitSeconds : undefined
+    };
+  }
+
+  async setAdminMfaDeliveryResult(email: string, sent: boolean, requestId?: string): Promise<void> {
+    const { data, error } = await supabase.rpc('complete_admin_mfa_delivery', {
+      p_email: email,
+      p_sent: sent,
+      p_request_id: requestId || null
+    });
+    if (error) throw error;
+    if (!data) throw new Error('Administrator MFA challenge was not pending delivery.');
+  }
+
+  async verifyAdminMfa(email: string, otpHash: string): Promise<OtpVerificationResult> {
+    const { data, error } = await supabase.rpc('verify_admin_mfa', {
+      p_email: email,
+      p_otp_hash: otpHash
+    });
+    if (error) throw error;
+    if (data === 'verified' || data === 'not_found' || data === 'expired' || data === 'locked' || data === 'invalid') {
+      return data;
+    }
+    throw new Error('Supabase returned an invalid administrator MFA verification response.');
+  }
+
 }
 
 // Export the appropriate adapter based on configuration
+const production = process.env.NODE_ENV === 'production';
+if (production && !isSupabaseConfigured()) {
+  throw new Error('Production requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY; JSON database fallback is disabled.');
+}
+
 export const databaseAdapter: DatabaseAdapter = isSupabaseConfigured()
   ? new SupabaseDatabaseAdapter()
   : new JsonDatabaseAdapter();
 
 export function getDatabaseType(): 'supabase' | 'json' {
-  return isSupabaseConfigured() ? 'supabase' : 'json';
+  return databaseAdapter instanceof SupabaseDatabaseAdapter ? 'supabase' : 'json';
 }

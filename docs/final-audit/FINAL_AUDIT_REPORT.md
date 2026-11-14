@@ -1,5 +1,7 @@
 # PairUpToday Final Repository Audit Report
 
+> Historical baseline: this report predates the later Supabase, route-authorization, webhook, finance, notification, location, and scheduler work. See [`SUPABASE_CANONICAL_DATABASE.md`](./SUPABASE_CANONICAL_DATABASE.md), [`ROUTE_AUTHORIZATION.md`](./ROUTE_AUTHORIZATION.md), and [`../RELEASE_INSTRUCTIONS.md`](../RELEASE_INSTRUCTIONS.md) for the current implementation state.
+
 ## Scope and method
 This audit inspected the actual repository code, server routes, frontend pages, database migrations, mobile app manifests, and local validation scripts to distinguish implemented functionality from planned or external-blocked work.
 
@@ -41,7 +43,7 @@ The repository is a partially integrated local application scaffold with real wo
 ## Actual implemented functionality
 1. Website and admin portal UI shell are present.
 2. Backend Express server exposes authentication, OTP, KYC, booking, admin, support, and location APIs.
-3. Local JSON fallback database exists and is used when live database services are not configured.
+3. A JSON adapter and fixtures exist for local development only; production requires Supabase and does not fall back to JSON.
 4. Key business rules for OTP hashing, financial split, and settlement lock are present in code and validated in tests.
 5. Provider-specific wrapper functions exist, but they intentionally return configuration errors when credentials are absent.
 

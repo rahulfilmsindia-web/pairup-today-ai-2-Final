@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+dist
+dist-admin
+data
+coverage
+android
+ios
+*.log
+*.exe
+*.exe-*
+service-account.json
+*.json.key

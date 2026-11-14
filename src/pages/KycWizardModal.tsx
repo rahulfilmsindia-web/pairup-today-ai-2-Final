@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { GovernmentIdType } from '../types';
-import { ShieldCheck, Upload, AlertCircle, Camera, Check, UserCheck, Lock, X, FileText } from 'lucide-react';
+import { ShieldCheck, Upload, AlertCircle, Camera, Check, UserCheck, Lock, X, FileText, RefreshCw, User, Heart } from 'lucide-react';
 
 export const KycWizardModal: React.FC = () => {
-  const { showKycWizard, closeKycWizard, submitKyc, user } = useAuth();
+  const { showKycWizard, closeKycWizard, submitKyc, user, activeRole, selectActiveRole } = useAuth();
   const { t } = useLanguage();
 
+  const [selectedRole, setSelectedRole] = useState<'CLIENT' | 'COMPANION'>(() => {
+    if (activeRole === 'COMPANION' || user?.activeRole === 'COMPANION') return 'COMPANION';
+    return 'CLIENT';
+  });
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [legalName, setLegalName] = useState('');
   const [dob, setDob] = useState('');
@@ -21,12 +25,97 @@ export const KycWizardModal: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Live Camera State
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (activeRole) {
+      setSelectedRole(activeRole);
+    } else if (user?.activeRole) {
+      setSelectedRole(user.activeRole);
+    }
+  }, [activeRole, user?.activeRole]);
+
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, []);
+
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError('Camera API is not supported in this browser.');
+        return;
+      }
+      stopCameraStream();
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 640 }
+        },
+        audio: false
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      setIsCameraActive(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch (err: any) {
+      console.warn('Direct camera access error:', err);
+      setCameraError('Unable to open front camera directly. Please check browser permissions or use file upload.');
+      setIsCameraActive(false);
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        setSelfieUrl(dataUrl);
+        stopCameraStream();
+      }
+    } catch (err) {
+      console.error('Failed to capture snapshot from video:', err);
+      setCameraError('Failed to capture selfie. Please try again.');
+    }
+  };
+
   // Dynamic max date of birth for strict 18+ enforcement
   const maxDobDate = new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+        setErrorMsg('Choose a JPEG, PNG or WebP image no larger than 5 MB.');
+        e.target.value = '';
+        return;
+      }
+      setErrorMsg(null);
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
@@ -54,12 +143,15 @@ export const KycWizardModal: React.FC = () => {
     }
 
     // Verify 18+
-    const birthDate = new Date(dob);
-    const ageDifMs = Date.now() - birthDate.getTime();
-    const ageDate = new Date(ageDifMs);
-    const age = Math.abs(ageDate.getUTCFullYear() - 1970);
+    const birthDate = new Date(`${dob}T00:00:00.000Z`);
+    const today = new Date();
+    let age = today.getUTCFullYear() - birthDate.getUTCFullYear();
+    if (
+      today.getUTCMonth() < birthDate.getUTCMonth() ||
+      (today.getUTCMonth() === birthDate.getUTCMonth() && today.getUTCDate() < birthDate.getUTCDate())
+    ) age -= 1;
 
-    if (age < 18) {
+    if (Number.isNaN(birthDate.getTime()) || birthDate.getTime() > Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) || age < 18) {
       setErrorMsg('Platform safety requires all participants to be at least 18 years of age.');
       return;
     }
@@ -69,14 +161,24 @@ export const KycWizardModal: React.FC = () => {
       return;
     }
 
+    if (!idFrontUrl || !selfieUrl || (idType !== 'PAN' && !idBackUrl)) {
+      setErrorMsg('Upload the required front, back (except PAN), and selfie images before submitting.');
+      return;
+    }
+
     setLoading(true);
+    // Ensure active role is synchronized before KYC submission if user is DUAL
+    if (user?.role === 'DUAL' && user.activeRole !== selectedRole) {
+      await selectActiveRole(selectedRole);
+    }
     const result = await submitKyc({
       legalName,
       dob,
       idType,
-      idFrontUrl: idFrontUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 300 180"><rect width="300" height="180" fill="%230f172a"/><text x="150" y="90" fill="%2394a3b8" font-size="14" text-anchor="middle">Front ID Document</text></svg>',
-      idBackUrl: idType === 'PAN' ? null : (idBackUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 300 180"><rect width="300" height="180" fill="%230f172a"/><text x="150" y="90" fill="%2394a3b8" font-size="14" text-anchor="middle">Back ID Document</text></svg>'),
-      selfieUrl: selfieUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%230f172a"/><circle cx="100" cy="80" r="40" fill="%23334155"/><circle cx="100" cy="180" r="70" fill="%23334155"/></svg>',
+      idFrontUrl,
+      idBackUrl: idType === 'PAN' ? null : idBackUrl,
+      selfieUrl,
+      userType: selectedRole,
       bio,
       city,
       photos: photos.slice(0, 6)
@@ -134,6 +236,44 @@ export const KycWizardModal: React.FC = () => {
               <span>{errorMsg}</span>
             </div>
           )}
+
+          {/* Role Choice for Verification */}
+          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+            <label className="block text-xs font-semibold text-slate-300">
+              Select Verification Role *
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedRole('CLIENT')}
+                className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                  selectedRole === 'CLIENT'
+                    ? 'bg-gradient-to-r from-pink-500/20 to-rose-500/20 border-pink-500 text-pink-300 shadow-md shadow-pink-500/10'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <User className="w-4 h-4" />
+                <span>Client Profile</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedRole('COMPANION')}
+                className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                  selectedRole === 'COMPANION'
+                    ? 'bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <Heart className="w-4 h-4" />
+                <span>Companion Profile</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              {selectedRole === 'COMPANION' 
+                ? 'Applying to offer companionship services on PairUpToday.'
+                : 'Applying to browse and book companionship services.'}
+            </p>
+          </div>
 
           {/* Age 18+ Gate */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
@@ -249,7 +389,7 @@ export const KycWizardModal: React.FC = () => {
                 <span className="sr-only">Choose Front ID</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={e => handleFileUpload(e, setIdFrontUrl)}
                   className="block w-full text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-amber-400 hover:file:bg-slate-700 cursor-pointer"
                 />
@@ -278,7 +418,7 @@ export const KycWizardModal: React.FC = () => {
                   <span className="sr-only">Choose Back ID</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     onChange={e => handleFileUpload(e, setIdBackUrl)}
                     className="block w-full text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-amber-400 hover:file:bg-slate-700 cursor-pointer"
                   />
@@ -287,7 +427,7 @@ export const KycWizardModal: React.FC = () => {
             )}
           </div>
 
-          {/* Live Selfie */}
+          {/* Live Selfie with Front Camera Feed */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full overflow-hidden shrink-0 ring-2 ring-emerald-500 bg-slate-900 flex items-center justify-center">
@@ -297,7 +437,7 @@ export const KycWizardModal: React.FC = () => {
                   <Camera className="w-7 h-7 text-slate-500" />
                 )}
               </div>
-              <div>
+              <div className="flex-1">
                 <div className="text-xs font-bold text-slate-200 mb-1 flex items-center gap-1.5">
                   <Camera className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Live Facial Verification Selfie</span>
@@ -308,16 +448,84 @@ export const KycWizardModal: React.FC = () => {
               </div>
             </div>
 
-            <label className="block">
-              <span className="sr-only">Upload Selfie</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="user"
-                onChange={e => handleFileUpload(e, setSelfieUrl)}
-                className="block w-full text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-emerald-400 hover:file:bg-slate-700 cursor-pointer"
-              />
-            </label>
+            {/* Direct Front Camera Video Container */}
+            {isCameraActive && (
+              <div className="relative rounded-2xl overflow-hidden bg-black border border-emerald-500/50 aspect-video max-w-sm mx-auto flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover -scale-x-100"
+                />
+                <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={capturePhoto}
+                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-1.5 transition-transform active:scale-95"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Capture Selfie</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopCameraStream}
+                    className="px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {cameraError && (
+              <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-[11px] flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />
+                <span>{cameraError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {!isCameraActive && (
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold flex items-center gap-2 transition-all active:scale-95"
+                >
+                  <Camera className="w-4 h-4 text-emerald-400" />
+                  <span>Open Front Camera</span>
+                </button>
+              )}
+
+              {selfieUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelfieUrl('');
+                    startCamera();
+                  }}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retake</span>
+                </button>
+              )}
+
+              <label className="cursor-pointer px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-medium flex items-center gap-1.5">
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload From File</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="user"
+                  onChange={e => {
+                    stopCameraStream();
+                    handleFileUpload(e, setSelfieUrl);
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
 
           {/* Bio */}
@@ -340,7 +548,7 @@ export const KycWizardModal: React.FC = () => {
             disabled={loading}
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500 hover:from-emerald-600 hover:to-sky-600 text-slate-950 font-extrabold text-sm shadow-xl shadow-emerald-500/20 transition-all hover:scale-[1.01] active:scale-98 disabled:opacity-50"
           >
-            {loading ? 'Submitting & Revoking Active Session...' : t.submitKyc}
+            {loading ? 'Submitting KYC...' : t.submitKyc}
           </button>
 
           <p className="text-[11px] text-center text-slate-400">

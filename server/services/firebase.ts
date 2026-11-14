@@ -12,9 +12,10 @@ export function initializeFirebase() {
   const serviceAccountKey = process.env.FIREBASE_PRIVATE_KEY;
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const databaseURL = process.env.FIREBASE_DATABASE_URL?.trim();
 
-  if (!serviceAccountKey || !projectId || !clientEmail) {
-    console.warn('Firebase credentials not configured. Firebase features will be disabled.');
+  if (!serviceAccountKey || !projectId || !clientEmail || !databaseURL) {
+    console.warn('Firebase Admin credentials or FIREBASE_DATABASE_URL are not configured. Firebase features will be disabled.');
     return null;
   }
 
@@ -27,7 +28,7 @@ export function initializeFirebase() {
 
     firebaseApp = initializeApp({
       credential: cert(serviceAccount),
-      databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
+      databaseURL
     });
 
     rtdb = getDatabase(firebaseApp);
@@ -40,10 +41,11 @@ export function initializeFirebase() {
 }
 
 // Get Firebase Realtime Database instance
-export function getRTDB(): Database | null {
+export function getRTDB(): Database {
   if (!rtdb) {
     initializeFirebase();
   }
+  if (!rtdb) throw new Error('Firebase Realtime Database is not configured.');
   return rtdb;
 }
 
@@ -62,94 +64,45 @@ export async function updateUserLocation(
   userId: string,
   latitude: number,
   longitude: number,
-  bookingId?: string
-): Promise<boolean> {
+  bookingId: string
+): Promise<void> {
   const db = getRTDB();
-  if (!db) return false;
-
-  try {
-    const locationRef = db.ref(`locations/${userId}`);
-    const update: LocationUpdate = {
-      userId,
-      latitude,
-      longitude,
-      timestamp: Date.now()
-    };
-
-    if (bookingId) {
-      update.bookingId = bookingId;
-    }
-
-    await locationRef.set(update);
-    return true;
-  } catch (error) {
-    console.error('Failed to update user location:', error);
-    return false;
-  }
+  const update: LocationUpdate = { userId, latitude, longitude, timestamp: Date.now(), bookingId };
+  await db.ref(`bookings/${bookingId}/locations/${userId}`).set(update);
 }
 
 // Get user's current location
-export async function getUserLocation(userId: string): Promise<LocationUpdate | null> {
+export async function getUserLocation(userId: string, bookingId: string): Promise<LocationUpdate | null> {
   const db = getRTDB();
-  if (!db) return null;
-
-  try {
-    const snapshot = await db.ref(`locations/${userId}`).once('value');
-    return snapshot.val();
-  } catch (error) {
-    console.error('Failed to get user location:', error);
-    return null;
-  }
+  const snapshot = await db.ref(`bookings/${bookingId}/locations/${userId}`).once('value');
+  return snapshot.val();
 }
 
 // Remove user's location (e.g., after booking completion)
-export async function removeUserLocation(userId: string): Promise<boolean> {
+export async function removeUserLocation(userId: string, bookingId: string): Promise<void> {
   const db = getRTDB();
-  if (!db) return false;
-
-  try {
-    await db.ref(`locations/${userId}`).remove();
-    return true;
-  } catch (error) {
-    console.error('Failed to remove user location:', error);
-    return false;
-  }
+  await db.ref(`bookings/${bookingId}/locations/${userId}`).remove();
 }
 
 // Start location sharing for a booking
 export async function startLocationSharing(
   userId: string,
   bookingId: string
-): Promise<boolean> {
+): Promise<void> {
   const db = getRTDB();
-  if (!db) return false;
-
-  try {
-    await db.ref(`bookings/${bookingId}/participants/${userId}/sharing`).set(true);
-    await db.ref(`bookings/${bookingId}/participants/${userId}/startedAt`).set(Date.now());
-    return true;
-  } catch (error) {
-    console.error('Failed to start location sharing:', error);
-    return false;
-  }
+  await db.ref(`bookings/${bookingId}/participants/${userId}/sharing`).set(true);
+  await db.ref(`bookings/${bookingId}/participants/${userId}/startedAt`).set(Date.now());
 }
 
 // Stop location sharing for a booking
 export async function stopLocationSharing(
   userId: string,
   bookingId: string
-): Promise<boolean> {
+): Promise<void> {
   const db = getRTDB();
-  if (!db) return false;
-
-  try {
-    await db.ref(`bookings/${bookingId}/participants/${userId}/sharing`).set(false);
-    await db.ref(`bookings/${bookingId}/participants/${userId}/stoppedAt`).set(Date.now());
-    return true;
-  } catch (error) {
-    console.error('Failed to stop location sharing:', error);
-    return false;
-  }
+  await db.ref(`bookings/${bookingId}/participants/${userId}/sharing`).set(false);
+  await db.ref(`bookings/${bookingId}/participants/${userId}/stoppedAt`).set(Date.now());
+  await removeUserLocation(userId, bookingId);
 }
 
 // Check if location sharing is active for a booking
@@ -158,85 +111,45 @@ export async function isLocationSharingActive(
   bookingId: string
 ): Promise<boolean> {
   const db = getRTDB();
-  if (!db) return false;
-
-  try {
-    const snapshot = await db.ref(`bookings/${bookingId}/participants/${userId}/sharing`).once('value');
-    return snapshot.val() === true;
-  } catch (error) {
-    console.error('Failed to check location sharing status:', error);
-    return false;
-  }
+  const snapshot = await db.ref(`bookings/${bookingId}/participants/${userId}/sharing`).once('value');
+  return snapshot.val() === true;
 }
 
 // Set user online/offline presence
 export async function setUserPresence(userId: string, online: boolean): Promise<boolean> {
   const db = getRTDB();
-  if (!db) return false;
-
-  try {
-    const presenceRef = db.ref(`presence/${userId}`);
-    await presenceRef.set({
-      online,
-      lastSeen: Date.now()
-    });
-
-    // Set up disconnect handler
-    if (online) {
-      presenceRef.onDisconnect().set({
-        online: false,
-        lastSeen: Date.now()
-      });
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Failed to set user presence:', error);
-    return false;
+  const presenceRef = db.ref(`presence/${userId}`);
+  await presenceRef.set({ online, lastSeen: Date.now() });
+  if (online) {
+    await presenceRef.onDisconnect().set({ online: false, lastSeen: Date.now() });
   }
+  return true;
 }
 
 // Get user presence
 export async function getUserPresence(userId: string): Promise<{ online: boolean; lastSeen: number } | null> {
   const db = getRTDB();
-  if (!db) return null;
-
-  try {
-    const snapshot = await db.ref(`presence/${userId}`).once('value');
-    return snapshot.val();
-  } catch (error) {
-    console.error('Failed to get user presence:', error);
-    return null;
-  }
+  const snapshot = await db.ref(`presence/${userId}`).once('value');
+  return snapshot.val();
 }
 
 // Clean up expired location data (called by scheduled job)
 export async function cleanupExpiredLocations(): Promise<number> {
   const db = getRTDB();
-  if (!db) return 0;
-
-  try {
-    const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
-    const locationsRef = db.ref('locations');
-    const snapshot = await locationsRef.once('value');
-    const locations = snapshot.val();
-
-    if (!locations) return 0;
-
-    let cleanedCount = 0;
-    for (const [userId, location] of Object.entries(locations)) {
-      const loc = location as LocationUpdate;
-      if (loc.timestamp < cutoffTime) {
-        await locationsRef.child(userId).remove();
+  const cutoffTime = Date.now() - (24 * 60 * 60 * 1000);
+  const bookingsSnapshot = await db.ref('bookings').once('value');
+  const bookings = bookingsSnapshot.val() as Record<string, any> | null;
+  let cleanedCount = 0;
+  for (const [bookingId, booking] of Object.entries(bookings || {})) {
+    const locations = booking?.locations as Record<string, LocationUpdate> | undefined;
+    for (const [userId, location] of Object.entries(locations || {})) {
+      if (typeof location.timestamp === 'number' && location.timestamp < cutoffTime) {
+        await db.ref(`bookings/${bookingId}/locations/${userId}`).remove();
         cleanedCount++;
       }
     }
-
-    return cleanedCount;
-  } catch (error) {
-    console.error('Failed to cleanup expired locations:', error);
-    return 0;
   }
+  return cleanedCount;
 }
 
 // Check if Firebase is configured
@@ -244,6 +157,7 @@ export function isFirebaseConfigured(): boolean {
   return !!(
     process.env.FIREBASE_PRIVATE_KEY &&
     process.env.FIREBASE_PROJECT_ID &&
-    process.env.FIREBASE_CLIENT_EMAIL
+    process.env.FIREBASE_CLIENT_EMAIL &&
+    process.env.FIREBASE_DATABASE_URL
   );
 }

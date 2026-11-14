@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { apiFetch } from '../utils/api';
+import { openRazorpayCheckout } from '../utils/razorpay';
 import { PAIRUP_SERVICES, ServiceItem } from '../constants/services';
 import { 
   Search, MapPin, Filter, Star, Clock, Calendar, ShieldCheck, 
@@ -101,7 +103,7 @@ export const ClientDashboard: React.FC = () => {
       if (selectedServiceId) params.append('serviceId', selectedServiceId.toString());
       if (selectedCity && selectedCity !== 'all') params.append('city', selectedCity);
 
-      const res = await fetch(`/api/companions/search?${params.toString()}`);
+      const res = await apiFetch(`/api/companions/search?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setCompanions(data.companions || []);
@@ -117,7 +119,7 @@ export const ClientDashboard: React.FC = () => {
   const fetchMyBookings = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/bookings/my/${user.id}`);
+      const res = await apiFetch(`/api/bookings/my/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setMyBookings(data.bookings || []);
@@ -131,7 +133,7 @@ export const ClientDashboard: React.FC = () => {
   const fetchNotifications = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/notifications/${user.id}`);
+      const res = await apiFetch(`/api/notifications/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.notifications || []);
@@ -171,7 +173,7 @@ export const ClientDashboard: React.FC = () => {
     if (!activeChatBooking) return;
     const fetchChat = async () => {
       try {
-        const res = await fetch(`/api/chat/${activeChatBooking.id}`);
+        const res = await apiFetch(`/api/chat/${activeChatBooking.id}`);
         if (res.ok) {
           const data = await res.json();
           setChatMessages(data.messages || []);
@@ -190,7 +192,7 @@ export const ClientDashboard: React.FC = () => {
     if (!activeChatBooking || !newChatText.trim() || !user) return;
 
     try {
-      const res = await fetch(`/api/chat/${activeChatBooking.id}`, {
+      const res = await apiFetch(`/api/chat/${activeChatBooking.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -230,7 +232,7 @@ export const ClientDashboard: React.FC = () => {
     const formattedEndTime = `${String(endH % 24).padStart(2, '0')}:${bookingTime.split(':')[1]}`;
 
     try {
-      const res = await fetch('/api/bookings/create', {
+      const res = await apiFetch('/api/bookings/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -251,7 +253,26 @@ export const ClientDashboard: React.FC = () => {
       if (!res.ok) {
         setBookingError(data.error || 'Failed to confirm booking.');
       } else {
-        setBookingSuccessMsg(`Booking ${data.booking.bookingCode} confirmed! 100% payment processed via PairUp Secure Vault.`);
+        const checkoutResult = await openRazorpayCheckout(
+          data.payment,
+          `Companion booking ${data.booking.bookingCode}`,
+          { name: user.legalName, contact: user.phone }
+        );
+        const verifyRes = await apiFetch('/api/payments/razorpay/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: data.booking.id,
+            orderId: checkoutResult.razorpay_order_id,
+            paymentId: checkoutResult.razorpay_payment_id,
+            signature: checkoutResult.razorpay_signature
+          })
+        });
+        const verification = await verifyRes.json();
+        if (!verifyRes.ok || !verification.success) {
+          throw new Error(verification.error || 'Payment was not confirmed by the backend.');
+        }
+        setBookingSuccessMsg(`Booking ${verification.booking.bookingCode} confirmed after payment verification.`);
         fetchMyBookings();
         setTimeout(() => {
           setSelectedCompanion(null);
@@ -1521,7 +1542,7 @@ export const ClientDashboard: React.FC = () => {
                 disabled={bookingInProgress}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] disabled:opacity-50"
               >
-                {bookingInProgress ? 'Processing Payment...' : 'Confirm & Pay via PairUp Secure Vault'}
+                {bookingInProgress ? 'Preparing secure checkout...' : 'Continue to Razorpay Checkout'}
               </button>
 
               <p className="text-[10px] text-center text-slate-500">

@@ -41,13 +41,13 @@ It includes policies for:
 - support messaging permissions
 - service-role access for backend usage
 
-## 3. Local implementation and fallback database
+## 3. Local-development JSON adapter
 The fallback database adapter is implemented in [server/services/database.ts](../../server/services/database.ts).
 
 It maintains a JSON file at:
 - [data/pairuptoday_db.json](../../data/pairuptoday_db.json)
 
-This is a local-only persistence layer used when Supabase is not configured. It includes:
+This adapter is for local development only and must never be selected in production. Production startup requires Supabase; it is not a fallback when provider configuration is missing. It includes:
 - users
 - kycSubmissions
 - companionProfiles

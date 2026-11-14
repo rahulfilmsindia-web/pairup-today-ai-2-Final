@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { AdminRole, KYCStatus } from '../types';
+import { apiFetch } from '../utils/api';
 import { 
   ShieldAlert, Lock, KeyRound, CheckCircle, AlertCircle, 
   Users, DollarSign, FileCheck, Shield, Eye, EyeOff, 
@@ -23,8 +24,8 @@ export const AdminPortal: React.FC = () => {
   } = useAdminAuth();
 
   // Admin login credentials state
-  const [emailInput, setEmailInput] = useState('rahulfilmsindia@gmail.com');
-  const [passwordInput, setPasswordInput] = useState('AdminPass@2026');
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
   const [mfaOtpInput, setMfaOtpInput] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -58,6 +59,8 @@ export const AdminPortal: React.FC = () => {
   const [companionKycs, setCompanionKycs] = useState<any[]>([]);
   const [kycFilter, setKycFilter] = useState<string>('ALL');
   const [selectedKycDoc, setSelectedKycDoc] = useState<any | null>(null);
+  const [kycDocuments, setKycDocuments] = useState<Record<string, string | null> | null>(null);
+  const [kycDocumentsError, setKycDocumentsError] = useState<string | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
 
   // Additional Admin Collections
@@ -85,6 +88,7 @@ export const AdminPortal: React.FC = () => {
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<AdminRole>('KYC_ADMIN');
 
   // Audit logs state
@@ -109,18 +113,18 @@ export const AdminPortal: React.FC = () => {
         resOverview, resClientsKyc, resCompsKyc, resFin, resStaff, resLogs,
         resClients, resComps, resMems, resBks, resPays, resSupport
       ] = await Promise.all([
-        fetch('/api/admin/overview', { headers: authHeaders }),
-        fetch('/api/admin/kyc/list?userType=CLIENT', { headers: authHeaders }),
-        fetch('/api/admin/kyc/list?userType=COMPANION', { headers: authHeaders }),
-        fetch('/api/admin/finance/settlements', { headers: authHeaders }),
-        fetch('/api/admin/staff', { headers: authHeaders }),
-        fetch('/api/admin/audit-logs', { headers: authHeaders }),
-        fetch('/api/admin/clients', { headers: authHeaders }),
-        fetch('/api/admin/companions', { headers: authHeaders }),
-        fetch('/api/admin/memberships', { headers: authHeaders }),
-        fetch('/api/admin/bookings', { headers: authHeaders }),
-        fetch('/api/admin/payments', { headers: authHeaders }),
-        fetch('/api/admin/support/conversations', { headers: authHeaders })
+        apiFetch('/api/admin/overview', { headers: authHeaders }),
+        apiFetch('/api/admin/kyc/list?userType=CLIENT', { headers: authHeaders }),
+        apiFetch('/api/admin/kyc/list?userType=COMPANION', { headers: authHeaders }),
+        apiFetch('/api/admin/finance/settlements', { headers: authHeaders }),
+        apiFetch('/api/admin/staff', { headers: authHeaders }),
+        apiFetch('/api/admin/audit-logs', { headers: authHeaders }),
+        apiFetch('/api/admin/clients', { headers: authHeaders }),
+        apiFetch('/api/admin/companions', { headers: authHeaders }),
+        apiFetch('/api/admin/memberships', { headers: authHeaders }),
+        apiFetch('/api/admin/bookings', { headers: authHeaders }),
+        apiFetch('/api/admin/payments', { headers: authHeaders }),
+        apiFetch('/api/admin/support/conversations', { headers: authHeaders })
       ]);
 
       if (resOverview.ok) setStats(await resOverview.json());
@@ -181,6 +185,27 @@ export const AdminPortal: React.FC = () => {
     }
   }, [isAdminAuthenticated]);
 
+  useEffect(() => {
+    if (!selectedKycDoc || !adminToken) {
+      setKycDocuments(null);
+      setKycDocumentsError(null);
+      return;
+    }
+    let active = true;
+    setKycDocuments(null);
+    setKycDocumentsError(null);
+    apiFetch(`/api/admin/kyc/${encodeURIComponent(selectedKycDoc.id)}/documents`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    }).then(async response => {
+      if (!response.ok) throw new Error('Private KYC documents could not be loaded.');
+      const payload = await response.json();
+      if (active) setKycDocuments(payload.documents || {});
+    }).catch(error => {
+      if (active) setKycDocumentsError(error instanceof Error ? error.message : 'Private KYC documents could not be loaded.');
+    });
+    return () => { active = false; };
+  }, [selectedKycDoc?.id, adminToken]);
+
   // Login handler
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,7 +231,7 @@ export const AdminPortal: React.FC = () => {
   const handleKycAction = async (submissionId: string, action: 'APPROVE' | 'REJECT') => {
     if (!admin) return;
     try {
-      const res = await fetch(`/api/admin/kyc/${submissionId}/action`, {
+      const res = await apiFetch(`/api/admin/kyc/${submissionId}/action`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${adminToken}`,
@@ -233,32 +258,62 @@ export const AdminPortal: React.FC = () => {
   };
 
   // Re-authenticate MFA to reveal unmasked bank details
+  const handleOpenRevealBank = async (companionId: string) => {
+    setMfaChallengeModal({ open: true, companionId });
+    setMfaChallengeCode('');
+    setMfaChallengeError(null);
+    try {
+      const response = await apiFetch('/api/admin/finance/re-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'REVEAL_BANK' })
+      });
+      const data = await response.json();
+      if (!response.ok) setMfaChallengeError(data.error || 'Could not send the verification code.');
+      else setMfaChallengeError('A verification code was sent to your registered admin phone.');
+    } catch (error: any) {
+      setMfaChallengeError(error.message || 'Could not send the verification code.');
+    }
+  };
+
   const handleRevealBankChallenge = async () => {
     if (!mfaChallengeModal || !admin) return;
     setMfaChallengeError(null);
     try {
-      const res = await fetch('/api/admin/finance/reveal-bank', {
+      const verification = await apiFetch('/api/admin/finance/re-auth/verify', {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({
-          companionId: mfaChallengeModal.companionId,
-          adminEmail: admin.email,
-          mfaCode: mfaChallengeCode
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'REVEAL_BANK', otp: mfaChallengeCode })
       });
-      const data = await res.json();
-      if (res.ok) {
-        setRevealedBanks(prev => ({ ...prev, [mfaChallengeModal.companionId]: data.bankDetails }));
-        setMfaChallengeModal(null);
-        setMfaChallengeCode('');
-      } else {
-        setMfaChallengeError(data.error || 'MFA Challenge failed');
+      const verificationData = await verification.json();
+      if (!verification.ok) {
+        setMfaChallengeError(verificationData.error || 'MFA verification failed.');
+        return;
       }
-    } catch (err: any) {
-      setMfaChallengeError(err.message || 'MFA Request failed');
+      const response = await apiFetch('/api/admin/finance/reveal-bank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: mfaChallengeModal.companionId })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setMfaChallengeError(data.error || 'Bank details could not be revealed.');
+        return;
+      }
+      setRevealedBanks(prev => ({
+        ...prev,
+        [mfaChallengeModal.companionId]: {
+          accountNumber: data.accountNumber,
+          accountNumberMasked: data.accountNumberMasked,
+          ifsc: data.ifsc,
+          bankName: data.bankName,
+          accountHolderName: data.accountHolderName
+        }
+      }));
+      setMfaChallengeModal(null);
+      setMfaChallengeCode('');
+    } catch (error: any) {
+      setMfaChallengeError(error.message || 'MFA request failed.');
     }
   };
 
@@ -270,7 +325,23 @@ export const AdminPortal: React.FC = () => {
     setPayoutError(null);
 
     try {
-      const res = await fetch('/api/admin/finance/process-payout', {
+      const challenge = await apiFetch('/api/admin/finance/re-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'PROCESS_PAYOUT' })
+      });
+      const challengeData = await challenge.json();
+      if (!challenge.ok) throw new Error(challengeData.error || 'Could not send payout verification code.');
+      const code = window.prompt('Enter the six-digit payout verification code sent to your registered admin phone.');
+      if (!code) throw new Error('Payout cancelled because no verification code was provided.');
+      const verification = await apiFetch('/api/admin/finance/re-auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'PROCESS_PAYOUT', otp: code })
+      });
+      const verificationData = await verification.json();
+      if (!verification.ok) throw new Error(verificationData.error || 'Payout MFA verification failed.');
+      const res = await apiFetch('/api/admin/finance/process-payout', {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${adminToken}`,
@@ -304,7 +375,7 @@ export const AdminPortal: React.FC = () => {
     if (admin?.role !== 'SUPER_ADMIN') return;
 
     try {
-      const res = await fetch('/api/admin/staff/create', {
+      const res = await apiFetch('/api/admin/staff/create', {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${adminToken}`,
@@ -315,6 +386,7 @@ export const AdminPortal: React.FC = () => {
           phone: newStaffPhone,
           name: newStaffName,
           role: newStaffRole,
+          password: newStaffPassword,
           requesterRole: admin.role
         })
       });
@@ -322,6 +394,7 @@ export const AdminPortal: React.FC = () => {
         setNewStaffEmail('');
         setNewStaffPhone('');
         setNewStaffName('');
+        setNewStaffPassword('');
         loadAdminData();
       } else {
         const d = await res.json();
@@ -1130,7 +1203,7 @@ export const AdminPortal: React.FC = () => {
                               <div className="flex items-center gap-1.5">
                                 <span>{b.bankAccountMasked || '••••••••1234'}</span>
                                 <button
-                                  onClick={() => setMfaChallengeModal({ open: true, companionId: b.companionId })}
+                                  onClick={() => handleOpenRevealBank(b.companionId)}
                                   className="text-[10px] text-amber-400 underline hover:text-amber-300"
                                 >
                                   MFA Reveal
@@ -1204,7 +1277,7 @@ export const AdminPortal: React.FC = () => {
               </h2>
 
               {/* Create Staff Form */}
-              <form onSubmit={handleCreateStaff} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+              <form onSubmit={handleCreateStaff} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                 <div>
                   <label className="block text-slate-400 mb-1">Staff Name</label>
                   <input
@@ -1228,6 +1301,30 @@ export const AdminPortal: React.FC = () => {
                   />
                 </div>
                 <div>
+                  <label className="block text-slate-400 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={newStaffPhone}
+                    onChange={e => setNewStaffPhone(e.target.value)}
+                    placeholder="+91XXXXXXXXXX"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-200"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1">Temporary Password (12+ characters)</label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    maxLength={1024}
+                    value={newStaffPassword}
+                    onChange={e => setNewStaffPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-200"
+                    required
+                  />
+                </div>
+                <div>
                   <label className="block text-slate-400 mb-1">Role (Strict 5)</label>
                   <select
                     value={newStaffRole}
@@ -1238,7 +1335,6 @@ export const AdminPortal: React.FC = () => {
                     <option value="FINANCE_ADMIN">FINANCE_ADMIN</option>
                     <option value="SUPPORT_ADMIN">SUPPORT_ADMIN</option>
                     <option value="AUDITOR">AUDITOR</option>
-                    <option value="SUPER_ADMIN">SUPER_ADMIN</option>
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -1321,28 +1417,34 @@ export const AdminPortal: React.FC = () => {
               <div>
                 <span className="text-slate-400 block mb-1">Front ID Document:</span>
                 <img
-                  src={selectedKycDoc.idFrontUrl}
+                  src={kycDocuments?.idFrontUrl || undefined}
                   alt="Front ID"
                   referrerPolicy="no-referrer"
-                  onError={(e: any) => {
-                    e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 300 180"><rect width="300" height="180" fill="%230f172a"/><text x="150" y="90" fill="%2394a3b8" font-size="14" text-anchor="middle">Document Preview</text></svg>';
-                  }}
                   className="w-full h-40 object-cover rounded-xl border border-slate-700 bg-slate-950"
                 />
               </div>
               <div>
                 <span className="text-slate-400 block mb-1">Live Facial Selfie:</span>
                 <img
-                  src={selectedKycDoc.selfieUrl}
+                  src={kycDocuments?.selfieUrl || undefined}
                   alt="Selfie"
                   referrerPolicy="no-referrer"
-                  onError={(e: any) => {
-                    e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="%230f172a"/><circle cx="100" cy="80" r="40" fill="%23334155"/><circle cx="100" cy="180" r="70" fill="%23334155"/></svg>';
-                  }}
                   className="w-full h-40 object-cover rounded-xl border border-slate-700 bg-slate-950"
                 />
               </div>
+              {kycDocuments?.idBackUrl && (
+                <div className="col-span-2">
+                  <span className="text-slate-400 block mb-1">Back ID Document:</span>
+                  <img
+                    src={kycDocuments.idBackUrl}
+                    alt="Back ID"
+                    referrerPolicy="no-referrer"
+                    className="w-full max-h-56 object-contain rounded-xl border border-slate-700 bg-slate-950"
+                  />
+                </div>
+              )}
             </div>
+            {kycDocumentsError && <p className="text-xs text-rose-400">{kycDocumentsError}</p>}
 
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
               <div>DOB: <strong className="font-mono text-slate-200">{selectedKycDoc.dob}</strong> (Permanently Locked)</div>
@@ -1390,7 +1492,7 @@ export const AdminPortal: React.FC = () => {
               <span>Security Re-Authentication</span>
             </div>
             <p className="text-xs text-slate-400">
-              Viewing sensitive companion bank account numbers requires secondary MFA verification. Enter security key (864085):
+              Viewing sensitive bank details requires a one-time SMS verification code sent to your registered admin phone.
             </p>
 
             {mfaChallengeError && (
@@ -1403,7 +1505,7 @@ export const AdminPortal: React.FC = () => {
               type="password"
               value={mfaChallengeCode}
               onChange={e => setMfaChallengeCode(e.target.value)}
-              placeholder="Security Key (864085)"
+              placeholder="Six-digit SMS code"
               className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-center font-mono tracking-widest text-slate-100 text-sm"
             />
 

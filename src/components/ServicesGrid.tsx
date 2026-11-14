@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PAIRUP_SERVICES, ServiceItem } from '../constants/services';
+import { useLanguage } from '../context/LanguageContext';
 import { 
   MessageCircleHeart, Coffee, Film, ShoppingBag, Plane, Compass, 
   Calendar, Sparkles, PartyPopper, Music, Trophy, Activity, 
@@ -45,15 +46,16 @@ const getIcon = (iconName: string) => {
 
 export const ServicesGrid: React.FC<ServicesGridProps> = ({ onSelectService }) => {
   const [filter, setFilter] = useState<string>('all');
+  const { t } = useLanguage();
 
   const categories = [
-    { id: 'all', label: 'All 24 Services' },
-    { id: 'social', label: 'Social' },
-    { id: 'lifestyle', label: 'Lifestyle' },
-    { id: 'travel', label: 'Travel & Tours' },
-    { id: 'wellness', label: 'Fitness & Outdoors' },
-    { id: 'culture', label: 'Culture & Arts' },
-    { id: 'care', label: 'Care & Assistance' }
+    { id: 'all', label: t.catAll },
+    { id: 'social', label: t.catSocial },
+    { id: 'lifestyle', label: t.catLifestyle },
+    { id: 'travel', label: t.catTravel },
+    { id: 'wellness', label: t.catWellness },
+    { id: 'culture', label: t.catCulture },
+    { id: 'care', label: t.catCare }
   ];
 
   const filteredServices = filter === 'all' 
@@ -68,13 +70,13 @@ export const ServicesGrid: React.FC<ServicesGridProps> = ({ onSelectService }) =
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
           <div>
             <div className="text-xs uppercase font-bold tracking-wider text-amber-400 mb-2">
-              Curated Experiences
+              {t.servicesSectionKicker}
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight">
-              24 Distinctive Companionship Services
+              {t.servicesSectionTitle}
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-1 max-w-2xl">
-              From casual café visits to travel partners and senior assistance, select the exact service tailored to your preference.
+              {t.servicesSectionDesc}
             </p>
           </div>
 
@@ -137,7 +139,7 @@ export const ServicesGrid: React.FC<ServicesGridProps> = ({ onSelectService }) =
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-amber-400 font-semibold">
-                  <span>Discover Companions</span>
+                  <span>{t.bookServiceAction}</span>
                   <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
                 </div>
               </div>

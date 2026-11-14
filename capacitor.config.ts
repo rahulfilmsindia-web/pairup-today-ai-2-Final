@@ -1,15 +1,4 @@
-export interface CapacitorConfig {
-  appId: string;
-  appName: string;
-  webDir: string;
-  server?: {
-    androidScheme?: string;
-    iosScheme?: string;
-    url?: string;
-    cleartext?: boolean;
-  };
-  plugins?: Record<string, any>;
-}
+import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.pairuptoday.app',
@@ -18,8 +7,6 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     iosScheme: 'https',
-    // In production mobile release, the app communicates with the secure backend API
-    url: process.env.VITE_APP_URL || undefined,
     cleartext: false
   },
   plugins: {

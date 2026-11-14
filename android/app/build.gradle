@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+def signingPropertiesFile = rootProject.file('keystore.properties')
+def signingProperties = new Properties()
+if (signingPropertiesFile.exists()) {
+    signingProperties.load(new FileInputStream(signingPropertiesFile))
+}
+
+def signingKeys = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def hasReleaseSigning = signingKeys.every { signingProperties.getProperty(it)?.trim() }
+
 android {
     namespace "com.pairuptoday.app"
     compileSdkVersion 34
@@ -15,8 +24,21 @@ android {
              ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(signingProperties.getProperty('storeFile'))
+                storePassword signingProperties.getProperty('storePassword')
+                keyAlias signingProperties.getProperty('keyAlias')
+                keyPassword signingProperties.getProperty('keyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -28,4 +50,23 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
     implementation 'androidx.core:core-splashscreen:1.0.1'
+}
+
+tasks.register('verifyReleaseSigning') {
+    doLast {
+        if (!hasReleaseSigning) {
+            throw new GradleException(
+                'Release signing is not configured. Copy keystore.properties.example to keystore.properties and fill it with local signing values.'
+            )
+        }
+        if (!rootProject.file(signingProperties.getProperty('storeFile')).isFile()) {
+            throw new GradleException('The keystore file configured in keystore.properties does not exist.')
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name == 'assembleRelease' || name == 'bundleRelease') {
+        dependsOn tasks.named('verifyReleaseSigning')
+    }
 }

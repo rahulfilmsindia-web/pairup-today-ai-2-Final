@@ -1,0 +1,4 @@
+App/Signing.xcconfig
+*.mobileprovision
+*.p12
+*.p8

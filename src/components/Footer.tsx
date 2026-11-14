@@ -26,7 +26,7 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentPage }) => {
   };
 
   const handleEmailClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    // Allows standard mailto anchor default action while ensuring cross-platform trigger
+    e.preventDefault();
     openMailtoUri(officialEmail);
   };
 
@@ -94,6 +94,14 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentPage }) => {
                   className="hover:text-amber-400 transition-colors"
                 >
                   {t.navSafetyTrust}
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setCurrentPage('terms')}
+                  className="hover:text-amber-400 transition-colors"
+                >
+                  {t.navTerms}
                 </button>
               </li>
             </ul>

@@ -85,6 +85,16 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
             {t.navSafetyTrust}
           </button>
 
+          {/* Terms of Service */}
+          <button
+            onClick={() => handleNavClick('terms')}
+            className={`transition-colors hover:text-amber-400 ${
+              currentPage === 'terms' ? 'text-amber-400 font-semibold' : 'text-slate-300'
+            }`}
+          >
+            {t.navTerms}
+          </button>
+
           {/* 6. Language Selector */}
           <div className="relative">
             <button
@@ -216,6 +226,13 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
             className="w-full text-left py-2.5 text-slate-300 hover:text-amber-400 text-sm font-semibold transition-colors"
           >
             {t.navSafetyTrust}
+          </button>
+
+          <button
+            onClick={() => handleNavClick('terms')}
+            className="w-full text-left py-2.5 text-slate-300 hover:text-amber-400 text-sm font-semibold transition-colors"
+          >
+            {t.navTerms}
           </button>
 
           <div className="py-2 border-y border-slate-800/80">
