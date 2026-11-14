@@ -2374,7 +2374,18 @@ app.post('/api/companion/bank/verify', async (req: Request, res: Response) => {
       membership.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date() &&
       !profile.isPaused
     );
-    if (profile) await databaseAdapter.updateCompanionProfile(userId, { isLive });
+    if (profile) {
+      await databaseAdapter.updateCompanionProfile(userId, {
+        isLive,
+        bankDetails: {
+          isVerified: true,
+          accountNumberMasked: `••••${accountNumberLast4}`,
+          ifsc: (verificationResult.ifsc || ifsc).toUpperCase(),
+          accountHolderName: verificationResult.nameAtBank || accountHolderName,
+          verifiedAt
+        }
+      });
+    }
     await databaseAdapter.createAuditLog({
       userId,
       action: 'BANK_ACCOUNT_VERIFIED',
@@ -4128,24 +4139,41 @@ app.get('/api/admin/companions', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', '
         .filter((u: any) => u.role === 'COMPANION' || u.activeRole === 'COMPANION')
         .map(async (u: any) => {
           const profile = profileMap.get(u.id);
-          let wallet: any = null;
-          try {
-            wallet = await databaseAdapter.getWalletBalance(u.id);
-          } catch {
-            wallet = null;
-          }
+          const [wallet, bankVerification, companionKyc, membership] = await Promise.all([
+            databaseAdapter.getWalletBalance(u.id).catch(() => null),
+            databaseAdapter.getBankVerification(u.id).catch(() => null),
+            databaseAdapter.getUserKycSubmission(u.id, 'COMPANION').catch(() => null),
+            databaseAdapter.getActiveMembership(u.id).catch(() => null)
+          ]);
+
+          const isBankVerified = Boolean(
+            bankVerification?.verificationStatus === 'VERIFIED' ||
+            bankVerification?.isVerified === true ||
+            profile?.bankDetails?.isVerified
+          );
+          const kycStatus = companionKyc?.status || u.kycStatus || u.kyc_status || 'NOT_SUBMITTED';
+          const membershipActive = Boolean(
+            profile?.membership?.isActive ||
+            (membership?.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date())
+          );
+          const membershipTier = profile?.membership?.plan || membership?.plan || 'NONE';
+          const isLive = Boolean(
+            profile?.isLive ||
+            (kycStatus === 'APPROVED' && membershipActive && isBankVerified && !profile?.isPaused)
+          );
+
           return {
             id: u.id,
             phone: u.phone,
             legalName: u.legalName,
             email: u.email,
-            kycStatus: u.kycStatus,
+            kycStatus,
             city: u.city,
-            isLive: profile?.isLive || false,
+            isLive,
             isPaused: profile?.isPaused || false,
-            membershipActive: Boolean(profile?.membership?.isActive),
-            membershipTier: profile?.membership?.plan || 'NONE',
-            bankVerified: Boolean(profile?.bankDetails?.isVerified),
+            membershipActive,
+            membershipTier,
+            bankVerified: isBankVerified,
             totalBookings: profile?.totalBookings || 0,
             lockedBalancePaise: wallet?.lockedSettlementBalancePaise || 0,
             totalSettledPaise: wallet?.totalSettledPaise || 0,

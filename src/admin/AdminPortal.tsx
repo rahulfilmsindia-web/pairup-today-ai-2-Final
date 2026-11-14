@@ -101,79 +101,76 @@ export const AdminPortal: React.FC = () => {
   const [newSupportMessage, setNewSupportMessage] = useState('');
   const [supportLoading, setSupportLoading] = useState(false);
 
+  // Sync button state & feedback
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+
   // Fetch all admin data
-  const loadAdminData = async () => {
+  const loadAdminData = async (manual = false) => {
     if (!isAdminAuthenticated || !adminToken) return;
+    if (manual) setIsSyncing(true);
     const authHeaders = {
       'Authorization': `Bearer ${adminToken}`,
       'Content-Type': 'application/json'
     };
     try {
+      const fetchJson = async (path: string) => {
+        try {
+          const res = await apiFetch(path, { headers: authHeaders });
+          if (!res.ok) return null;
+          return await res.json();
+        } catch (e) {
+          console.warn(`Admin sync skipped for ${path}:`, e);
+          return null;
+        }
+      };
+
       const [
-        resOverview, resClientsKyc, resCompsKyc, resFin, resStaff, resLogs,
-        resClients, resComps, resMems, resBks, resPays, resSupport
+        overviewData, clientsKycData, compsKycData, finData, staffData, logsData,
+        clientsData, compsData, memsData, bksData, paysData, supportData
       ] = await Promise.all([
-        apiFetch('/api/admin/overview', { headers: authHeaders }),
-        apiFetch('/api/admin/kyc/list?userType=CLIENT', { headers: authHeaders }),
-        apiFetch('/api/admin/kyc/list?userType=COMPANION', { headers: authHeaders }),
-        apiFetch('/api/admin/finance/settlements', { headers: authHeaders }),
-        apiFetch('/api/admin/staff', { headers: authHeaders }),
-        apiFetch('/api/admin/audit-logs', { headers: authHeaders }),
-        apiFetch('/api/admin/clients', { headers: authHeaders }),
-        apiFetch('/api/admin/companions', { headers: authHeaders }),
-        apiFetch('/api/admin/memberships', { headers: authHeaders }),
-        apiFetch('/api/admin/bookings', { headers: authHeaders }),
-        apiFetch('/api/admin/payments', { headers: authHeaders }),
-        apiFetch('/api/admin/support/conversations', { headers: authHeaders })
+        fetchJson('/api/admin/overview'),
+        fetchJson('/api/admin/kyc/list?userType=CLIENT'),
+        fetchJson('/api/admin/kyc/list?userType=COMPANION'),
+        fetchJson('/api/admin/finance/settlements'),
+        fetchJson('/api/admin/staff'),
+        fetchJson('/api/admin/audit-logs'),
+        fetchJson('/api/admin/clients'),
+        fetchJson('/api/admin/companions'),
+        fetchJson('/api/admin/memberships'),
+        fetchJson('/api/admin/bookings'),
+        fetchJson('/api/admin/payments'),
+        fetchJson('/api/admin/support/conversations')
       ]);
 
-      if (resOverview.ok) setStats(await resOverview.json());
-      if (resClientsKyc.ok) {
-        const d = await resClientsKyc.json();
-        setClientKycs(d.submissions || []);
-      }
-      if (resCompsKyc.ok) {
-        const d = await resCompsKyc.json();
-        setCompanionKycs(d.submissions || []);
-      }
-      if (resFin.ok) {
-        const d = await resFin.json();
-        setSettlements(d.settlements || []);
-      }
-      if (resStaff.ok) {
-        const d = await resStaff.json();
-        setStaffList(d.staff || []);
-      }
-      if (resLogs.ok) {
-        const d = await resLogs.json();
-        setAuditLogs(d.logs || []);
-      }
-      if (resClients.ok) {
-        const d = await resClients.json();
-        setClientsList(d.clients || []);
-      }
-      if (resComps.ok) {
-        const d = await resComps.json();
-        setCompanionsList(d.companions || []);
-      }
-      if (resMems.ok) {
-        const d = await resMems.json();
-        setMembershipsList(d.memberships || []);
-      }
-      if (resBks.ok) {
-        const d = await resBks.json();
-        setBookingsList(d.bookings || []);
-      }
-      if (resPays.ok) {
-        const d = await resPays.json();
-        setPaymentsList(d.payments || []);
-      }
-      if (resSupport.ok) {
-        const d = await resSupport.json();
-        setSupportConversations(d.conversations || []);
+      if (overviewData) setStats(overviewData);
+      if (clientsKycData?.submissions) setClientKycs(clientsKycData.submissions);
+      if (compsKycData?.submissions) setCompanionKycs(compsKycData.submissions);
+      if (finData?.settlements) setSettlements(finData.settlements);
+      if (staffData?.staff) setStaffList(staffData.staff);
+      if (logsData?.logs) setAuditLogs(logsData.logs);
+      if (clientsData?.clients) setClientsList(clientsData.clients);
+      if (compsData?.companions) setCompanionsList(compsData.companions);
+      if (memsData?.memberships) setMembershipsList(memsData.memberships);
+      if (bksData?.bookings) setBookingsList(bksData.bookings);
+      if (paysData?.payments) setPaymentsList(paysData.payments);
+      if (supportData?.conversations) setSupportConversations(supportData.conversations);
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastSyncedTime(timeStr);
+      if (manual) {
+        setSyncStatus('Refreshed');
+        setTimeout(() => setSyncStatus(null), 2500);
       }
     } catch (err) {
       console.error('Error fetching admin data', err);
+      if (manual) {
+        setSyncStatus('Sync Error');
+        setTimeout(() => setSyncStatus(null), 2500);
+      }
+    } finally {
+      if (manual) setIsSyncing(false);
     }
   };
 
@@ -538,11 +535,18 @@ export const AdminPortal: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <button
-            onClick={loadAdminData}
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5"
+            onClick={() => loadAdminData(true)}
+            disabled={isSyncing}
+            title="Click to refresh and sync all admin data"
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-all border border-slate-700/60 disabled:opacity-60 cursor-pointer shadow-sm"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Sync</span>
+            <RefreshCw className={`w-3.5 h-3.5 transition-transform ${isSyncing ? 'animate-spin text-cyan-400' : 'text-slate-400'}`} />
+            <span className={syncStatus === 'Refreshed' ? 'text-emerald-400 font-semibold' : ''}>
+              {isSyncing ? 'Syncing...' : syncStatus ? `✓ ${syncStatus}` : 'Sync'}
+            </span>
+            {lastSyncedTime && !isSyncing && !syncStatus && (
+              <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">({lastSyncedTime})</span>
+            )}
           </button>
 
           <button
@@ -878,9 +882,27 @@ export const AdminPortal: React.FC = () => {
                             {c.isLive ? 'LIVE' : 'INACTIVE'}
                           </span>
                         </td>
-                        <td className="p-3">{c.kycStatus === 'APPROVED' ? '✓ Approved' : 'Pending'}</td>
-                        <td className="p-3">{c.membershipActive ? `✓ ${c.membershipTier}` : 'No Plan'}</td>
-                        <td className="p-3">{c.bankVerified ? '✓ Verified' : 'Unverified'}</td>
+                        <td className="p-3">
+                          {c.kycStatus === 'APPROVED' ? (
+                            <span className="text-emerald-400 font-semibold">✓ Approved</span>
+                          ) : (
+                            <span className="text-amber-400 font-medium">{c.kycStatus || 'Pending'}</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {c.membershipActive ? (
+                            <span className="text-emerald-400 font-semibold">✓ {c.membershipTier}</span>
+                          ) : (
+                            <span className="text-slate-400">No Plan</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {c.bankVerified ? (
+                            <span className="text-emerald-400 font-semibold">✓ Verified</span>
+                          ) : (
+                            <span className="text-amber-400 font-medium">Unverified</span>
+                          )}
+                        </td>
                         <td className="p-3 font-bold text-emerald-400">₹{(c.totalSettledPaise / 100).toFixed(2)}</td>
                       </tr>
                     ))}
