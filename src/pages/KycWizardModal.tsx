@@ -14,6 +14,7 @@ export const KycWizardModal: React.FC = () => {
   });
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [legalName, setLegalName] = useState('');
+  const [profileName, setProfileName] = useState('');
   const [dob, setDob] = useState('');
   const [idType, setIdType] = useState<GovernmentIdType>('AADHAAR');
   const [idFrontUrl, setIdFrontUrl] = useState<string>('');
@@ -171,8 +172,11 @@ export const KycWizardModal: React.FC = () => {
     if (user?.role === 'DUAL' && user.activeRole !== selectedRole) {
       await selectActiveRole(selectedRole);
     }
+    const finalProfilePhoto = photos[0] || selfieUrl;
+    const allPhotos = photos.length > 0 ? photos : (selfieUrl ? [selfieUrl] : []);
     const result = await submitKyc({
       legalName,
+      profileName: profileName.trim() || legalName.trim(),
       dob,
       idType,
       idFrontUrl,
@@ -181,7 +185,8 @@ export const KycWizardModal: React.FC = () => {
       userType: selectedRole,
       bio,
       city,
-      photos: photos.slice(0, 6)
+      profilePhoto: finalProfilePhoto,
+      photos: allPhotos.slice(0, 6)
     });
     setLoading(false);
 
@@ -319,6 +324,28 @@ export const KycWizardModal: React.FC = () => {
                 required
               />
             </div>
+          </div>
+
+          {/* Public Profile Display Name */}
+          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-pink-400">
+                Public Profile Display Name (Optional)
+              </label>
+              <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                Privacy Protected
+              </span>
+            </div>
+            <input
+              type="text"
+              value={profileName}
+              onChange={e => setProfileName(e.target.value)}
+              placeholder="e.g. Rahul, Alex, Daisy (Visible to other users)"
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-pink-500"
+            />
+            <p className="text-[11px] text-slate-400">
+              Only this display name will be visible to other clients and companions. Your legal Government ID name remains private and securely locked for identity verification.
+            </p>
           </div>
 
           {/* City */}
@@ -526,6 +553,77 @@ export const KycWizardModal: React.FC = () => {
                 />
               </label>
             </div>
+          </div>
+
+          {/* Public Profile & Gallery Photos (Max 6 Photos) */}
+          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-200 block">
+                  Profile & Gallery Photos ({photos.length}/6)
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Main profile photo + up to 5 gallery photos
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {photos.map((p, idx) => (
+                <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-700 bg-slate-900 group">
+                  <img src={p} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                  {idx === 0 && (
+                    <span className="absolute bottom-1 left-1 bg-pink-600 text-white text-[9px] px-1.5 py-0.5 rounded font-bold">
+                      Main
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = photos.filter((_, i) => i !== idx);
+                      setPhotos(updated);
+                    }}
+                    className="absolute top-1 right-1 p-1 rounded-full bg-slate-950/80 text-slate-400 hover:text-rose-400 transition-colors"
+                    title="Remove"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                  {idx !== 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = [p, ...photos.filter((_, i) => i !== idx)];
+                        setPhotos(updated);
+                      }}
+                      className="absolute bottom-1 right-1 bg-slate-950/80 text-[8px] text-slate-300 hover:text-white px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Set as Main Profile Photo"
+                    >
+                      Make Main
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {photos.length < 6 && (
+                <label className="aspect-square rounded-xl border-2 border-dashed border-slate-700 hover:border-pink-500/60 bg-slate-900 flex flex-col items-center justify-center cursor-pointer transition-colors p-2 text-center">
+                  <Upload className="w-4 h-4 text-slate-400 mb-1" />
+                  <span className="text-[10px] text-slate-400">+ Add Photo</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={e => {
+                      handleFileUpload(e, (dataUrl) => {
+                        setPhotos(prev => [...prev, dataUrl].slice(0, 6));
+                      });
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500">
+              The first photo will be your main Profile Photo. You can add up to 5 additional gallery photos.
+            </p>
           </div>
 
           {/* Bio */}

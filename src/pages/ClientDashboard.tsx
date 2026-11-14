@@ -10,11 +10,11 @@ import {
   CreditCard, KeyRound, AlertTriangle, ChevronRight, UserCheck, X,
   Bell, Settings, LifeBuoy, LogOut, Heart, Sparkles, User, FileText,
   DollarSign, Compass, CheckCircle2, Sliders, Shield, Eye, ChevronLeft,
-  CalendarCheck
+  CalendarCheck, Upload, Lock, Trash2, Camera
 } from 'lucide-react';
 
 export const ClientDashboard: React.FC = () => {
-  const { user, token, logout, bookingContext, setBookingContext } = useAuth();
+  const { user, token, logout, bookingContext, setBookingContext, updateProfile } = useAuth();
   const { t } = useLanguage();
 
   // 16 Complete Visible Navigation Tabs per Section 7
@@ -81,6 +81,100 @@ export const ClientDashboard: React.FC = () => {
         ...(quickViewCompanion.photos || []).filter((p: string) => p && p !== quickViewCompanion.profilePhoto)
       ]
     : [];
+
+  // Profile editing state
+  const [profileNameInput, setProfileNameInput] = useState(user?.profileName || user?.legalName || '');
+  const [bioInput, setBioInput] = useState(user?.bio || '');
+  const [userPhotos, setUserPhotos] = useState<string[]>(() => {
+    if (Array.isArray(user?.photos) && user.photos.length > 0) return user.photos;
+    if (user?.profilePhoto) return [user.profilePhoto];
+    return [];
+  });
+  const [activeProfilePhoto, setActiveProfilePhoto] = useState<string>(user?.profilePhoto || '');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
+  const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setProfileNameInput(user.profileName || user.legalName || '');
+      setBioInput(user.bio || '');
+      const photos = Array.isArray(user.photos) && user.photos.length > 0 
+        ? user.photos 
+        : (user.profilePhoto ? [user.profilePhoto] : []);
+      setUserPhotos(photos);
+      setActiveProfilePhoto(user.profilePhoto || photos[0] || '');
+    }
+  }, [user]);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (userPhotos.length >= 6) {
+      setProfileErrorMsg('Maximum 6 photos allowed.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (uploadEvt) => {
+      const b64 = uploadEvt.target?.result as string;
+      if (b64) {
+        setUserPhotos(prev => {
+          const updated = [...prev, b64].slice(0, 6);
+          if (!activeProfilePhoto) {
+            setActiveProfilePhoto(b64);
+          }
+          return updated;
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemovePhoto = (photoToRemove: string) => {
+    setUserPhotos(prev => {
+      const updated = prev.filter(p => p !== photoToRemove);
+      if (activeProfilePhoto === photoToRemove) {
+        setActiveProfilePhoto(updated[0] || '');
+      }
+      return updated;
+    });
+  };
+
+  const handleSetMainPhoto = (photo: string) => {
+    setActiveProfilePhoto(photo);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileSuccessMsg(null);
+    setProfileErrorMsg(null);
+    try {
+      const currentMain = activeProfilePhoto || userPhotos[0] || '';
+      let allPhotos = [...userPhotos];
+      if (currentMain && !allPhotos.includes(currentMain)) {
+        allPhotos = [currentMain, ...allPhotos];
+      }
+      const result = await updateProfile({
+        profileName: profileNameInput.trim(),
+        bio: bioInput.trim(),
+        profilePhoto: currentMain,
+        photos: allPhotos.slice(0, 6)
+      });
+      if (result.success) {
+        setProfileSuccessMsg('Profile updated successfully!');
+        setTimeout(() => setProfileSuccessMsg(null), 4000);
+      } else {
+        setProfileErrorMsg(result.error || 'Failed to update profile.');
+      }
+    } catch (err: any) {
+      setProfileErrorMsg(err.message || 'Error updating profile.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   // Bookings list & chat
   const [myBookings, setMyBookings] = useState<any[]>([]);
@@ -323,7 +417,7 @@ export const ClientDashboard: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-slate-100">
-                  {user?.legalName || 'Client Member'}
+                  {user?.profileName || user?.legalName || 'Client Member'}
                 </h1>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-300 font-semibold">
                   Client Member
@@ -587,31 +681,231 @@ export const ClientDashboard: React.FC = () => {
 
         {/* TAB 2: MY PROFILE */}
         {activeTab === 'profile' && (
-          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
-            <h3 className="text-lg font-bold text-slate-100">Client Profile Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block mb-1">Legal Full Name</span>
-                <span className="text-sm font-bold text-slate-200">{user?.legalName}</span>
+          <form onSubmit={handleSaveProfile} className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                  <User className="w-5 h-5 text-amber-400" />
+                  Public Profile & Privacy Management
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Customize your public persona, display name, and photo gallery. Your official government ID credentials remain locked and private.
+                </p>
               </div>
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block mb-1">Registered Phone</span>
-                <span className="text-sm font-bold text-slate-200">{user?.phone}</span>
+              <button
+                type="submit"
+                disabled={profileSaving}
+                className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md shadow-amber-400/20 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {profileSaving ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    Saving Changes...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Save Profile Changes
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Notification messages */}
+            {profileSuccessMsg && (
+              <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{profileSuccessMsg}</span>
               </div>
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block mb-1">Date of Birth (Locked)</span>
-                <span className="text-sm font-bold text-slate-200">{user?.dob || 'Verified at KYC'} ({user?.age || 25} yrs)</span>
+            )}
+            {profileErrorMsg && (
+              <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{profileErrorMsg}</span>
               </div>
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block mb-1">Operating City</span>
-                <span className="text-sm font-bold text-slate-200">{user?.city || 'Delhi NCR, India'}</span>
+            )}
+
+            {/* PHOTOS MANAGEMENT (MAX 6 PHOTOS) */}
+            <div className="p-5 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <Camera className="w-4 h-4 text-amber-400" />
+                    Profile & Gallery Photos ({userPhotos.length}/6)
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Upload up to 6 high quality photos. Choose any photo as your primary profile photo.
+                  </p>
+                </div>
+                {userPhotos.length < 6 && (
+                  <label className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-semibold text-xs cursor-pointer flex items-center gap-1.5 transition-colors">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Photo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                    />
+                  </label>
+                )}
               </div>
-              <div className="md:col-span-2 p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block mb-1">Introduction & Bio</span>
-                <p className="text-slate-300 leading-relaxed">{user?.bio || 'Verified PairUpToday client member exploring companionship for leisure, walking, and city experiences.'}</p>
+
+              {/* Photos Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                {userPhotos.map((photo, idx) => {
+                  const isMain = photo === activeProfilePhoto || (!activeProfilePhoto && idx === 0);
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`relative group rounded-xl overflow-hidden aspect-square border-2 transition-all ${
+                        isMain ? 'border-amber-400 shadow-md shadow-amber-400/20' : 'border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <img 
+                        src={photo} 
+                        alt={`Photo ${idx + 1}`} 
+                        className="w-full h-full object-cover" 
+                      />
+                      {isMain ? (
+                        <div className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 text-[10px] font-bold shadow">
+                          ★ Main Photo
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetMainPhoto(photo)}
+                          className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-900/80 hover:bg-amber-400 hover:text-slate-950 text-slate-300 text-[9px] font-semibold opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          Set Main
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePhoto(photo)}
+                        className="absolute top-1.5 right-1.5 p-1 rounded-md bg-rose-600/90 text-white hover:bg-rose-500 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Delete photo"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {userPhotos.length < 6 && (
+                  <label className="border-2 border-dashed border-slate-800 hover:border-amber-400/60 rounded-xl flex flex-col items-center justify-center p-3 text-center cursor-pointer aspect-square bg-slate-900/40 hover:bg-slate-900/80 transition-colors">
+                    <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                    <span className="text-[11px] text-slate-400 font-medium">+ Add Photo</span>
+                    <span className="text-[9px] text-slate-500">Max 6</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                    />
+                  </label>
+                )}
               </div>
             </div>
-          </div>
+
+            {/* EDITABLE PUBLIC PROFILE FIELDS */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                Public Display Information
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="text-slate-400 block mb-1.5 font-medium">
+                    Profile Name (Public Display Name)
+                  </label>
+                  <input
+                    type="text"
+                    value={profileNameInput}
+                    onChange={(e) => setProfileNameInput(e.target.value)}
+                    placeholder="Enter display name (e.g. Alex D.)"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-amber-400 font-medium text-xs"
+                    required
+                  />
+                  <p className="text-[11px] text-emerald-400 mt-1">
+                    ✓ This public display name protects your identity. Your official government ID name will NOT be revealed.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1.5 font-medium">
+                    Operating City
+                  </label>
+                  <input
+                    type="text"
+                    value={user?.city || 'Delhi NCR, India'}
+                    readOnly
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-xs cursor-not-allowed"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Configured during profile signup.
+                  </p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-slate-400 block mb-1.5 font-medium">
+                    Bio & Introduction
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={bioInput}
+                    onChange={(e) => setBioInput(e.target.value)}
+                    placeholder="Describe what kind of companionship activities you enjoy (e.g., cafe conversations, city exploration, dining, social events)..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-amber-400 text-xs leading-relaxed"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Visible to verified companions when they review your booking inquiries.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* LOCKED IDENTITY CREDENTIALS */}
+            <div className="p-5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
+              <div className="flex items-center gap-2">
+                <Lock className="w-4 h-4 text-slate-400" />
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Verified Legal Identity (Permanently Locked)
+                </h4>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                To prevent fraud and maintain safety, legal verification details verified with Government ID & biometric face scans cannot be modified.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-1">
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                  <span className="text-slate-500 text-[11px] mb-1 flex items-center justify-between">
+                    Legal Full Name (Govt ID)
+                    <Lock className="w-3 h-3 text-slate-500" />
+                  </span>
+                  <span className="font-semibold text-slate-300">{user?.legalName}</span>
+                  <span className="text-[10px] text-amber-400/80 mt-1">KYC Verified · Hidden from public</span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                  <span className="text-slate-500 text-[11px] mb-1 flex items-center justify-between">
+                    Date of Birth & Age
+                    <Lock className="w-3 h-3 text-slate-500" />
+                  </span>
+                  <span className="font-semibold text-slate-300">{user?.dob || 'Verified at KYC'} ({user?.age || 25} yrs)</span>
+                  <span className="text-[10px] text-emerald-400/80 mt-1">Age 18+ Locked</span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                  <span className="text-slate-500 text-[11px] mb-1 flex items-center justify-between">
+                    Registered Mobile
+                    <Lock className="w-3 h-3 text-slate-500" />
+                  </span>
+                  <span className="font-semibold text-slate-300 font-mono">{user?.phone}</span>
+                  <span className="text-[10px] text-slate-500 mt-1">OTP Verified</span>
+                </div>
+              </div>
+            </div>
+          </form>
         )}
 
         {/* TAB 3: MY KYC STATUS */}

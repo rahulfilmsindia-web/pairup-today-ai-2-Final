@@ -22,6 +22,7 @@ export interface User {
   id: string;
   phone: string;
   legalName?: string;
+  profileName?: string;
   email?: string;
   role: 'CLIENT' | 'COMPANION' | 'DUAL';
   activeRole?: 'CLIENT' | 'COMPANION';
@@ -44,6 +45,7 @@ export interface KYCSubmission {
   userId: string;
   userPhone: string;
   legalName: string;
+  profileName?: string;
   dob: string;
   idType: GovernmentIdType;
   idFrontUrl: string;

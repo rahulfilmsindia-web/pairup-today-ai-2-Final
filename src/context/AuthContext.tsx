@@ -22,6 +22,12 @@ interface AuthContextType {
   submitKyc: (formData: any) => Promise<{ success: boolean; mandatoryLogout?: boolean; error?: string }>;
   logout: () => void;
   refreshUserData: () => void;
+  updateProfile: (profileData: {
+    profileName?: string;
+    bio?: string;
+    profilePhoto?: string;
+    photos?: string[];
+  }) => Promise<{ success: boolean; error?: string; user?: User }>;
   bookingContext: BookingContextData | null;
   setBookingContext: (ctx: BookingContextData | null) => void;
   checkPhoneRegistered: (phone: string) => Promise<{ registered: boolean; error?: string }>;
@@ -273,6 +279,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (profileData: {
+    profileName?: string;
+    bio?: string;
+    profilePhoto?: string;
+    photos?: string[];
+  }) => {
+    try {
+      const res = await apiFetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileData)
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.user) {
+        setUser(data.user);
+        localStorage.setItem('pairup_user', JSON.stringify(data.user));
+        return { success: true, user: data.user };
+      }
+      return { success: false, error: data.error || 'Failed to update profile' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error updating profile' };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -295,6 +325,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         submitKyc,
         logout,
         refreshUserData,
+        updateProfile,
         bookingContext,
         setBookingContext,
         checkPhoneRegistered

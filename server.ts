@@ -396,6 +396,7 @@ function publicAuthUser(user: any) {
     id: user.id,
     phone: user.phone,
     legalName: user.legalName,
+    profileName: user.profileName || user.legalName || 'User',
     email: user.email,
     role: user.role,
     activeRole: user.activeRole,
@@ -404,6 +405,7 @@ function publicAuthUser(user: any) {
     kycStatus: user.kycStatus || 'NOT_SUBMITTED',
     kycRejectionReason: user.kycRejectionReason,
     profilePhoto: user.profilePhoto,
+    photos: Array.isArray(user.photos) ? user.photos : (user.profilePhoto ? [user.profilePhoto] : []),
     bio: user.bio,
     city: user.city
   };
@@ -1433,6 +1435,8 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     'POST /api/notifications/device-token',
     'DELETE /api/notifications/device-token'
   ]).has(route) ||
+    route === 'POST /api/user/profile' ||
+    route === 'GET /api/user/profile' ||
     route === 'POST /api/kyc/submit' ||
     route === 'POST /api/companion/services-rates' ||
     route === 'POST /api/companion/membership/subscribe' ||
@@ -1973,12 +1977,14 @@ app.post('/api/kyc/submit', async (req: Request, res: Response) => {
   const {
     userId,
     legalName,
+    profileName,
     dob,
     idType,
     idFrontUrl,
     idBackUrl,
     selfieUrl,
     bio,
+    profilePhoto,
     photos,
     city,
     userType
@@ -2049,6 +2055,7 @@ app.post('/api/kyc/submit', async (req: Request, res: Response) => {
     userId: authenticatedUserId,
     userPhone: user.phone,
     legalName: legalName.trim(),
+    profileName: (typeof profileName === 'string' && profileName.trim()) ? profileName.trim() : legalName.trim(),
     dob,
     idType,
     idFrontUrl: `${authenticatedUserId}/${kycId}/id-front.${frontImage.extension}`,
@@ -2083,13 +2090,14 @@ app.post('/api/kyc/submit', async (req: Request, res: Response) => {
       };
       db.kycSubmissions[kycId] = localSubmission;
       user.legalName = submission.legalName;
+      user.profileName = submission.profileName;
       user.dob = dob;
       user.age = calculatedAge;
       user.kycStatus = 'PENDING';
       user.kycSubmittedAt = submittedAt;
       user.bio = submission.bio;
       user.photos = submission.photos;
-      user.profilePhoto = selfieUrl;
+      user.profilePhoto = profilePhoto || selfieUrl;
       user.city = submission.city;
       saveDB(db);
     }
@@ -2109,6 +2117,103 @@ app.post('/api/kyc/submit', async (req: Request, res: Response) => {
     success: true,
     mandatoryLogout: true,
     message: 'KYC submitted for verification. Please log in again.'
+  });
+});
+
+// -------------------------------------------------------------
+// USER PROFILE MANAGEMENT (CLIENT & COMPANION)
+// -------------------------------------------------------------
+app.get('/api/user/profile', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  if (!authUser?.id) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  let user: any;
+  if (getDatabaseType() === 'supabase') {
+    user = await databaseAdapter.getUser(authUser.id);
+  } else {
+    user = db.users[authUser.id];
+  }
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  return res.json({ success: true, user: publicAuthUser(user) });
+});
+
+app.post('/api/user/profile', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  if (!authUser?.id) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const { profileName, bio, profilePhoto, photos } = req.body;
+
+  let user: any;
+  if (getDatabaseType() === 'supabase') {
+    user = await databaseAdapter.getUser(authUser.id);
+  } else {
+    user = db.users[authUser.id];
+  }
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  // Strictly editable fields ONLY:
+  // (legalName, dob, phone, etc. are permanently locked according to Govt ID KYC)
+  if (profileName !== undefined) {
+    if (typeof profileName !== 'string' || !profileName.trim()) {
+      return res.status(400).json({ error: 'Profile display name cannot be blank.' });
+    }
+    user.profileName = profileName.trim().slice(0, 60);
+  }
+
+  if (bio !== undefined) {
+    if (typeof bio !== 'string' || bio.length > 2000) {
+      return res.status(400).json({ error: 'Bio must be at most 2000 characters.' });
+    }
+    user.bio = bio.trim();
+  }
+
+  if (profilePhoto !== undefined) {
+    if (typeof profilePhoto === 'string' && profilePhoto.trim()) {
+      user.profilePhoto = profilePhoto.trim();
+    }
+  }
+
+  if (photos !== undefined) {
+    if (!Array.isArray(photos)) {
+      return res.status(400).json({ error: 'Photos must be an array of image strings.' });
+    }
+    const cleanPhotos = photos.filter((p: unknown) => typeof p === 'string' && (p as string).trim()).slice(0, 6);
+    user.photos = cleanPhotos;
+    if (!user.profilePhoto && cleanPhotos.length > 0) {
+      user.profilePhoto = cleanPhotos[0];
+    }
+  }
+
+  // If companion has a profile record, sync bio
+  if (db.companionProfiles && db.companionProfiles[authUser.id]) {
+    if (user.bio !== undefined) db.companionProfiles[authUser.id].bio = user.bio;
+  }
+
+  try {
+    if (getDatabaseType() === 'supabase') {
+      await databaseAdapter.updateUser(authUser.id, {
+        profileName: user.profileName,
+        bio: user.bio,
+        profilePhoto: user.profilePhoto,
+        photos: user.photos
+      });
+    } else {
+      saveDB(db);
+    }
+  } catch (err) {
+    console.error('Failed to update user profile', err);
+    return res.status(500).json({ error: 'Failed to update profile' });
+  }
+
+  return res.json({
+    success: true,
+    user: publicAuthUser(user)
   });
 });
 
@@ -2860,7 +2965,7 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
     // Filter by text search
     if (query) {
       const q = (query as string).toLowerCase();
-      const matchName = user.legalName?.toLowerCase().includes(q);
+      const matchName = (user.profileName || user.legalName)?.toLowerCase().includes(q);
       const matchBio = user.bio?.toLowerCase().includes(q);
       const matchCity = user.city?.toLowerCase().includes(q) || profile.address?.toLowerCase().includes(q) || user.state?.toLowerCase().includes(q);
       if (!matchName && !matchBio && !matchCity) continue;
@@ -2886,7 +2991,8 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
     }
     const companionRecord = {
       id: user.id,
-      name: user.legalName,
+      name: user.profileName || user.legalName,
+      profileName: user.profileName || user.legalName,
       age: user.age,
       city: user.city || '',
       state: user.state || profile.state || '',
