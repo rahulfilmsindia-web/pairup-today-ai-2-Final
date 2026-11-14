@@ -4,7 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { apiFetch } from '../utils/api';
 import { openRazorpayCheckout } from '../utils/razorpay';
 import { PAIRUP_SERVICES } from '../constants/services';
-import { compressImageFile } from '../utils/image';
+import { compressImageFile, compressBase64 } from '../utils/image';
 import { MembershipPlanType } from '../types';
 import { 
   Sparkles, ShieldCheck, CheckCircle2, Clock, AlertCircle, 
@@ -155,11 +155,15 @@ export const CompanionDashboard: React.FC = () => {
       if (currentMain && !allPhotos.includes(currentMain)) {
         allPhotos = [currentMain, ...allPhotos];
       }
+      const compressedMain = currentMain ? await compressBase64(currentMain) : '';
+      const compressedPhotos = await Promise.all(
+        allPhotos.slice(0, 6).map(photo => compressBase64(photo))
+      );
       const result = await updateProfile({
         profileName: profileNameInput.trim(),
         bio: bioInput.trim(),
-        profilePhoto: currentMain,
-        photos: allPhotos.slice(0, 6)
+        profilePhoto: compressedMain,
+        photos: compressedPhotos
       });
       if (result.success) {
         setProfileSuccessMsg(t.profileSuccessMsg || 'Profile updated successfully!');

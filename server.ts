@@ -2144,94 +2144,105 @@ app.get('/api/user/profile', async (req: Request, res: Response) => {
 });
 
 app.post('/api/user/profile', async (req: Request, res: Response) => {
-  const authUser = (req as AuthenticatedRequest).authUser;
-  if (!authUser?.id) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const { profileName, bio, profilePhoto, photos } = req.body;
-
-  let user: any;
-  if (getDatabaseType() === 'supabase') {
-    user = await databaseAdapter.getUser(authUser.id);
-  } else {
-    user = db.users[authUser.id];
-  }
-
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  // Strictly editable fields ONLY:
-  // (legalName, dob, phone, etc. are permanently locked according to Govt ID KYC)
-  if (profileName !== undefined) {
-    if (typeof profileName !== 'string' || !profileName.trim()) {
-      return res.status(400).json({ error: 'Profile display name cannot be blank.' });
-    }
-    user.profileName = profileName.trim().slice(0, 60);
-  }
-
-  if (bio !== undefined) {
-    if (typeof bio !== 'string' || bio.length > 2000) {
-      return res.status(400).json({ error: 'Bio must be at most 2000 characters.' });
-    }
-    user.bio = bio.trim();
-  }
-
-  if (profilePhoto !== undefined) {
-    if (typeof profilePhoto === 'string' && profilePhoto.trim()) {
-      user.profilePhoto = profilePhoto.trim();
-    }
-  }
-
-  if (photos !== undefined) {
-    if (!Array.isArray(photos)) {
-      return res.status(400).json({ error: 'Photos must be an array of image strings.' });
-    }
-    const cleanPhotos = photos.filter((p: unknown) => typeof p === 'string' && (p as string).trim()).slice(0, 6);
-    user.photos = cleanPhotos;
-    if (!user.profilePhoto && cleanPhotos.length > 0) {
-      user.profilePhoto = cleanPhotos[0];
-    }
-  }
-
-  // Keep in-memory database synchronized
-  if (db.users) {
-    if (!db.users[authUser.id]) {
-      db.users[authUser.id] = { ...user, id: authUser.id };
-    }
-    if (user.profileName) db.users[authUser.id].profileName = user.profileName;
-    if (user.bio !== undefined) db.users[authUser.id].bio = user.bio;
-    if (user.profilePhoto) db.users[authUser.id].profilePhoto = user.profilePhoto;
-    if (user.photos) db.users[authUser.id].photos = user.photos;
-    saveDB(db);
-  }
-
-  // If companion has a profile record, sync bio
-  if (db.companionProfiles && db.companionProfiles[authUser.id]) {
-    if (user.bio !== undefined) db.companionProfiles[authUser.id].bio = user.bio;
-  }
-
   try {
+    const authUser = (req as AuthenticatedRequest).authUser;
+    if (!authUser?.id) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const { profileName, bio, profilePhoto, photos } = req.body;
+
+    let user: any;
     if (getDatabaseType() === 'supabase') {
-      const updated = await databaseAdapter.updateUser(authUser.id, {
-        profileName: user.profileName,
-        bio: user.bio,
-        profilePhoto: user.profilePhoto,
-        photos: user.photos
-      });
-      if (updated) {
-        user = { ...user, ...updated };
+      user = await databaseAdapter.getUser(authUser.id);
+    } else {
+      user = db.users[authUser.id];
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Strictly editable fields ONLY:
+    // (legalName, dob, phone, etc. are permanently locked according to Govt ID KYC)
+    if (profileName !== undefined) {
+      if (typeof profileName !== 'string' || !profileName.trim()) {
+        return res.status(400).json({ error: 'Profile display name cannot be blank.' });
+      }
+      user.profileName = profileName.trim().slice(0, 60);
+    }
+
+    if (bio !== undefined) {
+      if (typeof bio !== 'string' || bio.length > 2000) {
+        return res.status(400).json({ error: 'Bio must be at most 2000 characters.' });
+      }
+      user.bio = bio.trim();
+    }
+
+    if (profilePhoto !== undefined) {
+      if (typeof profilePhoto === 'string' && profilePhoto.trim()) {
+        user.profilePhoto = profilePhoto.trim();
       }
     }
-  } catch (err) {
-    console.warn('Supabase updateUser non-fatal warning', err);
-  }
 
-  return res.json({
-    success: true,
-    user: publicAuthUser(user)
-  });
+    if (photos !== undefined) {
+      if (!Array.isArray(photos)) {
+        return res.status(400).json({ error: 'Photos must be an array of image strings.' });
+      }
+      const cleanPhotos = photos.filter((p: unknown) => typeof p === 'string' && (p as string).trim()).slice(0, 6);
+      user.photos = cleanPhotos;
+      if (!user.profilePhoto && cleanPhotos.length > 0) {
+        user.profilePhoto = cleanPhotos[0];
+      }
+    }
+
+    // Keep in-memory database synchronized without throwing in production
+    if (db.users) {
+      if (!db.users[authUser.id]) {
+        db.users[authUser.id] = { ...user, id: authUser.id };
+      }
+      if (user.profileName) db.users[authUser.id].profileName = user.profileName;
+      if (user.bio !== undefined) db.users[authUser.id].bio = user.bio;
+      if (user.profilePhoto) db.users[authUser.id].profilePhoto = user.profilePhoto;
+      if (user.photos) db.users[authUser.id].photos = user.photos;
+      if (process.env.NODE_ENV !== 'production' && getDatabaseType() !== 'supabase') {
+        try {
+          saveDB(db);
+        } catch (e) {
+          console.warn('saveDB non-fatal:', e);
+        }
+      }
+    }
+
+    // If companion has a profile record, sync bio
+    if (db.companionProfiles && db.companionProfiles[authUser.id]) {
+      if (user.bio !== undefined) db.companionProfiles[authUser.id].bio = user.bio;
+    }
+
+    try {
+      if (getDatabaseType() === 'supabase') {
+        const updated = await databaseAdapter.updateUser(authUser.id, {
+          profileName: user.profileName,
+          bio: user.bio,
+          profilePhoto: user.profilePhoto,
+          photos: user.photos
+        });
+        if (updated) {
+          user = { ...user, ...updated };
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase updateUser non-fatal warning', err);
+    }
+
+    return res.json({
+      success: true,
+      user: publicAuthUser(user)
+    });
+  } catch (error: any) {
+    console.error('Fatal error in POST /api/user/profile:', error);
+    return res.status(500).json({ error: error?.message || 'Internal error updating profile' });
+  }
 });
 
 // -------------------------------------------------------------
