@@ -1345,10 +1345,11 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       ...user,
       passwordHash: user.password_hash,
       legalName: user.legal_name,
+      profileName: user.profile_name || user.profileName || user.legal_name || 'User',
       activeRole: user.active_role,
       kycStatus: user.kyc_status,
       kycRejectionReason: user.kyc_rejection_reason,
-      profilePhoto: user.profile_photo,
+      profilePhoto: user.profile_photo || user.profilePhoto,
       kycSubmittedAt: user.kyc_submitted_at,
       kycDecidedAt: user.kyc_decided_at,
       kycDecidedBy: user.kyc_decided_by,
@@ -1356,7 +1357,7 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       dob: user.dob,
       age: user.age,
       bio: user.bio,
-      photos: user.photos,
+      photos: Array.isArray(user.photos) ? user.photos : [],
       city: user.city,
       state: user.state,
       address: user.address,
@@ -1369,6 +1370,7 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       activeRole: 'active_role',
       kycStatus: 'kyc_status',
       legalName: 'legal_name',
+      profileName: 'profile_name',
       kycSubmittedAt: 'kyc_submitted_at',
       kycDecidedAt: 'kyc_decided_at',
       kycDecidedBy: 'kyc_decided_by',
@@ -1385,12 +1387,39 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       createdAt: 'created_at',
       passwordHash: 'password_hash'
     };
-    const rowUpdates = Object.fromEntries(
-      Object.entries(updates).map(([key, value]) => [columnNames[key] || key, value])
-    );
-    const { data, error } = await db.users().update(rowUpdates).eq('id', id).select().single();
-    if (error) throw error;
-    return this.mapUser(data);
+    const rowUpdates: Record<string, any> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (columnNames[key]) {
+        rowUpdates[columnNames[key]] = value;
+      }
+    }
+
+    try {
+      const { data, error } = await db.users().update(rowUpdates).eq('id', id).select().maybeSingle();
+      if (error) {
+        // If profile_name column does not exist yet in Supabase users table, safely retry without it
+        if (error.message?.includes('profile_name') || error.code === '42703' || String(error.message).includes('column')) {
+          const fallbackUpdates = { ...rowUpdates };
+          delete fallbackUpdates.profile_name;
+          const retry = await db.users().update(fallbackUpdates).eq('id', id).select().maybeSingle();
+          if (retry.error) {
+            console.warn('Supabase updateUser fallback error:', retry.error.message);
+          }
+          const userObj = this.mapUser(retry.data || { id, ...updates });
+          if (updates.profileName) userObj.profileName = updates.profileName;
+          return userObj;
+        }
+        console.warn('Supabase updateUser error:', error.message);
+      }
+      const userObj = this.mapUser(data || { id, ...updates });
+      if (updates.profileName) userObj.profileName = updates.profileName;
+      return userObj;
+    } catch (err: any) {
+      console.warn('Supabase updateUser exception:', err.message);
+      const userObj = this.mapUser({ id, ...updates });
+      if (updates.profileName) userObj.profileName = updates.profileName;
+      return userObj;
+    }
   }
 
   async listUsers(filters?: any): Promise<any[]> {

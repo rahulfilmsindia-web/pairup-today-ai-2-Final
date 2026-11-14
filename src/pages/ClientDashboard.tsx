@@ -424,7 +424,7 @@ export const ClientDashboard: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5 font-mono">
-                {user?.phone} · Region: {user?.city || 'India'}
+                {user?.phone} · Live GPS Discovery Active
               </p>
             </div>
           </div>
@@ -689,7 +689,7 @@ export const ClientDashboard: React.FC = () => {
                   Public Profile & Privacy Management
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Customize your public persona, display name, and photo gallery. Your official government ID credentials remain locked and private.
+                  Customize your public display name, photo gallery, and introduction. Your official Government ID credentials remain private and locked.
                 </p>
               </div>
               <button
@@ -725,7 +725,60 @@ export const ClientDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* PHOTOS MANAGEMENT (MAX 6 PHOTOS) */}
+            {/* 1. PUBLIC DISPLAY NAME & BIO (NAME EDIT/ADD AT TOP) */}
+            <div className="p-5 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <User className="w-4 h-4 text-amber-400" />
+                    Public Profile Name & Bio (প্রদর্শন নাম ও পরিচয়)
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    This public name is shown across the platform. Your legal government ID name is kept 100% confidential.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                  ✓ Privacy Protected
+                </span>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="text-slate-200 block mb-1.5 font-bold text-xs">
+                    Profile Name (পাবলিক প্রদর্শন নাম) *
+                  </label>
+                  <input
+                    type="text"
+                    value={profileNameInput}
+                    onChange={(e) => setProfileNameInput(e.target.value)}
+                    placeholder="Enter public display name (e.g. Alex, Rahul, Sam)"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-semibold text-sm shadow-inner"
+                    required
+                  />
+                  <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                    <span>✓</span> Visible to companions and clients instead of your official Government ID name.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-slate-300 block mb-1.5 font-medium">
+                    Bio & Introduction (আত্মপরিচয়)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={bioInput}
+                    onChange={(e) => setBioInput(e.target.value)}
+                    placeholder="Describe what kind of companionship activities you enjoy (e.g., cafe conversations, city exploration, dining, social events)..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 text-xs leading-relaxed"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Visible to verified companions when they review your bookings.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. PHOTOS MANAGEMENT (MAX 6 PHOTOS) */}
             <div className="p-5 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -808,63 +861,7 @@ export const ClientDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* EDITABLE PUBLIC PROFILE FIELDS */}
-            <div className="space-y-4">
-              <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                Public Display Information
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="text-slate-400 block mb-1.5 font-medium">
-                    Profile Name (Public Display Name)
-                  </label>
-                  <input
-                    type="text"
-                    value={profileNameInput}
-                    onChange={(e) => setProfileNameInput(e.target.value)}
-                    placeholder="Enter display name (e.g. Alex D.)"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-amber-400 font-medium text-xs"
-                    required
-                  />
-                  <p className="text-[11px] text-emerald-400 mt-1">
-                    ✓ This public display name protects your identity. Your official government ID name will NOT be revealed.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="text-slate-400 block mb-1.5 font-medium">
-                    Operating City
-                  </label>
-                  <input
-                    type="text"
-                    value={user?.city || 'Delhi NCR, India'}
-                    readOnly
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-xs cursor-not-allowed"
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Configured during profile signup.
-                  </p>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="text-slate-400 block mb-1.5 font-medium">
-                    Bio & Introduction
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={bioInput}
-                    onChange={(e) => setBioInput(e.target.value)}
-                    placeholder="Describe what kind of companionship activities you enjoy (e.g., cafe conversations, city exploration, dining, social events)..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-amber-400 text-xs leading-relaxed"
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Visible to verified companions when they review your booking inquiries.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* LOCKED IDENTITY CREDENTIALS */}
+            {/* 3. LOCKED IDENTITY CREDENTIALS */}
             <div className="p-5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
               <div className="flex items-center gap-2">
                 <Lock className="w-4 h-4 text-slate-400" />
@@ -904,6 +901,27 @@ export const ClientDashboard: React.FC = () => {
                   <span className="text-[10px] text-slate-500 mt-1">OTP Verified</span>
                 </div>
               </div>
+            </div>
+
+            {/* Bottom Save Action */}
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={profileSaving}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-lg shadow-amber-400/20 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {profileSaving ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    Saving Changes...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Save Profile Changes
+                  </>
+                )}
+              </button>
             </div>
           </form>
         )}

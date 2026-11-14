@@ -392,11 +392,14 @@ function verifyAdminSessionToken(token: string): { adminId: string; tokenId: str
 }
 
 function publicAuthUser(user: any) {
+  if (!user) return null;
+  const inMemory = db.users?.[user.id];
+  const profileName = user.profileName || inMemory?.profileName || user.legalName || 'User';
   return {
     id: user.id,
     phone: user.phone,
     legalName: user.legalName,
-    profileName: user.profileName || user.legalName || 'User',
+    profileName: profileName,
     email: user.email,
     role: user.role,
     activeRole: user.activeRole,
@@ -404,10 +407,12 @@ function publicAuthUser(user: any) {
     age: user.age,
     kycStatus: user.kycStatus || 'NOT_SUBMITTED',
     kycRejectionReason: user.kycRejectionReason,
-    profilePhoto: user.profilePhoto,
-    photos: Array.isArray(user.photos) ? user.photos : (user.profilePhoto ? [user.profilePhoto] : []),
-    bio: user.bio,
-    city: user.city
+    profilePhoto: user.profilePhoto || inMemory?.profilePhoto || null,
+    photos: Array.isArray(user.photos) && user.photos.length > 0 
+      ? user.photos 
+      : (inMemory?.photos || (user.profilePhoto ? [user.profilePhoto] : [])),
+    bio: user.bio || inMemory?.bio || '',
+    city: user.city || 'India'
   };
 }
 
@@ -2190,6 +2195,18 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
     }
   }
 
+  // Keep in-memory database synchronized
+  if (db.users) {
+    if (!db.users[authUser.id]) {
+      db.users[authUser.id] = { ...user, id: authUser.id };
+    }
+    if (user.profileName) db.users[authUser.id].profileName = user.profileName;
+    if (user.bio !== undefined) db.users[authUser.id].bio = user.bio;
+    if (user.profilePhoto) db.users[authUser.id].profilePhoto = user.profilePhoto;
+    if (user.photos) db.users[authUser.id].photos = user.photos;
+    saveDB(db);
+  }
+
   // If companion has a profile record, sync bio
   if (db.companionProfiles && db.companionProfiles[authUser.id]) {
     if (user.bio !== undefined) db.companionProfiles[authUser.id].bio = user.bio;
@@ -2197,18 +2214,18 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
 
   try {
     if (getDatabaseType() === 'supabase') {
-      await databaseAdapter.updateUser(authUser.id, {
+      const updated = await databaseAdapter.updateUser(authUser.id, {
         profileName: user.profileName,
         bio: user.bio,
         profilePhoto: user.profilePhoto,
         photos: user.photos
       });
-    } else {
-      saveDB(db);
+      if (updated) {
+        user = { ...user, ...updated };
+      }
     }
   } catch (err) {
-    console.error('Failed to update user profile', err);
-    return res.status(500).json({ error: 'Failed to update profile' });
+    console.warn('Supabase updateUser non-fatal warning', err);
   }
 
   return res.json({

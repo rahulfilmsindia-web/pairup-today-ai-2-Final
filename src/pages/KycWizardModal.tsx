@@ -348,28 +348,6 @@ export const KycWizardModal: React.FC = () => {
             </p>
           </div>
 
-          {/* City */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Operating City / Region
-            </label>
-            <select
-              value={city}
-              onChange={e => setCity(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-amber-400"
-            >
-              <option value="Delhi NCR">Delhi NCR</option>
-              <option value="Mumbai">Mumbai</option>
-              <option value="Bengaluru">Bengaluru</option>
-              <option value="Kolkata">Kolkata</option>
-              <option value="Hyderabad">Hyderabad</option>
-              <option value="Chennai">Chennai</option>
-              <option value="Pune">Pune</option>
-              <option value="Jaipur">Jaipur</option>
-              <option value="Ahmedabad">Ahmedabad</option>
-            </select>
-          </div>
-
           {/* Government ID Selection */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-2">
