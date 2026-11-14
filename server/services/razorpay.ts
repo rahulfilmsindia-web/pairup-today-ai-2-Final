@@ -36,8 +36,8 @@ export async function createRazorpayOrder(params: {
   keyId?: string;
   keySecret?: string;
 }): Promise<RazorpayOrderResponse> {
-  const keyId = params.keyId || process.env.RAZORPAY_KEY_ID;
-  const keySecret = params.keySecret || process.env.RAZORPAY_KEY_SECRET;
+  const keyId = (params.keyId || process.env.RAZORPAY_KEY_ID)?.trim();
+  const keySecret = (params.keySecret || process.env.RAZORPAY_KEY_SECRET)?.trim();
 
   if (!Number.isSafeInteger(params.amountPaise) || params.amountPaise <= 0) {
     return {

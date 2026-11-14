@@ -166,7 +166,14 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
               </button>
 
               <button
-                onClick={logout}
+                onClick={() => {
+                  logout();
+                  setCurrentPage('home');
+                  if (window.location.pathname !== '/') {
+                    window.history.pushState({}, '', '/');
+                  }
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 title={t.navLogout}
                 className="p-1.5 rounded-lg border border-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 transition-colors"
               >
@@ -300,6 +307,11 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
                 onClick={() => {
                   setMobileMenuOpen(false);
                   logout();
+                  setCurrentPage('home');
+                  if (window.location.pathname !== '/') {
+                    window.history.pushState({}, '', '/');
+                  }
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
                 className="w-full py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-rose-400 text-xs min-h-[40px]"
               >

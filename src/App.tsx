@@ -57,6 +57,30 @@ const MainAppContent: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Automatically redirect to home page whenever user logs out
+  const prevUserRef = React.useRef(user);
+  useEffect(() => {
+    if (prevUserRef.current && !user) {
+      setCurrentPage('home');
+      if (window.location.pathname !== '/') {
+        window.history.pushState({}, '', '/');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    prevUserRef.current = user;
+  }, [user]);
+
+  // Safety fallback: if not logged in, client/companion dashboards cannot be viewed
+  useEffect(() => {
+    if (!user && (currentPage === 'client-dashboard' || currentPage === 'companion-dashboard')) {
+      setCurrentPage('home');
+      if (window.location.pathname !== '/') {
+        window.history.pushState({}, '', '/');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [user, currentPage]);
+
   const handleSelectServiceFromGrid = (service: ServiceItem) => {
     setActiveServiceFilter(service.id);
     const el = document.getElementById('companion-discovery');
