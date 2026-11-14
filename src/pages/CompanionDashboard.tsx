@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { apiFetch } from '../utils/api';
@@ -40,6 +40,7 @@ export const CompanionDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<CompanionTab>('overview');
   const [loading, setLoading] = useState(true);
   const [statusData, setStatusData] = useState<any | null>(null);
+  const hasAutoNavigatedRef = useRef(false);
 
   // Step A: Services & Rates state
   const [selectedServices, setSelectedServices] = useState<number[]>([1, 2, 4, 6]);
@@ -96,6 +97,28 @@ export const CompanionDashboard: React.FC = () => {
             setSelectedDays(data.profile.availability.days || []);
             setStartTime(data.profile.availability.startTime || '09:00');
             setEndTime(data.profile.availability.endTime || '21:00');
+          }
+        }
+
+        // Automatic smart gate navigation on initial companion portal entry
+        if (!hasAutoNavigatedRef.current) {
+          hasAutoNavigatedRef.current = true;
+          const membershipValid = Boolean(
+            data.conditions?.membershipValid ?? data.profile?.membership?.isActive
+          );
+          const bankVerified = Boolean(
+            data.conditions?.bankVerified ?? data.profile?.bankDetails?.isVerified
+          );
+
+          if (!membershipValid) {
+            // Gate 2: Membership unpaid -> open membership page
+            setActiveTab('membership');
+          } else if (!bankVerified) {
+            // Gate 2 paid, Gate 3: Bank verification remaining -> open bank verify page
+            setActiveTab('bank');
+          } else {
+            // All verified -> direct login to overview according to previous flow
+            setActiveTab('overview');
           }
         }
       }
@@ -251,6 +274,7 @@ export const CompanionDashboard: React.FC = () => {
       await fetchCompanionStatus();
       setActionMsg(`${plan} membership payment was verified.`);
       setTimeout(() => setActionMsg(null), 3500);
+      setActiveTab('bank');
     } catch (err) {
       console.error('Error subscribing', err);
       alert(err instanceof Error ? err.message : 'Membership checkout failed.');
@@ -281,6 +305,7 @@ export const CompanionDashboard: React.FC = () => {
       if (res.ok) {
         setBankMsg('Bank account verified successfully by PairUp Verified Network.');
         fetchCompanionStatus();
+        setTimeout(() => setActiveTab('overview'), 1500);
       } else {
         setBankMsg(data.error || 'Bank verification failed.');
       }
@@ -398,6 +423,17 @@ export const CompanionDashboard: React.FC = () => {
   // Bookings breakdown
   const upcomingBookings = bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS');
   const pastBookings = bookings.filter(b => b.status === 'COMPLETED' || b.status === 'CANCELLED');
+
+  if (loading && !statusData) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-400 font-medium">Opening Companion Workspace...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-6 px-4 sm:px-6 lg:px-8">
