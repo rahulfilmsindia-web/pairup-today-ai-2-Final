@@ -10,7 +10,7 @@ import {
   CreditCard, Landmark, Wallet, Play, Check, ChevronRight, 
   MessageSquare, Navigation, AlertTriangle, PhoneCall, RefreshCw, X,
   User, Calendar, DollarSign, Bell, Settings, LifeBuoy, LogOut,
-  Pause, Power, Shield, FileText, CheckSquare, Star
+  Pause, Power, Shield, FileText, CheckSquare, Star, ArrowLeft
 } from 'lucide-react';
 
 export const CompanionDashboard: React.FC = () => {
@@ -445,6 +445,21 @@ export const CompanionDashboard: React.FC = () => {
         {/* Minimal top bar */}
         <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (window.history.length > 1) {
+                  window.history.back();
+                } else {
+                  window.location.href = '/';
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold shadow-sm active:scale-95"
+              title="Go back to previous page"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-pink-400" />
+              <span>Back</span>
+            </button>
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
@@ -587,6 +602,21 @@ export const CompanionDashboard: React.FC = () => {
         {/* Minimal top bar */}
         <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (window.history.length > 1) {
+                  window.history.back();
+                } else {
+                  window.location.href = '/';
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold shadow-sm active:scale-95"
+              title="Go back to previous page"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-pink-400" />
+              <span>Back</span>
+            </button>
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
             </div>

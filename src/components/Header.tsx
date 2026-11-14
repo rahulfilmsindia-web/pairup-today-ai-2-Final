@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { Language } from '../types';
-import { Globe, User, LogOut, ChevronDown, Menu, X } from 'lucide-react';
+import { Globe, User, LogOut, ChevronDown, Menu, X, ArrowLeft } from 'lucide-react';
 
 interface HeaderProps {
   currentPage: string;
@@ -26,29 +26,51 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
     setMobileMenuOpen(false);
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setCurrentPage('home');
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full bg-slate-950/90 backdrop-blur-md border-b border-slate-800 text-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         
-        {/* EXACT ORDER ITEMS 1 & 2: Logo and PairUpToday */}
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handleNavClick('home')}>
-          {/* 1. Exact uploaded PairUpToday Logo */}
-          <div className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-amber-400/60 shadow-lg shadow-pink-500/20 transition-transform group-hover:scale-105">
-            <img
-              src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
-              alt="PairUpToday Logo"
-              className="w-full h-full object-cover"
-            />
-          </div>
+        {/* Left Side: Back button (if on inner page) + Logo + PairUpToday */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {currentPage !== 'home' && (
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all text-xs font-bold shadow-sm active:scale-95"
+              title="Go back to previous page"
+              aria-label="Back to previous page"
+            >
+              <ArrowLeft className="w-4 h-4 text-pink-400" />
+              <span className="hidden sm:inline">Back</span>
+            </button>
+          )}
 
-          {/* 2. PairUpToday Brand Name */}
-          <div className="flex flex-col">
-            <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
-              {t.navPairUpToday}
-            </span>
-            <span className="text-[10px] text-slate-400 tracking-widest uppercase font-medium -mt-1 hidden sm:block">
-              Connect · Match · Belong
-            </span>
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handleNavClick('home')}>
+            {/* 1. Exact uploaded PairUpToday Logo */}
+            <div className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-amber-400/60 shadow-lg shadow-pink-500/20 transition-transform group-hover:scale-105">
+              <img
+                src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
+                alt="PairUpToday Logo"
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* 2. PairUpToday Brand Name */}
+            <div className="flex flex-col">
+              <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
+                {t.navPairUpToday}
+              </span>
+              <span className="text-[10px] text-slate-400 tracking-widest uppercase font-medium -mt-1 hidden sm:block">
+                Connect · Match · Belong
+              </span>
+            </div>
           </div>
         </div>
 
@@ -207,6 +229,19 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
       {/* Mobile Drawer (Strictly in the exact 8 item order) */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-slate-900 border-b border-slate-800 px-4 pt-3 pb-6 space-y-3">
+          {currentPage !== 'home' && (
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleBack();
+              }}
+              className="w-full text-left py-2.5 px-3 rounded-xl bg-slate-800/80 border border-slate-700/80 text-pink-400 text-xs font-bold flex items-center gap-2 transition-colors mb-1"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Previous Page</span>
+            </button>
+          )}
+
           <button
             onClick={() => handleNavClick('home')}
             className="w-full text-left py-2.5 text-slate-300 hover:text-amber-400 text-sm font-semibold transition-colors"

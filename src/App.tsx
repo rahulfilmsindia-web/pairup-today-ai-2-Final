@@ -19,40 +19,121 @@ import { AdminPortal } from './admin/AdminPortal';
 import { ServiceItem } from './constants/services';
 import { CompanionListing } from './components/CompanionListing';
 
+const pageToPath = (page: string): string => {
+  switch (page) {
+    case 'about': return '/about';
+    case 'how-it-works': return '/how-it-works';
+    case 'safety-trust': return '/safety-trust';
+    case 'terms': return '/terms';
+    case 'client-dashboard': return '/client-dashboard';
+    case 'companion-dashboard': return '/companion-dashboard';
+    case 'admin': return '/admin';
+    case 'home':
+    default:
+      return '/';
+  }
+};
+
+const pathToPage = (pathname: string): string => {
+  const clean = pathname.toLowerCase().replace(/\/$/, '') || '/';
+  switch (clean) {
+    case '/about': return 'about';
+    case '/how-it-works': return 'how-it-works';
+    case '/safety-trust': return 'safety-trust';
+    case '/terms':
+    case '/terms-of-service': return 'terms';
+    case '/client-dashboard': return 'client-dashboard';
+    case '/companion-dashboard': return 'companion-dashboard';
+    case '/admin': return 'admin';
+    case '/':
+    default:
+      return 'home';
+  }
+};
+
+const getInitialPage = (): string => {
+  const host = window.location.hostname.toLowerCase();
+  const path = window.location.pathname.toLowerCase();
+  const search = window.location.search.toLowerCase();
+  if (host.startsWith('admin.') || path === '/admin' || search.includes('admin=true')) {
+    return 'admin';
+  }
+  return pathToPage(path);
+};
+
 const MainAppContent: React.FC = () => {
   const { user, activeRole, openAuthModal, selectActiveRole } = useAuth();
-  const [currentPage, setCurrentPage] = useState<string>('home');
-  const [activeServiceFilter, setActiveServiceFilter] = useState<number | null>(null);
-  const [isAdminHostMode, setIsAdminHostMode] = useState<boolean>(() => {
-    const host = window.location.hostname.toLowerCase();
-    const path = window.location.pathname.toLowerCase();
-    const search = window.location.search.toLowerCase();
-    return host.startsWith('admin.') || path === '/admin' || search.includes('admin=true');
+  
+  const [currentPage, setCurrentPageState] = useState<string>(() => {
+    const init = getInitialPage();
+    return init === 'admin' ? 'home' : init;
   });
 
-  // URL routing sync
-  useEffect(() => {
-    const handlePopState = () => {
-      const path = window.location.pathname;
-      if (path === '/admin') {
-        setIsAdminHostMode(true);
-      } else if (path === '/about') {
-        setCurrentPage('about');
-        setIsAdminHostMode(false);
-      } else if (path === '/how-it-works') {
-        setCurrentPage('how-it-works');
-        setIsAdminHostMode(false);
-      } else if (path === '/safety-trust') {
-        setCurrentPage('safety-trust');
-        setIsAdminHostMode(false);
-      } else if (path === '/terms' || path === '/terms-of-service') {
-        setCurrentPage('terms');
-        setIsAdminHostMode(false);
+  const [activeServiceFilter, setActiveServiceFilter] = useState<number | null>(null);
+  
+  const [isAdminHostMode, setIsAdminHostMode] = useState<boolean>(() => {
+    return getInitialPage() === 'admin';
+  });
+
+  // Centralized navigation handler that synchronizes browser/device history
+  const navigateToPage = (targetPage: string, options?: { replace?: boolean }) => {
+    if (targetPage === 'admin') {
+      setIsAdminHostMode(true);
+      if (options?.replace) {
+        window.history.replaceState({ page: 'admin' }, '', '/admin');
       } else {
-        setCurrentPage('home');
-        setIsAdminHostMode(false);
+        window.history.pushState({ page: 'admin' }, '', '/admin');
       }
+      return;
+    }
+
+    setIsAdminHostMode(false);
+    const targetPath = pageToPath(targetPage);
+
+    // If already on the target page and path matches, do not create duplicate history entries
+    if (targetPage === currentPage && window.location.pathname === targetPath && !options?.replace) {
+      return;
+    }
+
+    if (options?.replace) {
+      window.history.replaceState({ page: targetPage }, '', targetPath);
+    } else {
+      window.history.pushState({ page: targetPage }, '', targetPath);
+    }
+
+    setCurrentPageState(targetPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // URL routing and device/browser back button (popstate) synchronization
+  useEffect(() => {
+    // 1. Ensure initial history entry has the state attached so back button can return to it
+    const initial = getInitialPage();
+    if (!window.history.state || !window.history.state.page) {
+      const initialPath = pageToPath(initial);
+      window.history.replaceState({ page: initial }, '', window.location.pathname || initialPath);
+    }
+
+    // 2. Listen to popstate (browser back/forward, mobile hardware back button, touch swipe back)
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      let targetPage = 'home';
+
+      if (state && typeof state.page === 'string') {
+        targetPage = state.page;
+      } else {
+        targetPage = pathToPage(window.location.pathname);
+      }
+
+      if (targetPage === 'admin' || window.location.pathname === '/admin') {
+        setIsAdminHostMode(true);
+      } else {
+        setIsAdminHostMode(false);
+        setCurrentPageState(targetPage);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
@@ -61,11 +142,7 @@ const MainAppContent: React.FC = () => {
   const prevUserRef = React.useRef(user);
   useEffect(() => {
     if (prevUserRef.current && !user) {
-      setCurrentPage('home');
-      if (window.location.pathname !== '/') {
-        window.history.pushState({}, '', '/');
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      navigateToPage('home', { replace: true });
     }
     prevUserRef.current = user;
   }, [user]);
@@ -73,11 +150,7 @@ const MainAppContent: React.FC = () => {
   // Safety fallback: if not logged in, client/companion dashboards cannot be viewed
   useEffect(() => {
     if (!user && (currentPage === 'client-dashboard' || currentPage === 'companion-dashboard')) {
-      setCurrentPage('home');
-      if (window.location.pathname !== '/') {
-        window.history.pushState({}, '', '/');
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      navigateToPage('home', { replace: true });
     }
   }, [user, currentPage]);
 
@@ -89,7 +162,7 @@ const MainAppContent: React.FC = () => {
     } else if (!user) {
       openAuthModal('signin');
     } else {
-      setCurrentPage('client-dashboard');
+      navigateToPage('client-dashboard');
     }
   };
 
@@ -100,7 +173,7 @@ const MainAppContent: React.FC = () => {
     } else if (!user) {
       openAuthModal('login');
     } else {
-      setCurrentPage('client-dashboard');
+      navigateToPage('client-dashboard');
     }
   };
 
@@ -109,7 +182,7 @@ const MainAppContent: React.FC = () => {
       openAuthModal('signin');
     } else {
       selectActiveRole('COMPANION');
-      setCurrentPage('companion-dashboard');
+      navigateToPage('companion-dashboard');
     }
   };
 
@@ -118,7 +191,7 @@ const MainAppContent: React.FC = () => {
       openAuthModal('signin');
     } else {
       selectActiveRole('CLIENT');
-      setCurrentPage('client-dashboard');
+      navigateToPage('client-dashboard');
     }
   };
 
@@ -168,7 +241,7 @@ const MainAppContent: React.FC = () => {
                 if (!user) {
                   openAuthModal('login');
                 } else {
-                  setCurrentPage('client-dashboard');
+                  navigateToPage('client-dashboard');
                 }
               }}
             />
@@ -181,8 +254,8 @@ const MainAppContent: React.FC = () => {
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-start overflow-x-hidden selection:bg-pink-500 selection:text-white">
       <div className="w-full flex flex-col min-h-screen">
-        {/* Customer Header in Exact 8 Item Order */}
-        <Header currentPage={currentPage} setCurrentPage={setCurrentPage} />
+        {/* Customer Header with back button & navigation */}
+        <Header currentPage={currentPage} setCurrentPage={navigateToPage} />
 
         {/* Dynamic Page Content */}
         <main className="flex-1 w-full overflow-x-hidden">
@@ -190,7 +263,7 @@ const MainAppContent: React.FC = () => {
         </main>
 
         {/* Footer */}
-        <Footer setCurrentPage={setCurrentPage} />
+        <Footer setCurrentPage={navigateToPage} />
 
         {/* Modals & Wizards */}
         <AuthGatewayModal />
@@ -198,9 +271,9 @@ const MainAppContent: React.FC = () => {
         <RoleSelectionModal
           onSelectRoleDone={role => {
             if (role === 'COMPANION') {
-              setCurrentPage('companion-dashboard');
+              navigateToPage('companion-dashboard');
             } else {
-              setCurrentPage('client-dashboard');
+              navigateToPage('client-dashboard');
             }
           }}
         />
