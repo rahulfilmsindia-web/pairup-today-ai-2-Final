@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { apiFetch } from '../utils/api';
 import { openRazorpayCheckout } from '../utils/razorpay';
 import { PAIRUP_SERVICES, ServiceItem } from '../constants/services';
+import { compressImageFile } from '../utils/image';
 import { 
   Search, MapPin, Filter, Star, Clock, Calendar, ShieldCheck, 
   AlertCircle, MessageSquare, PhoneCall, CheckCircle, Navigation, 
@@ -107,7 +108,7 @@ export const ClientDashboard: React.FC = () => {
     }
   }, [user]);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const file = files[0];
@@ -115,9 +116,8 @@ export const ClientDashboard: React.FC = () => {
       setProfileErrorMsg('Maximum 6 photos allowed.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (uploadEvt) => {
-      const b64 = uploadEvt.target?.result as string;
+    try {
+      const b64 = await compressImageFile(file, 900, 900, 0.75);
       if (b64) {
         setUserPhotos(prev => {
           const updated = [...prev, b64].slice(0, 6);
@@ -127,8 +127,9 @@ export const ClientDashboard: React.FC = () => {
           return updated;
         });
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      setProfileErrorMsg('Failed to process image: ' + (err.message || 'Unknown error'));
+    }
     e.target.value = '';
   };
 

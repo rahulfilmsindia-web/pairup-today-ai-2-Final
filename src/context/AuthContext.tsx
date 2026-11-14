@@ -291,6 +291,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profileData)
       });
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        return { 
+          success: false, 
+          error: res.status === 503 
+            ? 'Server is temporarily busy or photo size is too large. Please retry.' 
+            : `Server returned error (${res.status}): ${text.slice(0, 100)}` 
+        };
+      }
       const data = await res.json();
       if (res.ok && data.success && data.user) {
         setUser(data.user);

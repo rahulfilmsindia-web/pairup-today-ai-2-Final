@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { GovernmentIdType } from '../types';
+import { compressImageFile } from '../utils/image';
 import { ShieldCheck, Upload, AlertCircle, Camera, Check, UserCheck, Lock, X, FileText, RefreshCw, User, Heart } from 'lucide-react';
 
 export const KycWizardModal: React.FC = () => {
@@ -108,22 +109,21 @@ export const KycWizardModal: React.FC = () => {
   // Dynamic max date of birth for strict 18+ enforcement
   const maxDobDate = new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
-        setErrorMsg('Choose a JPEG, PNG or WebP image no larger than 5 MB.');
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        setErrorMsg('Please choose a JPEG, PNG or WebP image.');
         e.target.value = '';
         return;
       }
       setErrorMsg(null);
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setter(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 1000, 1000, 0.8);
+        setter(compressed);
+      } catch (err: any) {
+        setErrorMsg('Failed to process image: ' + (err.message || 'Unknown error'));
+      }
     }
   };
 
