@@ -2170,6 +2170,18 @@ app.post('/api/kyc/submit', async (req: Request, res: Response) => {
         documentPaths.push(document.path);
       }
       await databaseAdapter.submitKycSubmission(submission);
+      await databaseAdapter.updateUser(authenticatedUserId, {
+        profileName: submission.profileName,
+        bio: submission.bio,
+        photos: submission.photos,
+        profilePhoto: profilePhoto || selfieUrl
+      }).catch(err => console.warn('Non-fatal profile sync after KYC submit:', err));
+      if (db.users && db.users[authenticatedUserId]) {
+        db.users[authenticatedUserId].profileName = submission.profileName;
+        db.users[authenticatedUserId].bio = submission.bio;
+        db.users[authenticatedUserId].photos = submission.photos;
+        db.users[authenticatedUserId].profilePhoto = profilePhoto || selfieUrl;
+      }
     } else {
       const localSubmission = {
         ...submission,

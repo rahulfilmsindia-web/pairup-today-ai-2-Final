@@ -1436,6 +1436,9 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   private mapUser(user: any): any {
     if (!user) return null;
     let fallbackProfileName: string | undefined;
+    let fallbackPhotos: string[] | undefined;
+    let fallbackBio: string | undefined;
+    let fallbackProfilePhoto: string | undefined;
     let fallbackSuspended: boolean | undefined;
     let fallbackSuspendedReason: string | undefined;
     let fallbackSuspendedAt: string | undefined;
@@ -1446,6 +1449,9 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       try {
         const meta = JSON.parse(user.address.slice(9));
         if (meta?.profileName) fallbackProfileName = meta.profileName;
+        if (Array.isArray(meta?.photos) && meta.photos.length > 0) fallbackPhotos = meta.photos;
+        if (typeof meta?.bio === 'string') fallbackBio = meta.bio;
+        if (typeof meta?.profilePhoto === 'string' && meta.profilePhoto) fallbackProfilePhoto = meta.profilePhoto;
         if (meta?.isSuspended !== undefined) fallbackSuspended = meta.isSuspended;
         if (meta?.suspendedReason) fallbackSuspendedReason = meta.suspendedReason;
         if (meta?.suspendedAt) fallbackSuspendedAt = meta.suspendedAt;
@@ -1455,6 +1461,11 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       } catch {}
     }
     const resolvedProfileName = user.profile_name || user.profileName || fallbackProfileName || user.legal_name || 'User';
+    const resolvedPhotos = (Array.isArray(user.photos) && user.photos.length > 0)
+      ? user.photos
+      : (fallbackPhotos || []);
+    const resolvedProfilePhoto = user.profile_photo || user.profilePhoto || fallbackProfilePhoto || resolvedPhotos[0] || null;
+    const resolvedBio = (user.bio !== undefined && user.bio !== null) ? user.bio : (fallbackBio || '');
     return {
       ...user,
       passwordHash: user.password_hash,
@@ -1463,15 +1474,15 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       activeRole: user.active_role,
       kycStatus: user.kyc_status,
       kycRejectionReason: user.kyc_rejection_reason,
-      profilePhoto: user.profile_photo || user.profilePhoto,
+      profilePhoto: resolvedProfilePhoto,
       kycSubmittedAt: user.kyc_submitted_at,
       kycDecidedAt: user.kyc_decided_at,
       kycDecidedBy: user.kyc_decided_by,
       kycDecidedByAdminId: user.kyc_decided_by_admin_id,
       dob: user.dob,
       age: user.age,
-      bio: user.bio,
-      photos: Array.isArray(user.photos) ? user.photos : [],
+      bio: resolvedBio,
+      photos: resolvedPhotos,
       city: user.city,
       state: user.state,
       address: typeof user.address === 'string' && user.address.startsWith('__META__:') ? '' : user.address,
@@ -1520,9 +1531,21 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
         rowUpdates[columnNames[key]] = value;
       }
     }
-    // Reliable persistence fallback: embed profileName and moderation metadata in address
-    const metaUpdates: Record<string, any> = {};
-    if (updates.profileName) metaUpdates.profileName = updates.profileName;
+    // Reliable persistence fallback: embed profileName, photos, bio, profilePhoto and moderation metadata in address
+    // This is the primary fallback for Supabase databases that may be missing newer columns.
+    let existingMeta: Record<string, any> = {};
+    try {
+      const { data: cur } = await db.users().select('address').eq('id', id).maybeSingle();
+      if (cur?.address && typeof cur.address === 'string' && cur.address.startsWith('__META__:')) {
+        existingMeta = JSON.parse(cur.address.slice(9));
+      }
+    } catch {}
+
+    const metaUpdates: Record<string, any> = { ...existingMeta };
+    if (updates.profileName !== undefined) metaUpdates.profileName = updates.profileName;
+    if (Array.isArray(updates.photos)) metaUpdates.photos = updates.photos;
+    if (updates.bio !== undefined) metaUpdates.bio = updates.bio;
+    if (updates.profilePhoto !== undefined) metaUpdates.profilePhoto = updates.profilePhoto;
     if (updates.isSuspended !== undefined) metaUpdates.isSuspended = updates.isSuspended;
     if (updates.suspendedReason !== undefined) metaUpdates.suspendedReason = updates.suspendedReason;
     if (updates.suspendedAt !== undefined) metaUpdates.suspendedAt = updates.suspendedAt;
@@ -1534,10 +1557,24 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       rowUpdates['address'] = '__META__:' + JSON.stringify(metaUpdates);
     }
 
+    // Helper to merge __META__ updates after a successful DB write
+    const applyMetaOverrides = (userObj: any): any => {
+      if (metaUpdates.profileName) userObj.profileName = metaUpdates.profileName;
+      if (Array.isArray(metaUpdates.photos)) userObj.photos = metaUpdates.photos;
+      if (metaUpdates.bio !== undefined) userObj.bio = metaUpdates.bio;
+      if (metaUpdates.profilePhoto) userObj.profilePhoto = metaUpdates.profilePhoto;
+      if (metaUpdates.isSuspended !== undefined) userObj.isSuspended = metaUpdates.isSuspended;
+      if (metaUpdates.suspendedReason !== undefined) userObj.suspendedReason = metaUpdates.suspendedReason;
+      if (metaUpdates.warningCount !== undefined) userObj.warningCount = metaUpdates.warningCount;
+      if (metaUpdates.lastWarningReason !== undefined) userObj.lastWarningReason = metaUpdates.lastWarningReason;
+      return userObj;
+    };
+
     try {
       const { data, error } = await db.users().update(rowUpdates).eq('id', id).select().maybeSingle();
       if (error) {
         // If newer columns do not exist yet in Supabase users table, safely retry without them
+        // The __META__:address fallback above ensures data is always persisted
         if (error.message?.includes('profile_name') || error.code === '42703' || String(error.message).includes('column')) {
           const fallbackUpdates = { ...rowUpdates };
           delete fallbackUpdates.profile_name;
@@ -1547,36 +1584,25 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
           delete fallbackUpdates.warning_count;
           delete fallbackUpdates.last_warning_reason;
           delete fallbackUpdates.last_warning_at;
-          const retry = await db.users().update(fallbackUpdates).eq('id', id).select().maybeSingle();
+          let retry = await db.users().update(fallbackUpdates).eq('id', id).select().maybeSingle();
+          if (retry.error && (retry.error.code === '42703' || String(retry.error.message).includes('column'))) {
+            // Progressively strip non-core columns if they trigger missing column errors
+            delete fallbackUpdates.photos;
+            delete fallbackUpdates.bio;
+            delete fallbackUpdates.profile_photo;
+            retry = await db.users().update(fallbackUpdates).eq('id', id).select().maybeSingle();
+          }
           if (retry.error) {
             console.warn('Supabase updateUser fallback error:', retry.error.message);
           }
-          const userObj = this.mapUser(retry.data || { id, ...updates });
-          if (updates.profileName) userObj.profileName = updates.profileName;
-          if (updates.isSuspended !== undefined) userObj.isSuspended = updates.isSuspended;
-          if (updates.suspendedReason !== undefined) userObj.suspendedReason = updates.suspendedReason;
-          if (updates.warningCount !== undefined) userObj.warningCount = updates.warningCount;
-          if (updates.lastWarningReason !== undefined) userObj.lastWarningReason = updates.lastWarningReason;
-          return userObj;
+          return applyMetaOverrides(this.mapUser(retry.data || { id, ...updates }));
         }
         console.warn('Supabase updateUser error:', error.message);
       }
-      const userObj = this.mapUser(data || { id, ...updates });
-      if (updates.profileName) userObj.profileName = updates.profileName;
-      if (updates.isSuspended !== undefined) userObj.isSuspended = updates.isSuspended;
-      if (updates.suspendedReason !== undefined) userObj.suspendedReason = updates.suspendedReason;
-      if (updates.warningCount !== undefined) userObj.warningCount = updates.warningCount;
-      if (updates.lastWarningReason !== undefined) userObj.lastWarningReason = updates.lastWarningReason;
-      return userObj;
+      return applyMetaOverrides(this.mapUser(data || { id, ...updates }));
     } catch (err: any) {
       console.warn('Supabase updateUser exception:', err.message);
-      const userObj = this.mapUser({ id, ...updates });
-      if (updates.profileName) userObj.profileName = updates.profileName;
-      if (updates.isSuspended !== undefined) userObj.isSuspended = updates.isSuspended;
-      if (updates.suspendedReason !== undefined) userObj.suspendedReason = updates.suspendedReason;
-      if (updates.warningCount !== undefined) userObj.warningCount = updates.warningCount;
-      if (updates.lastWarningReason !== undefined) userObj.lastWarningReason = updates.lastWarningReason;
-      return userObj;
+      return applyMetaOverrides(this.mapUser({ id, ...updates }));
     }
   }
 

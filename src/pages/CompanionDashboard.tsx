@@ -244,7 +244,7 @@ export const CompanionDashboard: React.FC = () => {
       setUserPhotos(photos);
       setActiveProfilePhoto(user.profilePhoto || photos[0] || '');
     }
-  }, [user]);
+  }, [user?.profileName, user?.profilePhoto, JSON.stringify(user?.photos || []), user?.bio]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -257,12 +257,23 @@ export const CompanionDashboard: React.FC = () => {
     try {
       const b64 = await compressImageFile(file, 900, 900, 0.75);
       if (b64) {
-        setUserPhotos(prev => {
-          const updated = [...prev, b64].slice(0, 6);
-          if (!activeProfilePhoto) {
-            setActiveProfilePhoto(b64);
+        const updated = [...userPhotos, b64].slice(0, 6);
+        const mainPhoto = activeProfilePhoto || updated[0] || '';
+        setUserPhotos(updated);
+        if (!activeProfilePhoto) {
+          setActiveProfilePhoto(b64);
+        }
+        // Auto-persist uploaded photo immediately so it is never removed automatically
+        updateProfile({
+          photos: updated,
+          profilePhoto: mainPhoto
+        }).then(res => {
+          if (res.success) {
+            setProfileSuccessMsg('Photo uploaded and saved!');
+            setTimeout(() => setProfileSuccessMsg(null), 3000);
           }
-          return updated;
+        }).catch(err => {
+          console.warn('Auto-save photo error:', err);
         });
       }
     } catch (err: any) {
@@ -272,17 +283,31 @@ export const CompanionDashboard: React.FC = () => {
   };
 
   const handleRemovePhoto = (photoToRemove: string) => {
-    setUserPhotos(prev => {
-      const updated = prev.filter(p => p !== photoToRemove);
-      if (activeProfilePhoto === photoToRemove) {
-        setActiveProfilePhoto(updated[0] || '');
-      }
-      return updated;
+    const updated = userPhotos.filter(p => p !== photoToRemove);
+    const mainPhoto = activeProfilePhoto === photoToRemove ? (updated[0] || '') : activeProfilePhoto;
+    setUserPhotos(updated);
+    if (activeProfilePhoto === photoToRemove) {
+      setActiveProfilePhoto(updated[0] || '');
+    }
+    // Auto-persist photo deletion immediately
+    updateProfile({
+      photos: updated,
+      profilePhoto: mainPhoto
+    }).catch(err => {
+      console.warn('Auto-save remove photo error:', err);
     });
   };
 
   const handleSetMainPhoto = (photo: string) => {
     setActiveProfilePhoto(photo);
+    const reordered = [photo, ...userPhotos.filter(p => p !== photo)];
+    setUserPhotos(reordered);
+    updateProfile({
+      profilePhoto: photo,
+      photos: reordered
+    }).catch(err => {
+      console.warn('Auto-save main photo error:', err);
+    });
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {

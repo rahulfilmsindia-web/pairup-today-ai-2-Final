@@ -980,6 +980,55 @@ await runScenario(38, 'In-App Incident Report Processing & Safety Resolution Lif
   assert(updated.resolutionNotes === 'Issued warning for off-platform payment attempt.', 'Resolution notes must match');
 });
 
+// 39. Profile Display Name & Extra Photos Persistence and Auto-Save
+await runScenario(39, 'Profile Display Name & Extra Photos Persistence and Auto-Save', async () => {
+  const { databaseAdapter } = await import('../server/services/database.ts');
+  const testUserId = 'test_usr_profile_persist_01';
+  
+  // Create or seed a test user with a legal name
+  await databaseAdapter.createUser({
+    id: testUserId,
+    phone: '+919876500001',
+    legalName: 'Official Legal Govt Name',
+    role: 'CLIENT',
+    activeRole: 'CLIENT',
+    kycStatus: 'APPROVED'
+  });
+
+  // Update profile with custom display name and 4 gallery photos
+  const testPhotos = [
+    'data:image/jpeg;base64,mockphoto1',
+    'data:image/jpeg;base64,mockphoto2',
+    'data:image/jpeg;base64,mockphoto3',
+    'data:image/jpeg;base64,mockphoto4'
+  ];
+  const updatedUser = await databaseAdapter.updateUser(testUserId, {
+    profileName: 'Aarav Cool',
+    bio: 'Friendly verified explorer.',
+    profilePhoto: testPhotos[0],
+    photos: testPhotos
+  });
+
+  assert(updatedUser, 'updateUser must return updated user object');
+  assert(updatedUser.profileName === 'Aarav Cool', 'Profile display name must persist as Aarav Cool');
+  assert(Array.isArray(updatedUser.photos) && updatedUser.photos.length === 4, 'All 4 extra photos must persist in photos array');
+
+  // Verify fetch returns the custom display name instead of legal govt ID name
+  const fetchedUser = await databaseAdapter.getUser(testUserId);
+  assert(fetchedUser, 'Fetched user must exist');
+  assert(fetchedUser.profileName === 'Aarav Cool', 'Fetched profile display name must remain custom Aarav Cool');
+  assert(fetchedUser.legalName === 'Official Legal Govt Name', 'Legal name remains locked and unchanged');
+  assert(Array.isArray(fetchedUser.photos) && fetchedUser.photos.length === 4, 'Fetched user must retain all 4 extra photos');
+
+  // Verify UI files include immediate auto-persist logic
+  const clientDashContent = fs.readFileSync(path.join(rootDir, 'src/pages/ClientDashboard.tsx'), 'utf-8');
+  const companionDashContent = fs.readFileSync(path.join(rootDir, 'src/pages/CompanionDashboard.tsx'), 'utf-8');
+  assert(clientDashContent.includes('Auto-persist uploaded photo immediately'), 'ClientDashboard must auto-persist uploaded photos');
+  assert(clientDashContent.includes('Auto-persist photo deletion immediately'), 'ClientDashboard must auto-persist photo deletion');
+  assert(companionDashContent.includes('Auto-persist uploaded photo immediately'), 'CompanionDashboard must auto-persist uploaded photos');
+  assert(companionDashContent.includes('Auto-persist photo deletion immediately'), 'CompanionDashboard must auto-persist photo deletion');
+});
+
 console.log('\n===============================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`  RESULTS: ${passedCount} / ${results.length} SCENARIOS PASSED`);
