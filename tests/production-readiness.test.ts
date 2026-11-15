@@ -1029,6 +1029,63 @@ await runScenario(39, 'Profile Display Name & Extra Photos Persistence and Auto-
   assert(companionDashContent.includes('Auto-persist photo deletion immediately'), 'CompanionDashboard must auto-persist photo deletion');
 });
 
+// ─────────────────────────────────────────────────────────
+// SCENARIO 40 — Smart Location Autocomplete (India-wide)
+// ─────────────────────────────────────────────────────────
+await runScenario(40, 'Smart India location autocomplete component and integration', () => {
+  // 40a. Verify LocationAutocomplete component exists
+  const componentPath = path.join(rootDir, 'src/components/LocationAutocomplete.tsx');
+  assert(fs.existsSync(componentPath), 'LocationAutocomplete.tsx component must exist in src/components/');
+
+  const componentSrc = fs.readFileSync(componentPath, 'utf-8');
+
+  // 40b. Must use Nominatim (OpenStreetMap) API restricted to India
+  assert(componentSrc.includes('nominatim.openstreetmap.org'), 'LocationAutocomplete must use Nominatim OpenStreetMap API');
+  assert(componentSrc.includes('countrycodes=IN'), 'Nominatim query must be restricted to India (countrycodes=IN)');
+  assert(componentSrc.includes('addressdetails=1'), 'Nominatim query must include addressdetails for structured addresses');
+
+  // 40c. Must have debouncing to respect Nominatim usage policy
+  assert(componentSrc.includes('debounceTimer') || componentSrc.includes('setTimeout'), 'LocationAutocomplete must debounce API calls');
+  assert(componentSrc.includes('350') || componentSrc.includes('300'), 'Debounce delay must be at least 300ms');
+
+  // 40d. Must have User-Agent header (Nominatim usage policy)
+  assert(componentSrc.includes('User-Agent') || componentSrc.includes('user-agent'), 'Nominatim requests must include User-Agent header');
+
+  // 40e. Must support both city and full modes
+  assert(componentSrc.includes("mode === 'city'") || componentSrc.includes("mode==='city'"), 'Must support city mode for region filter');
+  assert(componentSrc.includes("mode === 'full'") || componentSrc.includes("mode==='full'") || componentSrc.includes("mode: 'full'"), 'Must support full mode for any location type');
+
+  // 40f. Must handle keyboard navigation
+  assert(componentSrc.includes('ArrowDown'), 'Must handle ArrowDown keyboard navigation');
+  assert(componentSrc.includes('ArrowUp'), 'Must handle ArrowUp keyboard navigation');
+  assert(componentSrc.includes("'Escape'") || componentSrc.includes('"Escape"'), 'Must handle Escape key to close dropdown');
+
+  // 40g. ClientDashboard must import and use LocationAutocomplete
+  const clientDashSrc = fs.readFileSync(path.join(rootDir, 'src/pages/ClientDashboard.tsx'), 'utf-8');
+  assert(clientDashSrc.includes("import LocationAutocomplete"), 'ClientDashboard must import LocationAutocomplete');
+
+  // 40h. ClientDashboard must NOT have hardcoded city select dropdowns with old options
+  assert(!clientDashSrc.includes('<option value="Delhi NCR">Delhi NCR</option>'), 'ClientDashboard must not have hardcoded Delhi NCR option — use LocationAutocomplete instead');
+  assert(!clientDashSrc.includes('<option value="Bengaluru">Bengaluru</option>'), 'ClientDashboard must not have hardcoded Bengaluru option — use LocationAutocomplete instead');
+
+  // 40i. Meeting location input in booking modal must use LocationAutocomplete
+  assert(
+    clientDashSrc.includes('meetingLocation') && clientDashSrc.includes('LocationAutocomplete'),
+    'Booking modal meeting location must use LocationAutocomplete component'
+  );
+  // The old plain <input ... meetingLocation ... /> pattern should be replaced
+  assert(
+    !clientDashSrc.includes('type="text"\n                  value={meetingLocation}'),
+    'Old plain text input for meetingLocation should be replaced by LocationAutocomplete'
+  );
+
+  // 40j. Component must free-text allow (no results case)
+  assert(componentSrc.includes('No matching locations') || componentSrc.includes('type freely'), 'Must show free-text fallback message when no results found');
+
+  // 40k. AbortController used to cancel stale requests
+  assert(componentSrc.includes('AbortController'), 'Must use AbortController to cancel in-flight Nominatim requests');
+});
+
 console.log('\n===============================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`  RESULTS: ${passedCount} / ${results.length} SCENARIOS PASSED`);

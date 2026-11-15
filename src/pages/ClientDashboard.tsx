@@ -5,6 +5,7 @@ import { apiFetch } from '../utils/api';
 import { openRazorpayCheckout } from '../utils/razorpay';
 import { PAIRUP_SERVICES, ServiceItem } from '../constants/services';
 import { compressImageFile, compressBase64 } from '../utils/image';
+import LocationAutocomplete from '../components/LocationAutocomplete';
 import { 
   Search, MapPin, Filter, Star, Clock, Calendar, ShieldCheck, 
   AlertCircle, MessageSquare, PhoneCall, CheckCircle, Navigation, 
@@ -1344,19 +1345,13 @@ export const ClientDashboard: React.FC = () => {
               </div>
 
               <div>
-                <select
-                  value={selectedCity}
-                  onChange={e => setSelectedCity(e.target.value)}
-                  className="w-full py-2 px-3 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-amber-400"
-                >
-                  <option value="all">All Indian Cities</option>
-                  <option value="Delhi NCR">Delhi NCR</option>
-                  <option value="Mumbai">Mumbai</option>
-                  <option value="Bengaluru">Bengaluru</option>
-                  <option value="Kolkata">Kolkata</option>
-                  <option value="Hyderabad">Hyderabad</option>
-                  <option value="Pune">Pune</option>
-                </select>
+                <LocationAutocomplete
+                  value={selectedCity === 'all' ? '' : selectedCity}
+                  onChange={val => setSelectedCity(val.trim() === '' ? 'all' : val)}
+                  mode="city"
+                  accentColor="amber"
+                  placeholder="Filter by any city, town or area..."
+                />
               </div>
 
               <button
@@ -1601,17 +1596,13 @@ export const ClientDashboard: React.FC = () => {
 
               <div>
                 <label className="block text-slate-400 mb-1">City Region</label>
-                <select
-                  value={selectedCity}
-                  onChange={e => setSelectedCity(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-200"
-                >
-                  <option value="all">All Regions</option>
-                  <option value="Delhi NCR">Delhi NCR</option>
-                  <option value="Mumbai">Mumbai</option>
-                  <option value="Bengaluru">Bengaluru</option>
-                  <option value="Kolkata">Kolkata</option>
-                </select>
+                <LocationAutocomplete
+                  value={selectedCity === 'all' ? '' : selectedCity}
+                  onChange={val => setSelectedCity(val.trim() === '' ? 'all' : val)}
+                  mode="city"
+                  accentColor="amber"
+                  placeholder="Search any city, town, district..."
+                />
               </div>
             </div>
 
@@ -2377,12 +2368,12 @@ export const ClientDashboard: React.FC = () => {
                 <label className="block text-slate-300 font-semibold mb-1">
                   Public Meeting Location
                 </label>
-                <input
-                  type="text"
+                <LocationAutocomplete
                   value={meetingLocation}
-                  onChange={e => setMeetingLocation(e.target.value)}
-                  placeholder="e.g. Starbucks Cafe, South City Mall"
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                  onChange={setMeetingLocation}
+                  mode="full"
+                  accentColor="amber"
+                  placeholder="e.g. Starbucks Cafe, South City Mall, MG Road..."
                   required
                 />
               </div>
