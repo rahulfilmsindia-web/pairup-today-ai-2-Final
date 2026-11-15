@@ -139,8 +139,7 @@ export async function getPlaceAutocomplete(
       const params = new URLSearchParams({
         input,
         key: GOOGLE_MAPS_API_KEY,
-        components: 'country:IN', // Restrict to India
-        types: 'geocode|establishment'
+        components: 'country:IN', // Restrict to all of India
       });
 
       if (location && radius) {
