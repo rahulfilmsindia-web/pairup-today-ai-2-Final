@@ -412,7 +412,13 @@ function publicAuthUser(user: any) {
       ? user.photos 
       : (inMemory?.photos || (user.profilePhoto ? [user.profilePhoto] : [])),
     bio: user.bio !== undefined ? user.bio : (inMemory?.bio || ''),
-    city: user.city || 'India'
+    city: user.city || 'India',
+    isSuspended: user.isSuspended !== undefined ? !!user.isSuspended : !!inMemory?.isSuspended,
+    suspendedReason: user.suspendedReason || inMemory?.suspendedReason || null,
+    suspendedAt: user.suspendedAt || inMemory?.suspendedAt || null,
+    warningCount: typeof user.warningCount === 'number' ? user.warningCount : (typeof inMemory?.warningCount === 'number' ? inMemory.warningCount : 0),
+    lastWarningReason: user.lastWarningReason || inMemory?.lastWarningReason || null,
+    lastWarningAt: user.lastWarningAt || inMemory?.lastWarningAt || null
   };
 }
 
@@ -1578,6 +1584,17 @@ app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const route = `${req.method} ${apiPath}`;
+    if (user.isSuspended) {
+      if (
+        route === 'POST /api/bookings/create' ||
+        route.startsWith('POST /api/chat/') ||
+        route === 'POST /api/companion/availability/toggle'
+      ) {
+        return res.status(403).json({
+          error: `Your account has been suspended: ${user.suspendedReason || 'Violation of platform guidelines'}. Please contact support.`
+        });
+      }
+    }
     const selfId = user.id;
     if (req.body && typeof req.body === 'object') {
       if ('userId' in req.body) req.body.userId = selfId;
@@ -2877,18 +2894,18 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
       // Send in-app notifications
       try {
         await createAndSendNotification({
-          userId: booking.clientId,
+          userId: finalizedBooking.clientId,
           type: 'BOOKING_CONFIRMED',
           title: 'Booking Confirmed 📅',
-          body: `Your booking #${booking.bookingCode || ''} for ${booking.serviceName || 'Session'} is confirmed.`,
-          data: { type: 'BOOKING', bookingId: booking.id }
+          body: `Your booking #${finalizedBooking.bookingCode || ''} for ${finalizedBooking.serviceName || 'Session'} is confirmed.`,
+          data: { type: 'BOOKING', bookingId: finalizedBooking.id }
         });
         await createAndSendNotification({
-          userId: booking.companionId,
+          userId: finalizedBooking.companionId,
           type: 'BOOKING_CONFIRMED',
           title: 'New Confirmed Booking 💰',
-          body: `Booking #${booking.bookingCode || ''} payment confirmed for ${booking.date} (${booking.durationHours} hrs).`,
-          data: { type: 'BOOKING', bookingId: booking.id }
+          body: `Booking #${finalizedBooking.bookingCode || ''} payment confirmed for ${finalizedBooking.date} (${finalizedBooking.durationHours} hrs).`,
+          data: { type: 'BOOKING', bookingId: finalizedBooking.id }
         });
       } catch (nErr) {
         console.warn('Booking payment notification warning:', nErr);
@@ -3936,6 +3953,76 @@ app.post('/api/chat/:bookingId', async (req: Request, res: Response) => {
   }
 });
 
+// User Incident Report submission (from Secure Chat)
+app.post('/api/reports/submit', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  if (!authUser) return res.status(401).json({ error: 'Authentication required.' });
+
+  const { bookingId, reason, details } = req.body || {};
+  if (!bookingId || typeof bookingId !== 'string') {
+    return res.status(400).json({ error: 'Valid booking ID is required.' });
+  }
+  if (!reason || typeof reason !== 'string' || reason.trim().length < 3) {
+    return res.status(400).json({ error: 'Please select or provide a reason for the report.' });
+  }
+  if (!details || typeof details !== 'string' || details.trim().length < 5) {
+    return res.status(400).json({ error: 'Please describe the incident in detail (at least 5 characters).' });
+  }
+
+  try {
+    const booking = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getBooking(bookingId)
+      : db.bookings[bookingId];
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Associated booking could not be found.' });
+    }
+
+    if (booking.clientId !== authUser.id && booking.companionId !== authUser.id) {
+      return res.status(403).json({ error: 'You are not a participant in this booking.' });
+    }
+
+    const isClient = booking.clientId === authUser.id;
+    const reportedUserId = isClient ? booking.companionId : booking.clientId;
+    const reportedUserName = isClient ? (booking.companionName || 'Companion') : (booking.clientName || 'Client');
+    const reportingUserName = isClient ? (booking.clientName || authUser.legalName || authUser.profileName || 'Client') : (booking.companionName || authUser.legalName || authUser.profileName || 'Companion');
+
+    let reportedUser: any = null;
+    try {
+      reportedUser = await databaseAdapter.getUser(reportedUserId) || db.users?.[reportedUserId];
+    } catch {}
+
+    const report = await databaseAdapter.createIncidentReport({
+      bookingId,
+      bookingCode: booking.bookingCode || bookingId.slice(0, 8),
+      reportingUserId: authUser.id,
+      reportingUserName,
+      reportingUserPhone: authUser.phone || '',
+      reportingUserRole: isClient ? 'CLIENT' : 'COMPANION',
+      reportedUserId,
+      reportedUserName,
+      reportedUserPhone: reportedUser?.phone || '',
+      reportedUserRole: isClient ? 'COMPANION' : 'CLIENT',
+      reason: reason.trim(),
+      details: details.trim(),
+      status: 'PENDING_REVIEW'
+    });
+
+    await databaseAdapter.createAuditLog({
+      action: 'INCIDENT_REPORT_SUBMITTED',
+      entityType: 'incident_report',
+      entityId: report.id,
+      userId: authUser.id,
+      details: `Report filed by ${reportingUserName} against ${reportedUserName}: ${reason.trim()}`
+    }).catch(() => null);
+
+    return res.json({ success: true, report });
+  } catch (error: any) {
+    console.error('Failed to submit incident report:', error);
+    return res.status(500).json({ error: 'Could not submit report at this time. Please contact support.' });
+  }
+});
+
 // -------------------------------------------------------------
 // SEPARATE ADMIN PANEL & MFA AUTHENTICATION
 // -------------------------------------------------------------
@@ -4623,7 +4710,13 @@ app.get('/api/admin/clients', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', 'SUP
           kycStatus: u.kycStatus,
           city: u.city,
           createdAt: u.createdAt,
-          totalBookings: userBookings.length
+          totalBookings: userBookings.length,
+          isSuspended: !!u.isSuspended,
+          suspendedReason: u.suspendedReason || null,
+          suspendedAt: u.suspendedAt || null,
+          warningCount: u.warningCount || 0,
+          lastWarningReason: u.lastWarningReason || null,
+          lastWarningAt: u.lastWarningAt || null
         };
       });
     return res.json({ clients });
@@ -4689,6 +4782,12 @@ app.get('/api/admin/companions', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', '
             totalBookings: profile?.totalBookings || 0,
             lockedBalancePaise: wallet?.lockedSettlementBalancePaise || 0,
             totalSettledPaise: wallet?.totalSettledPaise || 0,
+            isSuspended: !!u.isSuspended,
+            suspendedReason: u.suspendedReason || null,
+            suspendedAt: u.suspendedAt || null,
+            warningCount: u.warningCount || 0,
+            lastWarningReason: u.lastWarningReason || null,
+            lastWarningAt: u.lastWarningAt || null,
             createdAt: u.createdAt
           };
         })
@@ -4697,6 +4796,155 @@ app.get('/api/admin/companions', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', '
   } catch (error) {
     console.error('Failed to list companions.', error);
     return res.status(503).json({ error: 'Companion listing is temporarily unavailable.' });
+  }
+});
+
+// Admin Incident Reports
+app.get('/api/admin/reports', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', 'SUPPORT_ADMIN', 'AUDITOR'), async (req: Request, res: Response) => {
+  try {
+    const reports = await databaseAdapter.listIncidentReports();
+    return res.json({ reports });
+  } catch (error) {
+    console.error('Failed to list incident reports:', error);
+    return res.status(503).json({ error: 'Incident reports are temporarily unavailable.' });
+  }
+});
+
+// Admin Dismiss Incident Report
+app.post('/api/admin/reports/:reportId/dismiss', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', 'SUPPORT_ADMIN'), async (req: Request, res: Response) => {
+  const { reportId } = req.params;
+  const admin = (req as AuthenticatedRequest).adminUser;
+  const { notes } = req.body || {};
+
+  try {
+    const updated = await databaseAdapter.updateIncidentReport(reportId, {
+      status: 'DISMISSED',
+      resolutionNotes: notes || 'Dismissed by administrator after review.',
+      resolvedAt: new Date().toISOString(),
+      resolvedByAdminId: admin?.id
+    });
+
+    await databaseAdapter.createAuditLog({
+      adminUserId: admin?.id,
+      action: 'INCIDENT_REPORT_DISMISSED',
+      entityType: 'incident_report',
+      entityId: reportId,
+      details: `Incident report dismissed by admin ${admin?.name || admin?.email}`
+    }).catch(() => null);
+
+    return res.json({ success: true, report: updated });
+  } catch (error) {
+    console.error('Failed to dismiss incident report:', error);
+    return res.status(500).json({ error: 'Could not dismiss incident report.' });
+  }
+});
+
+// Admin User Moderation (Warn / Suspend / Unsuspend)
+app.post('/api/admin/users/:userId/moderation', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', 'SUPPORT_ADMIN'), async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const admin = (req as AuthenticatedRequest).adminUser;
+  const { action, reason, reportId } = req.body || {};
+
+  if (!['WARN', 'SUSPEND', 'UNSUSPEND'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid moderation action. Must be WARN, SUSPEND, or UNSUSPEND.' });
+  }
+  if (action !== 'UNSUSPEND' && (!reason || typeof reason !== 'string' || reason.trim().length < 3)) {
+    return res.status(400).json({ error: 'A specific reason is required for moderation action.' });
+  }
+
+  try {
+    const user = await databaseAdapter.getUser(userId) || db.users?.[userId];
+    if (!user) {
+      return res.status(404).json({ error: 'User account not found.' });
+    }
+
+    const cleanReason = (reason || '').trim();
+    let updates: any = {};
+
+    if (action === 'WARN') {
+      const currentWarnings = Number(user.warningCount || 0);
+      updates = {
+        warningCount: currentWarnings + 1,
+        lastWarningReason: cleanReason,
+        lastWarningAt: new Date().toISOString()
+      };
+
+      await databaseAdapter.createNotification({
+        userId,
+        type: 'ACCOUNT_WARNING',
+        title: '⚠️ Account Warning Received',
+        body: `Administrative Warning: ${cleanReason}. Continued policy violations may result in account suspension.`
+      }).catch(() => null);
+
+      if (reportId) {
+        await databaseAdapter.updateIncidentReport(reportId, {
+          status: 'WARNED',
+          resolutionNotes: `Warning issued by admin ${admin?.name || admin?.email}: ${cleanReason}`,
+          resolvedAt: new Date().toISOString(),
+          resolvedByAdminId: admin?.id
+        }).catch(() => null);
+      }
+    } else if (action === 'SUSPEND') {
+      updates = {
+        isSuspended: true,
+        suspendedReason: cleanReason,
+        suspendedAt: new Date().toISOString()
+      };
+
+      // Also deactivate companion availability if companion
+      await databaseAdapter.updateCompanionProfile(userId, {
+        isLive: false,
+        isPaused: true
+      }).catch(() => null);
+
+      await databaseAdapter.createNotification({
+        userId,
+        type: 'ACCOUNT_SUSPENDED',
+        title: '🚫 Account Suspended',
+        body: `Your account has been suspended: ${cleanReason}. Booking privileges and companion visibility are revoked. Contact support for assistance.`
+      }).catch(() => null);
+
+      if (reportId) {
+        await databaseAdapter.updateIncidentReport(reportId, {
+          status: 'SUSPENDED',
+          resolutionNotes: `Account suspended by admin ${admin?.name || admin?.email}: ${cleanReason}`,
+          resolvedAt: new Date().toISOString(),
+          resolvedByAdminId: admin?.id
+        }).catch(() => null);
+      }
+    } else if (action === 'UNSUSPEND') {
+      updates = {
+        isSuspended: false,
+        suspendedReason: null,
+        suspendedAt: null
+      };
+
+      await databaseAdapter.createNotification({
+        userId,
+        type: 'ACCOUNT_UNSUSPENDED',
+        title: '✅ Account Restored',
+        body: 'Your account suspension has been lifted. You can now resume normal platform activities.'
+      }).catch(() => null);
+    }
+
+    const updatedUser = await databaseAdapter.updateUser(userId, updates);
+    if (db.users && db.users[userId]) {
+      db.users[userId] = { ...db.users[userId], ...updates };
+      saveDB(db);
+    }
+
+    await databaseAdapter.createAuditLog({
+      adminUserId: admin?.id,
+      action: `USER_${action}`,
+      entityType: 'user',
+      entityId: userId,
+      details: `${action} applied to user ${user.legalName || user.phone} by admin ${admin?.name || admin?.email}. Reason: ${cleanReason || 'Restored'}`
+    }).catch(() => null);
+
+    return res.json({ success: true, action, user: publicAuthUser(updatedUser || { ...user, ...updates }) });
+  } catch (error) {
+    console.error('Failed to apply user moderation action:', error);
+    return res.status(500).json({ error: 'Could not apply moderation action.' });
   }
 });
 

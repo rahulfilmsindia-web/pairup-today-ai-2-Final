@@ -932,6 +932,54 @@ await runScenario(36, 'Fail-Safe Rejection of JSON Fallback in Production Mode',
   assert(supabaseServiceContent.includes("placeholder-project.supabase.co"), 'Safe offline test placeholder provided for development and test harnesses');
 });
 
+// 37. Admin User Moderation (Warn / Suspend / Unsuspend) & Suspension Enforcements
+await runScenario(37, 'Admin User Moderation (Warn / Suspend / Unsuspend) & Suspension Enforcements', () => {
+  const serverContent = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+  assert(serverContent.includes("app.post('/api/admin/users/:userId/moderation'"), 'Admin user moderation endpoint is mounted');
+  assert(serverContent.includes("if (user.isSuspended)"), 'Suspended users are intercepted in authentication middleware');
+  assert(serverContent.includes("route === 'POST /api/bookings/create'"), 'Suspended users are blocked from creating bookings');
+  assert(serverContent.includes("route.startsWith('POST /api/chat/')"), 'Suspended users are blocked from sending chat messages');
+  assert(serverContent.includes("route === 'POST /api/companion/availability/toggle'"), 'Suspended users are blocked from toggling companion availability');
+});
+
+// 38. In-App Incident Report Processing & Safety Resolution Lifecycle
+await runScenario(38, 'In-App Incident Report Processing & Safety Resolution Lifecycle', async () => {
+  const serverContent = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+  assert(serverContent.includes("app.post('/api/reports/submit'"), 'Secure chat report submission endpoint is mounted');
+  assert(serverContent.includes("app.get('/api/admin/reports'"), 'Admin incident reports listing endpoint is mounted');
+  assert(serverContent.includes("app.post('/api/admin/reports/:reportId/dismiss'"), 'Admin incident report dismissal endpoint is mounted');
+
+  // Verify adapter methods
+  const { databaseAdapter } = await import('../server/services/database.ts');
+  const report = await databaseAdapter.createIncidentReport({
+    bookingId: 'test_book_999',
+    bookingCode: 'TST999',
+    reportingUserId: 'usr_client_01',
+    reportingUserName: 'Test Client',
+    reportingUserRole: 'CLIENT',
+    reportedUserId: 'usr_comp_02',
+    reportedUserName: 'Test Companion',
+    reportedUserRole: 'COMPANION',
+    reason: 'Inappropriate behavior',
+    details: 'Off-platform payment requested during session.'
+  });
+
+  assert(report && report.id, 'Report must be created with unique ID');
+  assert(report.status === 'PENDING_REVIEW', 'Initial report status must be PENDING_REVIEW');
+
+  const allReports = await databaseAdapter.listIncidentReports();
+  const found = allReports.find((r: any) => r.id === report.id);
+  assert(found, 'Created report must be present in incident reports list');
+  assert(found.reason === 'Inappropriate behavior', 'Report reason must match');
+
+  const updated = await databaseAdapter.updateIncidentReport(report.id, {
+    status: 'WARNED',
+    resolutionNotes: 'Issued warning for off-platform payment attempt.'
+  });
+  assert(updated.status === 'WARNED', 'Report status must update to WARNED');
+  assert(updated.resolutionNotes === 'Issued warning for off-platform payment attempt.', 'Resolution notes must match');
+});
+
 console.log('\n===============================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`  RESULTS: ${passedCount} / ${results.length} SCENARIOS PASSED`);

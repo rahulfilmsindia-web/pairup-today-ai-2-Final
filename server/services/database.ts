@@ -99,6 +99,7 @@ interface DBState {
   bankVerifications?: Record<string, any>;
   userLocations?: Record<string, any>;
   userPresence?: Record<string, any>;
+  incidentReports?: Record<string, any>;
   otpStore: Record<string, any>;
   adminMfaStore: Record<string, any>;
   auditLogs: any[];
@@ -296,6 +297,11 @@ export interface DatabaseAdapter {
   completeAdminSensitiveMfaDelivery(adminUserId: string, action: string, sent: boolean): Promise<boolean>;
   verifyAdminSensitiveMfa(adminUserId: string, action: string, otpHash: string): Promise<string>;
   consumeAdminSensitiveMfa(adminUserId: string, action: string): Promise<boolean>;
+
+  // Incident Reports & Safety
+  createIncidentReport(report: any): Promise<any>;
+  listIncidentReports(filters?: any): Promise<any[]>;
+  updateIncidentReport(id: string, updates: any): Promise<any>;
 }
 
 export interface OtpReservation {
@@ -968,6 +974,35 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     return db.auditLogs || [];
   }
 
+  async createIncidentReport(report: any): Promise<any> {
+    const db = this.getDB();
+    db.incidentReports ||= {};
+    const item = {
+      ...report,
+      id: report.id || `report_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      status: report.status || 'PENDING_REVIEW',
+      createdAt: report.createdAt || new Date().toISOString()
+    };
+    db.incidentReports[item.id] = item;
+    this.saveDB(db);
+    return item;
+  }
+
+  async listIncidentReports(filters?: any): Promise<any[]> {
+    const db = this.getDB();
+    const list = Object.values(db.incidentReports || {});
+    return list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async updateIncidentReport(id: string, updates: any): Promise<any> {
+    const db = this.getDB();
+    db.incidentReports ||= {};
+    if (!db.incidentReports[id]) return null;
+    db.incidentReports[id] = { ...db.incidentReports[id], ...updates, updatedAt: new Date().toISOString() };
+    this.saveDB(db);
+    return db.incidentReports[id];
+  }
+
   async createNotification(notification: any): Promise<any> {
     const db = this.getDB();
     db.notifications ||= {};
@@ -1401,10 +1436,22 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   private mapUser(user: any): any {
     if (!user) return null;
     let fallbackProfileName: string | undefined;
+    let fallbackSuspended: boolean | undefined;
+    let fallbackSuspendedReason: string | undefined;
+    let fallbackSuspendedAt: string | undefined;
+    let fallbackWarningCount: number | undefined;
+    let fallbackLastWarningReason: string | undefined;
+    let fallbackLastWarningAt: string | undefined;
     if (typeof user.address === 'string' && user.address.startsWith('__META__:')) {
       try {
         const meta = JSON.parse(user.address.slice(9));
         if (meta?.profileName) fallbackProfileName = meta.profileName;
+        if (meta?.isSuspended !== undefined) fallbackSuspended = meta.isSuspended;
+        if (meta?.suspendedReason) fallbackSuspendedReason = meta.suspendedReason;
+        if (meta?.suspendedAt) fallbackSuspendedAt = meta.suspendedAt;
+        if (meta?.warningCount !== undefined) fallbackWarningCount = meta.warningCount;
+        if (meta?.lastWarningReason) fallbackLastWarningReason = meta.lastWarningReason;
+        if (meta?.lastWarningAt) fallbackLastWarningAt = meta.lastWarningAt;
       } catch {}
     }
     const resolvedProfileName = user.profile_name || user.profileName || fallbackProfileName || user.legal_name || 'User';
@@ -1428,6 +1475,12 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       city: user.city,
       state: user.state,
       address: typeof user.address === 'string' && user.address.startsWith('__META__:') ? '' : user.address,
+      isSuspended: user.is_suspended !== undefined ? !!user.is_suspended : (user.isSuspended !== undefined ? !!user.isSuspended : !!fallbackSuspended),
+      suspendedReason: user.suspended_reason || user.suspendedReason || fallbackSuspendedReason,
+      suspendedAt: user.suspended_at || user.suspendedAt || fallbackSuspendedAt,
+      warningCount: typeof user.warning_count === 'number' ? user.warning_count : (typeof user.warningCount === 'number' ? user.warningCount : (fallbackWarningCount || 0)),
+      lastWarningReason: user.last_warning_reason || user.lastWarningReason || fallbackLastWarningReason,
+      lastWarningAt: user.last_warning_at || user.lastWarningAt || fallbackLastWarningAt,
       createdAt: user.created_at
     };
   }
@@ -1452,6 +1505,12 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       city: 'city',
       state: 'state',
       address: 'address',
+      isSuspended: 'is_suspended',
+      suspendedReason: 'suspended_reason',
+      suspendedAt: 'suspended_at',
+      warningCount: 'warning_count',
+      lastWarningReason: 'last_warning_reason',
+      lastWarningAt: 'last_warning_at',
       createdAt: 'created_at',
       passwordHash: 'password_hash'
     };
@@ -1461,35 +1520,62 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
         rowUpdates[columnNames[key]] = value;
       }
     }
-    // Reliable persistence fallback: if profileName is provided, also embed in address as metadata
-    if (updates.profileName && !updates.address) {
-      rowUpdates['address'] = '__META__:' + JSON.stringify({ profileName: updates.profileName });
+    // Reliable persistence fallback: embed profileName and moderation metadata in address
+    const metaUpdates: Record<string, any> = {};
+    if (updates.profileName) metaUpdates.profileName = updates.profileName;
+    if (updates.isSuspended !== undefined) metaUpdates.isSuspended = updates.isSuspended;
+    if (updates.suspendedReason !== undefined) metaUpdates.suspendedReason = updates.suspendedReason;
+    if (updates.suspendedAt !== undefined) metaUpdates.suspendedAt = updates.suspendedAt;
+    if (updates.warningCount !== undefined) metaUpdates.warningCount = updates.warningCount;
+    if (updates.lastWarningReason !== undefined) metaUpdates.lastWarningReason = updates.lastWarningReason;
+    if (updates.lastWarningAt !== undefined) metaUpdates.lastWarningAt = updates.lastWarningAt;
+
+    if (Object.keys(metaUpdates).length > 0 && !updates.address) {
+      rowUpdates['address'] = '__META__:' + JSON.stringify(metaUpdates);
     }
 
     try {
       const { data, error } = await db.users().update(rowUpdates).eq('id', id).select().maybeSingle();
       if (error) {
-        // If profile_name column does not exist yet in Supabase users table, safely retry without it
+        // If newer columns do not exist yet in Supabase users table, safely retry without them
         if (error.message?.includes('profile_name') || error.code === '42703' || String(error.message).includes('column')) {
           const fallbackUpdates = { ...rowUpdates };
           delete fallbackUpdates.profile_name;
+          delete fallbackUpdates.is_suspended;
+          delete fallbackUpdates.suspended_reason;
+          delete fallbackUpdates.suspended_at;
+          delete fallbackUpdates.warning_count;
+          delete fallbackUpdates.last_warning_reason;
+          delete fallbackUpdates.last_warning_at;
           const retry = await db.users().update(fallbackUpdates).eq('id', id).select().maybeSingle();
           if (retry.error) {
             console.warn('Supabase updateUser fallback error:', retry.error.message);
           }
           const userObj = this.mapUser(retry.data || { id, ...updates });
           if (updates.profileName) userObj.profileName = updates.profileName;
+          if (updates.isSuspended !== undefined) userObj.isSuspended = updates.isSuspended;
+          if (updates.suspendedReason !== undefined) userObj.suspendedReason = updates.suspendedReason;
+          if (updates.warningCount !== undefined) userObj.warningCount = updates.warningCount;
+          if (updates.lastWarningReason !== undefined) userObj.lastWarningReason = updates.lastWarningReason;
           return userObj;
         }
         console.warn('Supabase updateUser error:', error.message);
       }
       const userObj = this.mapUser(data || { id, ...updates });
       if (updates.profileName) userObj.profileName = updates.profileName;
+      if (updates.isSuspended !== undefined) userObj.isSuspended = updates.isSuspended;
+      if (updates.suspendedReason !== undefined) userObj.suspendedReason = updates.suspendedReason;
+      if (updates.warningCount !== undefined) userObj.warningCount = updates.warningCount;
+      if (updates.lastWarningReason !== undefined) userObj.lastWarningReason = updates.lastWarningReason;
       return userObj;
     } catch (err: any) {
       console.warn('Supabase updateUser exception:', err.message);
       const userObj = this.mapUser({ id, ...updates });
       if (updates.profileName) userObj.profileName = updates.profileName;
+      if (updates.isSuspended !== undefined) userObj.isSuspended = updates.isSuspended;
+      if (updates.suspendedReason !== undefined) userObj.suspendedReason = updates.suspendedReason;
+      if (updates.warningCount !== undefined) userObj.warningCount = updates.warningCount;
+      if (updates.lastWarningReason !== undefined) userObj.lastWarningReason = updates.lastWarningReason;
       return userObj;
     }
   }
@@ -2745,6 +2831,67 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       return data;
     }
     throw new Error('Supabase returned an invalid administrator MFA verification response.');
+  }
+
+  async createIncidentReport(report: any): Promise<any> {
+    const item = {
+      ...report,
+      id: report.id || `report_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      status: report.status || 'PENDING_REVIEW',
+      createdAt: report.createdAt || new Date().toISOString()
+    };
+    try {
+      await db.auditLogs().insert({
+        action: 'INCIDENT_REPORT',
+        entity_type: 'incident_report',
+        entity_id: uuidOrUndefined(item.bookingId) || null,
+        details: item
+      });
+    } catch (e: any) {
+      console.warn('Supabase createIncidentReport audit log warning:', e.message);
+    }
+    return item;
+  }
+
+  async listIncidentReports(filters?: any): Promise<any[]> {
+    try {
+      const { data, error } = await db.auditLogs()
+        .select('*')
+        .eq('action', 'INCIDENT_REPORT')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const reports = (data || []).map((row: any) => {
+        const details = row.details || {};
+        return {
+          id: details.id || row.id,
+          ...details,
+          createdAt: details.createdAt || row.created_at
+        };
+      });
+      return reports;
+    } catch (e: any) {
+      console.warn('Supabase listIncidentReports error:', e.message);
+      return [];
+    }
+  }
+
+  async updateIncidentReport(id: string, updates: any): Promise<any> {
+    try {
+      const reports = await this.listIncidentReports();
+      const existing = reports.find(r => r.id === id);
+      if (!existing) return null;
+      const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+      await db.auditLogs().insert({
+        action: 'INCIDENT_REPORT_UPDATE',
+        entity_type: 'incident_report',
+        entity_id: uuidOrUndefined(existing.bookingId) || null,
+        details: updated
+      });
+      return updated;
+    } catch (e: any) {
+      console.warn('Supabase updateIncidentReport error:', e.message);
+      return null;
+    }
   }
 
 }

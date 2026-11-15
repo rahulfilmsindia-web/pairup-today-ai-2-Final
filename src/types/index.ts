@@ -37,6 +37,33 @@ export interface User {
   bio?: string;
   photos?: string[];
   city?: string;
+  isSuspended?: boolean;
+  suspendedReason?: string;
+  suspendedAt?: string;
+  warningCount?: number;
+  lastWarningReason?: string;
+  lastWarningAt?: string;
+  createdAt: string;
+}
+
+export interface IncidentReport {
+  id: string;
+  bookingId: string;
+  bookingCode?: string;
+  reportingUserId: string;
+  reportingUserName: string;
+  reportingUserPhone?: string;
+  reportingUserRole: string;
+  reportedUserId: string;
+  reportedUserName: string;
+  reportedUserPhone?: string;
+  reportedUserRole: string;
+  reason: string;
+  details: string;
+  status: 'PENDING_REVIEW' | 'WARNED' | 'SUSPENDED' | 'DISMISSED' | 'RESOLVED';
+  resolutionNotes?: string;
+  resolvedAt?: string;
+  resolvedByAdminId?: string;
   createdAt: string;
 }
 

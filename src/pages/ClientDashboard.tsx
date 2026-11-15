@@ -11,7 +11,7 @@ import {
   CreditCard, KeyRound, AlertTriangle, ChevronRight, UserCheck, X,
   Bell, Settings, LifeBuoy, LogOut, Heart, Sparkles, User, FileText,
   DollarSign, Compass, CheckCircle2, Sliders, Shield, Eye, ChevronLeft,
-  CalendarCheck, Upload, Lock, Trash2, Camera
+  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert
 } from 'lucide-react';
 
 export const ClientDashboard: React.FC = () => {
@@ -214,6 +214,66 @@ export const ClientDashboard: React.FC = () => {
   const [daLoading, setDaLoading] = useState(false);
   const [daMsg, setDaMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [daCountdown, setDaCountdown] = useState(0);
+
+  // Incident Report state (from Secure Chat)
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportBooking, setReportBooking] = useState<any | null>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportFeedback, setReportFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const openReportModal = (booking: any) => {
+    setReportBooking(booking);
+    setReportReason('');
+    setReportDetails('');
+    setReportFeedback(null);
+    setReportModalOpen(true);
+  };
+
+  const handleSubmitReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportBooking) return;
+    if (!reportReason) {
+      setReportFeedback({ type: 'error', message: 'Please select a reason for the report.' });
+      return;
+    }
+    if (!reportDetails || reportDetails.trim().length < 5) {
+      setReportFeedback({ type: 'error', message: 'Please provide details of the incident (at least 5 characters).' });
+      return;
+    }
+    setReportLoading(true);
+    setReportFeedback(null);
+    try {
+      const res = await apiFetch('/api/reports/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: reportBooking.id,
+          reason: reportReason,
+          details: reportDetails.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit report.');
+      }
+      setReportFeedback({
+        type: 'success',
+        message: 'Your report has been submitted to the platform safety team. We will review this promptly and take necessary action.'
+      });
+      setTimeout(() => {
+        setReportModalOpen(false);
+        setReportFeedback(null);
+        setReportReason('');
+        setReportDetails('');
+      }, 2500);
+    } catch (err: any) {
+      setReportFeedback({ type: 'error', message: err.message || 'Could not submit report.' });
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   // Countdown timers
   useEffect(() => {
@@ -586,6 +646,46 @@ export const ClientDashboard: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Persistent Account Suspension Alert */}
+        {user?.isSuspended && (
+          <div className="p-4 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-200 flex items-start gap-3 shadow-lg shadow-rose-950/60 animate-fade-in">
+            <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0 mt-0.5">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm text-rose-300">
+                Account Suspended by Administration
+              </h4>
+              <p className="text-xs text-rose-200 font-medium">
+                Reason: {user.suspendedReason || 'Terms of service violation'}.
+              </p>
+              <p className="text-[11px] text-slate-300">
+                New bookings, companion services, and messaging are temporarily restricted. Please contact customer support for appeal.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Persistent Account Warning Alert */}
+        {Boolean(!user?.isSuspended && user?.warningCount && user.warningCount > 0) && (
+          <div className="p-4 rounded-2xl bg-amber-950/60 border border-amber-500/50 text-amber-200 flex items-start gap-3 shadow-lg shadow-amber-950/50 animate-fade-in">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm text-amber-300">
+                Official Account Warning #{user?.warningCount}
+              </h4>
+              <p className="text-xs text-amber-200 font-medium">
+                Notice: {user?.lastWarningReason || 'Policy compliance reminder'}.
+              </p>
+              <p className="text-[11px] text-slate-300">
+                Please maintain professional and respectful behavior. Repeated violations will result in account suspension.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Persistent KYC Action Required Banner if rejected */}
         {(user?.kycStatus === 'REJECTED' || user?.kycRejectionReason) && (
@@ -2295,10 +2395,10 @@ export const ClientDashboard: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={bookingInProgress}
+                disabled={bookingInProgress || user?.isSuspended}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] disabled:opacity-50"
               >
-                {bookingInProgress ? 'Preparing secure checkout...' : 'Continue to Razorpay Checkout'}
+                {user?.isSuspended ? 'Account Suspended - Booking Disabled' : (bookingInProgress ? 'Preparing secure checkout...' : 'Continue to Razorpay Checkout')}
               </button>
 
               <p className="text-[10px] text-center text-slate-500">
@@ -2324,12 +2424,23 @@ export const ClientDashboard: React.FC = () => {
                   Encrypted Session · Booking {activeChatBooking.bookingCode}
                 </p>
               </div>
-              <button
-                onClick={() => setActiveChatBooking(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openReportModal(activeChatBooking)}
+                  className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title="Report incident to Admin"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Report Us</span>
+                </button>
+                <button
+                  onClick={() => setActiveChatBooking(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Messages Body */}
@@ -2362,22 +2473,132 @@ export const ClientDashboard: React.FC = () => {
             </div>
 
             {/* Input Form */}
-            <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
-              <input
-                type="text"
-                value={newChatText}
-                onChange={e => setNewChatText(e.target.value)}
-                placeholder="Type secure message..."
-                className="flex-1 px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-amber-400"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-slate-950 rounded-xl font-bold text-xs"
-              >
-                Send
-              </button>
-            </form>
+            {user?.isSuspended ? (
+              <div className="p-3 bg-slate-950 border-t border-slate-800 text-center text-xs text-rose-400 font-medium">
+                🚫 Your account is suspended. Messaging has been disabled.
+              </div>
+            ) : (
+              <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
+                <input
+                  type="text"
+                  value={newChatText}
+                  onChange={e => setNewChatText(e.target.value)}
+                  placeholder="Type secure message..."
+                  className="flex-1 px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-slate-950 rounded-xl font-bold text-xs cursor-pointer"
+                >
+                  Send
+                </button>
+              </form>
+            )}
 
+          </div>
+        </div>
+      )}
+
+      {/* REPORT US MODAL */}
+      {reportModalOpen && reportBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 text-slate-100 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-400" />
+                <h3 className="text-sm font-bold text-slate-100">
+                  Report Us · Incident Report
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReportModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+              <div>Booking Code: <strong className="text-amber-400">#{reportBooking.bookingCode}</strong></div>
+              <div>Reported Party: <strong className="text-slate-200">{reportBooking.companionName || 'Companion'}</strong></div>
+              <p className="text-[11px] text-slate-400 pt-1">
+                Your report is confidential and delivered straight to the Platform Safety & Admin Desk.
+              </p>
+            </div>
+
+            {reportFeedback && (
+              <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                reportFeedback.type === 'success'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+              }`}>
+                {reportFeedback.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                <span>{reportFeedback.message}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitReport} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1.5">
+                  Select Reason *
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    'Inappropriate behavior / misconduct',
+                    'Demand for off-platform payment',
+                    'Safety or comfort rule violation',
+                    'Abusive or threatening language',
+                    'Did not arrive / Misleading profile',
+                    'Other platform policy breach'
+                  ].map(reason => (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={() => setReportReason(reason)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] transition cursor-pointer ${
+                        reportReason === reason
+                          ? 'bg-rose-500 text-white font-bold shadow'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Describe what happened *
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={reportDetails}
+                  onChange={e => setReportDetails(e.target.value)}
+                  placeholder="Please describe the incident in detail so our safety admins can investigate..."
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-rose-400 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setReportModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reportLoading || !reportReason || !reportDetails.trim()}
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition disabled:opacity-50 cursor-pointer shadow-md shadow-rose-600/30"
+                >
+                  {reportLoading ? 'Sending Report...' : 'Submit Incident Report'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

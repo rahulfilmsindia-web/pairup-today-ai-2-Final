@@ -30,9 +30,10 @@ export const AdminPortal: React.FC = () => {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // 16 Admin Modules (Support Center added)
+  // 17 Admin Modules (Reports & Safety added)
   type AdminModule =
     | 'overview'
+    | 'reports'
     | 'clients'
     | 'companions'
     | 'client-kyc'
@@ -53,6 +54,23 @@ export const AdminPortal: React.FC = () => {
 
   // Overview stats
   const [stats, setStats] = useState<any | null>(null);
+
+  // Incident Reports & Safety
+  const [reportsList, setReportsList] = useState<any[]>([]);
+  const [reportFilter, setReportFilter] = useState<'ALL' | 'PENDING_REVIEW' | 'WARNED' | 'SUSPENDED' | 'DISMISSED'>('ALL');
+
+  // User Moderation Modal
+  const [moderationModal, setModerationModal] = useState<{
+    open: boolean;
+    user: { id: string; name: string; phone?: string; role?: string; isSuspended?: boolean; warningCount?: number };
+    defaultAction?: 'WARN' | 'SUSPEND' | 'UNSUSPEND';
+    reportId?: string;
+    reportContext?: string;
+  } | null>(null);
+  const [moderationAction, setModerationAction] = useState<'WARN' | 'SUSPEND' | 'UNSUSPEND'>('WARN');
+  const [moderationReason, setModerationReason] = useState('');
+  const [moderationLoading, setModerationLoading] = useState(false);
+  const [moderationFeedback, setModerationFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // KYC lists
   const [clientKycs, setClientKycs] = useState<any[]>([]);
@@ -129,7 +147,7 @@ export const AdminPortal: React.FC = () => {
 
       const [
         overviewData, clientsKycData, compsKycData, finData, staffData, logsData,
-        clientsData, compsData, memsData, bksData, paysData, supportData
+        clientsData, compsData, memsData, bksData, paysData, supportData, reportsData
       ] = await Promise.all([
         fetchJson('/api/admin/overview'),
         fetchJson('/api/admin/kyc/list?userType=CLIENT'),
@@ -142,7 +160,8 @@ export const AdminPortal: React.FC = () => {
         fetchJson('/api/admin/memberships'),
         fetchJson('/api/admin/bookings'),
         fetchJson('/api/admin/payments'),
-        fetchJson('/api/admin/support/conversations')
+        fetchJson('/api/admin/support/conversations'),
+        fetchJson('/api/admin/reports')
       ]);
 
       if (overviewData) setStats(overviewData);
@@ -157,6 +176,7 @@ export const AdminPortal: React.FC = () => {
       if (bksData?.bookings) setBookingsList(bksData.bookings);
       if (paysData?.payments) setPaymentsList(paysData.payments);
       if (supportData?.conversations) setSupportConversations(supportData.conversations);
+      if (reportsData?.reports) setReportsList(reportsData.reports);
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastSyncedTime(timeStr);
@@ -252,6 +272,91 @@ export const AdminPortal: React.FC = () => {
       }
     } catch (err) {
       console.error('Error deciding KYC', err);
+    }
+  };
+
+  // Open Moderation Modal
+  const openModerationModal = (
+    user: { id: string; name: string; phone?: string; role?: string; isSuspended?: boolean; warningCount?: number },
+    defaultAction: 'WARN' | 'SUSPEND' | 'UNSUSPEND' = 'WARN',
+    reportId?: string,
+    reportContext?: string
+  ) => {
+    setModerationModal({
+      open: true,
+      user,
+      defaultAction,
+      reportId,
+      reportContext
+    });
+    setModerationAction(defaultAction);
+    setModerationReason('');
+    setModerationFeedback(null);
+  };
+
+  // Submit Moderation Action (Warn, Suspend, Unsuspend)
+  const handleUserModeration = async () => {
+    if (!moderationModal) return;
+    if (moderationAction !== 'UNSUSPEND' && (!moderationReason || moderationReason.trim().length < 3)) {
+      setModerationFeedback({ type: 'error', message: 'Please provide or select a reason for this moderation action.' });
+      return;
+    }
+    setModerationLoading(true);
+    setModerationFeedback(null);
+    try {
+      const res = await apiFetch(`/api/admin/users/${moderationModal.user.id}/moderation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          action: moderationAction,
+          reason: moderationReason.trim(),
+          reportId: moderationModal.reportId
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to apply moderation action.');
+      }
+      setModerationFeedback({
+        type: 'success',
+        message: moderationAction === 'WARN'
+          ? `Warning #${data.user?.warningCount || '1'} successfully issued to ${moderationModal.user.name}.`
+          : moderationAction === 'SUSPEND'
+            ? `Account of ${moderationModal.user.name} has been suspended.`
+            : `Suspension lifted for ${moderationModal.user.name}. Account is now active.`
+      });
+      loadAdminData();
+      setTimeout(() => {
+        setModerationModal(null);
+        setModerationFeedback(null);
+        setModerationReason('');
+      }, 1400);
+    } catch (err: any) {
+      setModerationFeedback({ type: 'error', message: err.message || 'Error executing action.' });
+    } finally {
+      setModerationLoading(false);
+    }
+  };
+
+  // Dismiss Incident Report
+  const handleDismissReport = async (reportId: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/reports/${reportId}/dismiss`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ notes: 'Dismissed by administrator after review.' })
+      });
+      if (res.ok) {
+        loadAdminData();
+      }
+    } catch (err) {
+      console.error('Error dismissing report:', err);
     }
   };
 
@@ -569,6 +674,7 @@ export const AdminPortal: React.FC = () => {
           className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400"
         >
           <option value="overview">Overview</option>
+          <option value="reports">Incident Reports & Safety ({reportsList.filter(r => r.status === 'PENDING_REVIEW').length} pending)</option>
           <option value="clients">Client Management ({clientsList.length})</option>
           <option value="companions">Companion Management ({companionsList.length})</option>
           <option value="client-kyc">Client Documents / KYC ({clientKycs.length})</option>
@@ -599,6 +705,23 @@ export const AdminPortal: React.FC = () => {
           >
             <Users className="w-4 h-4" />
             <span>Overview</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentSection('reports')}
+            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+              currentSection === 'reports' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-rose-400" />
+              <span>Incident Reports & Safety</span>
+            </div>
+            {reportsList.filter(r => r.status === 'PENDING_REVIEW').length > 0 && (
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
+                {reportsList.filter(r => r.status === 'PENDING_REVIEW').length}
+              </span>
+            )}
           </button>
 
           <button
@@ -813,21 +936,163 @@ export const AdminPortal: React.FC = () => {
             </div>
           )}
 
+          {/* INCIDENT REPORTS & SAFETY */}
+          {currentSection === 'reports' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-rose-400" />
+                    <span>Incident Reports & Safety Desk</span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Review safety incidents reported from Secure Chat sessions. Issue formal warnings or suspend violating accounts.
+                  </p>
+                </div>
+
+                {/* Filter Tabs */}
+                <div className="flex flex-wrap gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                  {(['ALL', 'PENDING_REVIEW', 'WARNED', 'SUSPENDED', 'DISMISSED'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setReportFilter(tab)}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition ${
+                        reportFilter === tab
+                          ? 'bg-amber-400 text-slate-950 font-bold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {tab === 'ALL' ? `All (${reportsList.length})` :
+                       tab === 'PENDING_REVIEW' ? `Pending (${reportsList.filter(r => r.status === 'PENDING_REVIEW').length})` :
+                       tab === 'WARNED' ? `Warned (${reportsList.filter(r => r.status === 'WARNED').length})` :
+                       tab === 'SUSPENDED' ? `Suspended (${reportsList.filter(r => r.status === 'SUSPENDED').length})` :
+                       `Dismissed (${reportsList.filter(r => r.status === 'DISMISSED').length})`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reports Grid / List */}
+              {reportsList.filter(r => reportFilter === 'ALL' || r.status === reportFilter).length === 0 ? (
+                <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-400">
+                  <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-60" />
+                  <p className="font-semibold text-slate-300">No incident reports in this view</p>
+                  <p className="text-[11px] text-slate-500 mt-1">When clients or companions click "Report Us" in Secure Chat, incidents appear here for administrative review.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {reportsList
+                    .filter(r => reportFilter === 'ALL' || r.status === reportFilter)
+                    .map(report => (
+                      <div
+                        key={report.id}
+                        className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition space-y-3 text-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-amber-400">#{report.bookingCode || 'BOOKING'}</span>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-slate-400">
+                              {new Date(report.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase tracking-wider ${
+                            report.status === 'PENDING_REVIEW' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                            report.status === 'WARNED' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' :
+                            report.status === 'SUSPENDED' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
+                            'bg-slate-800 text-slate-400'
+                          }`}>
+                            {report.status.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+                          <div>
+                            <span className="text-[10px] text-slate-500 uppercase font-semibold block">Reporting User ({report.reportingUserRole})</span>
+                            <span className="font-bold text-slate-200 text-sm block mt-0.5">{report.reportingUserName}</span>
+                            {report.reportingUserPhone && <span className="font-mono text-slate-400 text-[11px]">{report.reportingUserPhone}</span>}
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-rose-400 uppercase font-semibold block">Reported User ({report.reportedUserRole})</span>
+                            <span className="font-bold text-rose-300 text-sm block mt-0.5">{report.reportedUserName}</span>
+                            {report.reportedUserPhone && <span className="font-mono text-slate-400 text-[11px]">{report.reportedUserPhone}</span>}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-bold text-amber-400 uppercase">Reason: {report.reason}</span>
+                          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 whitespace-pre-wrap leading-relaxed">
+                            {report.details}
+                          </div>
+                        </div>
+
+                        {report.resolutionNotes && (
+                          <div className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 text-[11px] text-slate-300">
+                            <strong className="text-amber-400">Resolution:</strong> {report.resolutionNotes}
+                            {report.resolvedAt && <span className="text-slate-500 ml-2">({new Date(report.resolvedAt).toLocaleDateString()})</span>}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                          <button
+                            onClick={() => openModerationModal(
+                              { id: report.reportedUserId, name: report.reportedUserName, phone: report.reportedUserPhone, role: report.reportedUserRole },
+                              'WARN',
+                              report.id,
+                              `Reported reason: ${report.reason}`
+                            )}
+                            className="px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 font-bold transition flex items-center gap-1.5"
+                          >
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>Issue Warning</span>
+                          </button>
+
+                          <button
+                            onClick={() => openModerationModal(
+                              { id: report.reportedUserId, name: report.reportedUserName, phone: report.reportedUserPhone, role: report.reportedUserRole },
+                              'SUSPEND',
+                              report.id,
+                              `Reported reason: ${report.reason}`
+                            )}
+                            className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold transition flex items-center gap-1.5"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                            <span>Suspend Account</span>
+                          </button>
+
+                          {report.status === 'PENDING_REVIEW' && (
+                            <button
+                              onClick={() => handleDismissReport(report.id)}
+                              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
+                            >
+                              Dismiss Report
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 2. CLIENT MANAGEMENT */}
           {currentSection === 'clients' && (
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-slate-100">Client Management</h2>
               <p className="text-xs text-slate-400">All registered clients on PairUpToday. Client membership is strictly 100% Free.</p>
               <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800">
                     <tr>
                       <th className="p-3">Client Name</th>
                       <th className="p-3">Phone</th>
                       <th className="p-3">City</th>
                       <th className="p-3">KYC Status</th>
+                      <th className="p-3">Moderation</th>
                       <th className="p-3">Total Bookings</th>
                       <th className="p-3">Membership Fee</th>
+                      <th className="p-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
@@ -843,8 +1108,57 @@ export const AdminPortal: React.FC = () => {
                             {c.kycStatus}
                           </span>
                         </td>
+                        <td className="p-3">
+                          {c.isSuspended ? (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-rose-500/20 text-rose-400 border border-rose-500/30" title={c.suspendedReason || ''}>
+                              🚫 SUSPENDED
+                            </span>
+                          ) : (c.warningCount || 0) > 0 ? (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30" title={c.lastWarningReason || ''}>
+                              ⚠️ WARNED ({c.warningCount})
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-500/20 text-emerald-400">
+                              ✓ ACTIVE
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3 font-mono">{c.totalBookings || 0}</td>
                         <td className="p-3 text-emerald-400 font-bold">FREE (₹0)</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => openModerationModal(
+                                { id: c.id, name: c.legalName || 'Client', phone: c.phone, role: 'CLIENT', isSuspended: c.isSuspended, warningCount: c.warningCount },
+                                'WARN'
+                              )}
+                              className="px-2 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 text-[10px] font-bold"
+                            >
+                              ⚠️ Warn
+                            </button>
+                            {c.isSuspended ? (
+                              <button
+                                onClick={() => openModerationModal(
+                                  { id: c.id, name: c.legalName || 'Client', phone: c.phone, role: 'CLIENT', isSuspended: c.isSuspended, warningCount: c.warningCount },
+                                  'UNSUSPEND'
+                                )}
+                                className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold"
+                              >
+                                ✓ Restore
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openModerationModal(
+                                  { id: c.id, name: c.legalName || 'Client', phone: c.phone, role: 'CLIENT', isSuspended: c.isSuspended, warningCount: c.warningCount },
+                                  'SUSPEND'
+                                )}
+                                className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 text-[10px] font-bold"
+                              >
+                                🚫 Suspend
+                              </button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -865,10 +1179,12 @@ export const AdminPortal: React.FC = () => {
                       <th className="p-3">Host Name</th>
                       <th className="p-3">Phone</th>
                       <th className="p-3">Live Status</th>
+                      <th className="p-3">Moderation</th>
                       <th className="p-3">Gate 1: KYC</th>
                       <th className="p-3">Gate 2: Membership</th>
                       <th className="p-3">Gate 3: Bank</th>
                       <th className="p-3">Total Settled</th>
+                      <th className="p-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
@@ -882,6 +1198,21 @@ export const AdminPortal: React.FC = () => {
                           }`}>
                             {c.isLive ? 'LIVE' : 'INACTIVE'}
                           </span>
+                        </td>
+                        <td className="p-3">
+                          {c.isSuspended ? (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-rose-500/20 text-rose-400 border border-rose-500/30" title={c.suspendedReason || ''}>
+                              🚫 SUSPENDED
+                            </span>
+                          ) : (c.warningCount || 0) > 0 ? (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30" title={c.lastWarningReason || ''}>
+                              ⚠️ WARNED ({c.warningCount})
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-500/20 text-emerald-400">
+                              ✓ ACTIVE
+                            </span>
+                          )}
                         </td>
                         <td className="p-3">
                           {c.kycStatus === 'APPROVED' ? (
@@ -905,6 +1236,40 @@ export const AdminPortal: React.FC = () => {
                           )}
                         </td>
                         <td className="p-3 font-bold text-emerald-400">₹{(c.totalSettledPaise / 100).toFixed(2)}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => openModerationModal(
+                                { id: c.id, name: c.legalName || 'Companion', phone: c.phone, role: 'COMPANION', isSuspended: c.isSuspended, warningCount: c.warningCount },
+                                'WARN'
+                              )}
+                              className="px-2 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 text-[10px] font-bold"
+                            >
+                              ⚠️ Warn
+                            </button>
+                            {c.isSuspended ? (
+                              <button
+                                onClick={() => openModerationModal(
+                                  { id: c.id, name: c.legalName || 'Companion', phone: c.phone, role: 'COMPANION', isSuspended: c.isSuspended, warningCount: c.warningCount },
+                                  'UNSUSPEND'
+                                )}
+                                className="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold"
+                              >
+                                ✓ Restore
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openModerationModal(
+                                  { id: c.id, name: c.legalName || 'Companion', phone: c.phone, role: 'COMPANION', isSuspended: c.isSuspended, warningCount: c.warningCount },
+                                  'SUSPEND'
+                                )}
+                                className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 text-[10px] font-bold"
+                              >
+                                🚫 Suspend
+                              </button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1704,6 +2069,189 @@ export const AdminPortal: React.FC = () => {
                 {payoutLoading ? 'Committing Atomic Ledger Debit...' : 'Confirm Manual Bank Payout'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* USER MODERATION MODAL (WARN / SUSPEND / UNSUSPEND WITH PRESETS) */}
+      {moderationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 text-slate-100 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert className="w-5 h-5 text-amber-400" />
+                <h3 className="text-sm font-bold text-slate-100">
+                  User Moderation & Safety Enforcement
+                </h3>
+              </div>
+              <button
+                onClick={() => setModerationModal(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target User Info */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs flex justify-between items-center">
+              <div>
+                <span className="font-bold text-slate-100 text-sm block">{moderationModal.user.name}</span>
+                <span className="text-slate-400 font-mono text-[11px]">{moderationModal.user.phone || 'No phone'} • {moderationModal.user.role || 'User'}</span>
+              </div>
+              <div className="text-right">
+                {moderationModal.user.isSuspended ? (
+                  <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                    SUSPENDED
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-500/20 text-emerald-400">
+                    ACTIVE {moderationModal.user.warningCount ? `(${moderationModal.user.warningCount} Warnings)` : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {moderationFeedback && (
+              <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                moderationFeedback.type === 'success'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+              }`}>
+                {moderationFeedback.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                <span>{moderationFeedback.message}</span>
+              </div>
+            )}
+
+            {/* Action Picker Tabs */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5">Select Enforcement Action:</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setModerationAction('WARN'); setModerationReason(''); }}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                    moderationAction === 'WARN'
+                      ? 'bg-amber-400 text-slate-950 shadow-md'
+                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Issue Warning</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setModerationAction('SUSPEND'); setModerationReason(''); }}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                    moderationAction === 'SUSPEND'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Suspend Account</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setModerationAction('UNSUSPEND'); setModerationReason('Account restored by administration.'); }}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                    moderationAction === 'UNSUSPEND'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md'
+                      : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Lift Suspension</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Presets */}
+            {moderationAction !== 'UNSUSPEND' && (
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-400 uppercase">
+                  Quick Select Reason (click to apply):
+                </label>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-slate-950/40 rounded-xl border border-slate-800/60">
+                  {(moderationAction === 'WARN' ? [
+                    'Abusive language / Misconduct in chat',
+                    'Late arrival or unresponsiveness',
+                    'Soliciting off-platform payment',
+                    'Inappropriate profile bio or photos',
+                    'Violation of community safety guidelines',
+                    'Unverified contact details sharing'
+                  ] : [
+                    'Severe misconduct / harassment reported',
+                    'Fraudulent payment or identity issue',
+                    'Repeated safety guideline violations',
+                    'Extortion or unauthorized commercial activity',
+                    'Multiple verified incident complaints',
+                    'Terms of service non-compliance'
+                  ]).map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setModerationReason(preset)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+                        moderationReason === preset
+                          ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reason Textarea */}
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-slate-400 uppercase">
+                {moderationAction === 'UNSUSPEND' ? 'Restoration Notes' : 'Specific Reason / Notice Text (editable):'}
+              </label>
+              <textarea
+                value={moderationReason}
+                onChange={e => setModerationReason(e.target.value)}
+                rows={3}
+                placeholder={
+                  moderationAction === 'WARN'
+                    ? 'Enter warning reason that the user will see in their notification...'
+                    : moderationAction === 'SUSPEND'
+                      ? 'Enter detailed reason for suspension...'
+                      : 'Optional notes for audit logs...'
+                }
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-amber-400 resize-none"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setModerationModal(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUserModeration}
+                disabled={moderationLoading || (moderationAction !== 'UNSUSPEND' && !moderationReason.trim())}
+                className={`px-5 py-2 rounded-xl font-bold text-xs transition disabled:opacity-50 cursor-pointer ${
+                  moderationAction === 'WARN'
+                    ? 'bg-amber-400 hover:bg-amber-500 text-slate-950'
+                    : moderationAction === 'SUSPEND'
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                      : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'
+                }`}
+              >
+                {moderationLoading ? 'Processing...' : (
+                  moderationAction === 'WARN' ? 'Confirm & Send Warning' :
+                  moderationAction === 'SUSPEND' ? 'Confirm & Suspend User' :
+                  'Lift Suspension Now'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
