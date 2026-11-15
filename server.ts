@@ -1390,6 +1390,7 @@ function isPublicApiRoute(req: Request): boolean {
     'POST /api/auth/request-otp',
     'POST /api/auth/register-with-otp',
     'POST /api/auth/verify-otp',
+    'POST /api/auth/reset-password',
     'POST /api/auth/login',
     'POST /api/admin/login',
     'POST /api/admin/verify-mfa',
@@ -1409,10 +1410,13 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     'POST /api/auth/request-otp',
     'POST /api/auth/register-with-otp',
     'POST /api/auth/verify-otp',
+    'POST /api/auth/reset-password',
     'GET /api/auth/session',
     'POST /api/auth/login',
     'POST /api/auth/select-role',
     'POST /api/auth/logout',
+    'POST /api/user/change-password',
+    'POST /api/user/delete-account',
     'POST /api/admin/login',
     'POST /api/admin/verify-mfa',
     'POST /api/admin/logout',
@@ -1870,6 +1874,49 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
+  const { phone, otp, newPassword } = req.body;
+  const normalizedPhone = normalizeIndianPhone(phone);
+  if (!normalizedPhone) return res.status(400).json({ error: 'Invalid mobile number.' });
+  if (typeof otp !== 'string' || !/^\d{6}$/.test(otp)) {
+    return res.status(400).json({ error: 'OTP must be exactly six digits.' });
+  }
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+  }
+  if (!isOtpHmacSecretConfigured() || !isSessionSecretConfigured()) {
+    return res.status(503).json({ error: 'Authentication secrets are not configured on the backend.' });
+  }
+  if (process.env.NODE_ENV === 'production' && getDatabaseType() !== 'supabase') {
+    return res.status(503).json({ error: 'Production authentication requires the configured Supabase database.' });
+  }
+
+  try {
+    const user = await databaseAdapter.getUserByPhone(normalizedPhone);
+    if (!user) {
+      return res.status(404).json({ error: 'Account not found. Please create an account.' });
+    }
+    const verification = await databaseAdapter.verifyOtp(normalizedPhone, hashOtp(otp));
+    if (verification !== 'verified') {
+      if (verification === 'locked') return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new OTP.' });
+      if (verification === 'expired') return res.status(400).json({ error: 'OTP expired. Please request a new OTP.' });
+      if (verification === 'invalid') return res.status(400).json({ error: 'Incorrect OTP.' });
+      return res.status(400).json({ error: 'No valid OTP request was found. Please request a new OTP.' });
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await databaseAdapter.updateUser(user.id, { passwordHash });
+
+    return res.json({
+      success: true,
+      message: 'Password reset successfully. You can now log in with your new password.'
+    });
+  } catch (error) {
+    console.error('Password reset failed.', error);
+    return res.status(503).json({ error: 'Password reset is temporarily unavailable.' });
+  }
+});
+
 app.get('/api/auth/session', async (req: Request, res: Response) => {
   const authorization = req.headers.authorization || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
@@ -2262,6 +2309,109 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Fatal error in POST /api/user/profile:', error);
     return res.status(500).json({ error: error?.message || 'Internal error updating profile' });
+  }
+});
+
+app.post('/api/user/change-password', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const verifiedSession = (req as AuthenticatedRequest).verifiedSession;
+  if (!authUser?.id) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  const { otp, newPassword } = req.body;
+  if (typeof otp !== 'string' || !/^\d{6}$/.test(otp)) {
+    return res.status(400).json({ error: 'OTP must be exactly six digits.' });
+  }
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+  }
+  if (!isOtpHmacSecretConfigured() || !isSessionSecretConfigured()) {
+    return res.status(503).json({ error: 'Authentication secrets are not configured on the backend.' });
+  }
+
+  try {
+    const user = await databaseAdapter.getUser(authUser.id);
+    if (!user || !user.phone) {
+      return res.status(404).json({ error: 'User account or registered phone not found.' });
+    }
+    const verification = await databaseAdapter.verifyOtp(user.phone, hashOtp(otp));
+    if (verification !== 'verified') {
+      if (verification === 'locked') return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new OTP.' });
+      if (verification === 'expired') return res.status(400).json({ error: 'OTP expired. Please request a new OTP.' });
+      if (verification === 'invalid') return res.status(400).json({ error: 'Incorrect OTP.' });
+      return res.status(400).json({ error: 'No valid OTP request was found. Please request a new OTP.' });
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await databaseAdapter.updateUser(user.id, { passwordHash });
+
+    if (verifiedSession?.tokenId) {
+      await databaseAdapter.revokeSession(
+        verifiedSession.tokenId,
+        user.id,
+        'USER',
+        verifiedSession.expiresAt
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: 'Password changed successfully. Please log in with your new password.'
+    });
+  } catch (error) {
+    console.error('Change password failed.', error);
+    return res.status(503).json({ error: 'Change password is temporarily unavailable.' });
+  }
+});
+
+app.post('/api/user/delete-account', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const verifiedSession = (req as AuthenticatedRequest).verifiedSession;
+  if (!authUser?.id) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  const { otp, confirmDelete } = req.body;
+  if (!confirmDelete) {
+    return res.status(400).json({ error: 'Confirmation is required to delete your account.' });
+  }
+  if (typeof otp !== 'string' || !/^\d{6}$/.test(otp)) {
+    return res.status(400).json({ error: 'OTP must be exactly six digits.' });
+  }
+  if (!isOtpHmacSecretConfigured() || !isSessionSecretConfigured()) {
+    return res.status(503).json({ error: 'Authentication secrets are not configured on the backend.' });
+  }
+
+  try {
+    const user = await databaseAdapter.getUser(authUser.id);
+    if (!user || !user.phone) {
+      return res.status(404).json({ error: 'User account or registered phone not found.' });
+    }
+    const verification = await databaseAdapter.verifyOtp(user.phone, hashOtp(otp));
+    if (verification !== 'verified') {
+      if (verification === 'locked') return res.status(429).json({ error: 'Too many incorrect attempts. Please request a new OTP.' });
+      if (verification === 'expired') return res.status(400).json({ error: 'OTP expired. Please request a new OTP.' });
+      if (verification === 'invalid') return res.status(400).json({ error: 'Incorrect OTP.' });
+      return res.status(400).json({ error: 'No valid OTP request was found. Please request a new OTP.' });
+    }
+
+    if (verifiedSession?.tokenId) {
+      await databaseAdapter.revokeSession(
+        verifiedSession.tokenId,
+        user.id,
+        'USER',
+        verifiedSession.expiresAt
+      );
+    }
+
+    await databaseAdapter.deleteUser(user.id);
+
+    return res.json({
+      success: true,
+      message: 'Your account and all associated data have been permanently deleted.'
+    });
+  } catch (error) {
+    console.error('Delete account failed.', error);
+    return res.status(503).json({ error: 'Account deletion is temporarily unavailable.' });
   }
 });
 

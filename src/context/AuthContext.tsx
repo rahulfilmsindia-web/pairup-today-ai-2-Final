@@ -31,6 +31,9 @@ interface AuthContextType {
   bookingContext: BookingContextData | null;
   setBookingContext: (ctx: BookingContextData | null) => void;
   checkPhoneRegistered: (phone: string) => Promise<{ registered: boolean; error?: string }>;
+  resetPassword: (phone: string, otp: string, newPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  changePassword: (otp: string, newPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  deleteAccount: (otp: string) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -350,6 +353,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (phone: string, otp: string, newPassword: string) => {
+    try {
+      const res = await apiFetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp, newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to reset password' };
+      }
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error resetting password' };
+    }
+  };
+
+  const changePassword = async (otp: string, newPassword: string) => {
+    try {
+      const res = await apiFetch('/api/user/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ otp, newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to change password' };
+      }
+      logout();
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error changing password' };
+    }
+  };
+
+  const deleteAccount = async (otp: string) => {
+    try {
+      const res = await apiFetch('/api/user/delete-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ otp, confirmDelete: true })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to delete account' };
+      }
+      logout();
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error deleting account' };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -375,7 +437,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateProfile,
         bookingContext,
         setBookingContext,
-        checkPhoneRegistered
+        checkPhoneRegistered,
+        resetPassword,
+        changePassword,
+        deleteAccount
       }}
     >
       {children}

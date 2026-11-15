@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export const CompanionDashboard: React.FC = () => {
-  const { user, refreshUserData, logout, updateProfile } = useAuth();
+  const { user, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount } = useAuth();
   const { t } = useLanguage();
 
   // Complete Visible Navigation Tabs per Section 8
@@ -61,6 +61,81 @@ export const CompanionDashboard: React.FC = () => {
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('21:00');
   const [isAvailabilityPaused, setIsAvailabilityPaused] = useState(false);
+
+  // Change Password state (Companion)
+  const [cpOtpSent, setCpOtpSent] = useState(false);
+  const [cpOtp, setCpOtp] = useState('');
+  const [cpNewPassword, setCpNewPassword] = useState('');
+  const [cpConfirmPassword, setCpConfirmPassword] = useState('');
+  const [cpLoading, setCpLoading] = useState(false);
+  const [cpMsg, setCpMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [cpCountdown, setCpCountdown] = useState(0);
+
+  // Delete Account state (Companion)
+  const [daOtpSent, setDaOtpSent] = useState(false);
+  const [daOtp, setDaOtp] = useState('');
+  const [daConfirm, setDaConfirm] = useState(false);
+  const [daLoading, setDaLoading] = useState(false);
+  const [daMsg, setDaMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [daCountdown, setDaCountdown] = useState(0);
+
+  // Countdown timers
+  useEffect(() => {
+    if (cpCountdown > 0) {
+      const t = setTimeout(() => setCpCountdown(c => c - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [cpCountdown]);
+  useEffect(() => {
+    if (daCountdown > 0) {
+      const t = setTimeout(() => setDaCountdown(c => c - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [daCountdown]);
+
+  const handleSendCpOtp = async () => {
+    if (!user?.phone) return;
+    setCpMsg(null);
+    setCpLoading(true);
+    const result = await requestOtp(user.phone, 'change-password');
+    setCpLoading(false);
+    if (result.success) { setCpOtpSent(true); setCpCountdown(60); }
+    else { setCpMsg({ type: 'error', text: result.error || 'Failed to send OTP.' }); }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCpMsg(null);
+    if (!cpOtp || cpOtp.length !== 6) { setCpMsg({ type: 'error', text: 'Enter the 6-digit OTP.' }); return; }
+    if (!cpNewPassword || cpNewPassword.length < 6) { setCpMsg({ type: 'error', text: 'Password must be at least 6 characters.' }); return; }
+    if (cpNewPassword !== cpConfirmPassword) { setCpMsg({ type: 'error', text: 'Passwords do not match.' }); return; }
+    setCpLoading(true);
+    const result = await changePassword(cpOtp, cpNewPassword);
+    setCpLoading(false);
+    if (result.success) { setCpMsg({ type: 'success', text: result.message || 'Password changed! Please log in again.' }); }
+    else { setCpMsg({ type: 'error', text: result.error || 'Failed to change password.' }); }
+  };
+
+  const handleSendDaOtp = async () => {
+    if (!user?.phone) return;
+    setDaMsg(null);
+    setDaLoading(true);
+    const result = await requestOtp(user.phone, 'delete-account');
+    setDaLoading(false);
+    if (result.success) { setDaOtpSent(true); setDaCountdown(60); }
+    else { setDaMsg({ type: 'error', text: result.error || 'Failed to send OTP.' }); }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDaMsg(null);
+    if (!daOtp || daOtp.length !== 6) { setDaMsg({ type: 'error', text: 'Enter the 6-digit OTP.' }); return; }
+    if (!daConfirm) { setDaMsg({ type: 'error', text: 'Please confirm you understand all data will be deleted.' }); return; }
+    setDaLoading(true);
+    const result = await deleteAccount(daOtp);
+    setDaLoading(false);
+    if (result.success) { setDaMsg({ type: 'success', text: 'Account deleted successfully.' }); }
+    else { setDaMsg({ type: 'error', text: result.error || 'Failed to delete account.' }); }
+  };
 
   // Step B: Membership state
   const [subscribingPlan, setSubscribingPlan] = useState<MembershipPlanType | null>(null);
@@ -2185,6 +2260,184 @@ export const CompanionDashboard: React.FC = () => {
                   {isAvailabilityPaused ? 'Resume' : 'Pause'}
                 </button>
               </div>
+            </div>
+
+            {/* ── CHANGE PASSWORD ── */}
+            <div className="rounded-xl bg-slate-950 border border-slate-800 p-4 space-y-3">
+              <h4 className="font-bold text-slate-100 flex items-center gap-2 text-sm">
+                <Lock className="w-4 h-4 text-pink-400" />
+                Change Password
+              </h4>
+              <p className="text-slate-500 text-[11px]">
+                Registered number: <span className="text-slate-300 font-mono">{user?.phone || '—'}</span>
+              </p>
+
+              {cpMsg && (
+                <div className={`p-2.5 rounded-lg text-[11px] flex items-center gap-2 ${cpMsg.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' : 'bg-red-500/10 border border-red-500/20 text-red-300'}`}>
+                  {cpMsg.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                  <span>{cpMsg.text}</span>
+                </div>
+              )}
+
+              {!cpOtpSent ? (
+                <button
+                  onClick={handleSendCpOtp}
+                  disabled={cpLoading || cpCountdown > 0}
+                  className="w-full py-2.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 font-bold border border-pink-500/30 disabled:opacity-50 transition-colors"
+                >
+                  {cpLoading ? 'Sending OTP...' : cpCountdown > 0 ? `Resend in ${cpCountdown}s` : 'Send OTP to Change Password'}
+                </button>
+              ) : (
+                <form onSubmit={handleChangePassword} className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">Enter OTP</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">🔑</span>
+                      <input
+                        type="text"
+                        value={cpOtp}
+                        onChange={e => setCpOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        maxLength={6}
+                        placeholder="6-digit OTP"
+                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 font-mono tracking-widest text-sm focus:outline-none focus:border-pink-400"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">New Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                      <input
+                        type="password"
+                        value={cpNewPassword}
+                        onChange={e => setCpNewPassword(e.target.value)}
+                        placeholder="Min 6 characters"
+                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-pink-400"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">Confirm New Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                      <input
+                        type="password"
+                        value={cpConfirmPassword}
+                        onChange={e => setCpConfirmPassword(e.target.value)}
+                        placeholder="Re-enter new password"
+                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-pink-400"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setCpOtpSent(false); setCpOtp(''); setCpNewPassword(''); setCpConfirmPassword(''); setCpMsg(null); setCpCountdown(0); }}
+                      className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={cpLoading}
+                      className="flex-1 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold text-xs disabled:opacity-50"
+                    >
+                      {cpLoading ? 'Saving...' : 'Save New Password'}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSendCpOtp}
+                    disabled={cpCountdown > 0 || cpLoading}
+                    className="text-[11px] text-pink-400 hover:text-pink-300 underline disabled:opacity-50"
+                  >
+                    {cpCountdown > 0 ? `Resend OTP in ${cpCountdown}s` : 'Resend OTP'}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* ── DELETE ACCOUNT ── */}
+            <div className="rounded-xl bg-red-950/30 border border-red-500/30 p-4 space-y-3">
+              <h4 className="font-bold text-red-300 flex items-center gap-2 text-sm">
+                <Trash2 className="w-4 h-4 text-red-400" />
+                Delete Account
+              </h4>
+
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-300 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> ATTENTION: This action is permanent and cannot be undone.
+                </p>
+                <p className="text-red-400/80">Deleting your account will permanently erase all your KYC documents, membership records, bank verifications, chat history, booking records, wallet data, and all associated platform data.</p>
+              </div>
+
+              {daMsg && (
+                <div className={`p-2.5 rounded-lg text-[11px] flex items-center gap-2 ${daMsg.type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' : 'bg-red-500/10 border border-red-500/20 text-red-300'}`}>
+                  {daMsg.type === 'success' ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                  <span>{daMsg.text}</span>
+                </div>
+              )}
+
+              {!daOtpSent ? (
+                <button
+                  onClick={handleSendDaOtp}
+                  disabled={daLoading || daCountdown > 0}
+                  className="w-full py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 font-bold border border-red-500/30 disabled:opacity-50 transition-colors"
+                >
+                  {daLoading ? 'Sending OTP...' : daCountdown > 0 ? `Resend in ${daCountdown}s` : 'Request Deletion OTP'}
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">Enter OTP</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">🔑</span>
+                      <input
+                        type="text"
+                        value={daOtp}
+                        onChange={e => setDaOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        maxLength={6}
+                        placeholder="6-digit OTP"
+                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-red-500/30 rounded-lg text-slate-100 font-mono tracking-widest text-sm focus:outline-none focus:border-red-400"
+                      />
+                    </div>
+                  </div>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={daConfirm}
+                      onChange={e => setDaConfirm(e.target.checked)}
+                      className="w-4 h-4 mt-0.5 accent-red-500 shrink-0"
+                    />
+                    <span className="text-[11px] text-slate-400">I understand that all my data will be <strong className="text-red-400">permanently and irreversibly erased</strong>.</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setDaOtpSent(false); setDaOtp(''); setDaConfirm(false); setDaMsg(null); setDaCountdown(0); }}
+                      className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAccount}
+                      disabled={daLoading || !daConfirm || daOtp.length !== 6}
+                      className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs disabled:opacity-50 transition-colors"
+                    >
+                      {daLoading ? 'Deleting...' : 'Permanently Delete'}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSendDaOtp}
+                    disabled={daCountdown > 0 || daLoading}
+                    className="text-[11px] text-red-400 hover:text-red-300 underline disabled:opacity-50"
+                  >
+                    {daCountdown > 0 ? `Resend OTP in ${daCountdown}s` : 'Resend OTP'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

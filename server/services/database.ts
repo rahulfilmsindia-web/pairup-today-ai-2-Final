@@ -170,6 +170,7 @@ export interface DatabaseAdapter {
   getUserByPhone(phone: string): Promise<any | null>;
   createUser(user: any): Promise<any>;
   updateUser(id: string, updates: any): Promise<any>;
+  deleteUser(id: string): Promise<void>;
   listUsers(filters?: any): Promise<any[]>;
 
   // KYC
@@ -500,6 +501,27 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     db.users[id] = { ...db.users[id], ...updates };
     this.saveDB(db);
     return db.users[id];
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    const db = this.getDB();
+    delete db.users[userId];
+    if (db.kycSubmissions) {
+      for (const k of Object.keys(db.kycSubmissions)) {
+        if (db.kycSubmissions[k]?.userId === userId) delete db.kycSubmissions[k];
+      }
+    }
+    if (db.companionProfiles) delete db.companionProfiles[userId];
+    if (db.companionMemberships) {
+      for (const k of Object.keys(db.companionMemberships)) {
+        if (db.companionMemberships[k]?.userId === userId) delete db.companionMemberships[k];
+      }
+    }
+    if (db.bankVerifications) delete db.bankVerifications[userId];
+    if (db.companionWallets) delete db.companionWallets[userId];
+    if (db.userLocations) delete db.userLocations[userId];
+    if (db.userPresence) delete db.userPresence[userId];
+    this.saveDB(db);
   }
 
   async listUsers(filters?: any): Promise<any[]> {
@@ -1479,6 +1501,26 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     const { data, error } = await query;
     if (error) throw error;
     return (data || []).map((user: any) => this.mapUser(user));
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await Promise.allSettled([
+      db.kycSubmissions().delete().eq('user_id', userId),
+      db.companionProfiles().delete().eq('user_id', userId),
+      db.companionMemberships().delete().eq('user_id', userId),
+      db.bankVerifications().delete().eq('user_id', userId),
+      db.userLocations().delete().eq('user_id', userId),
+      db.userPresence().delete().eq('user_id', userId),
+      db.firebaseDeviceTokens().delete().eq('user_id', userId),
+      db.notifications().delete().eq('user_id', userId),
+      db.chatMessages().delete().eq('sender_id', userId),
+      db.supportMessages().delete().eq('sender_id', userId)
+    ]);
+    const { error } = await db.users().delete().eq('id', userId);
+    if (error) {
+      console.warn('Supabase deleteUser error:', error.message);
+      throw error;
+    }
   }
 
   async createKycSubmission(submission: any): Promise<any> {
