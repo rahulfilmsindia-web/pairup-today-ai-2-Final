@@ -405,8 +405,8 @@ function publicAuthUser(user: any) {
     activeRole: user.activeRole || user.active_role || inMemory?.activeRole || (user.role === 'COMPANION' ? 'COMPANION' : 'CLIENT'),
     dob: user.dob,
     age: user.age,
-    kycStatus: user.kycStatus || user.kyc_status || 'NOT_SUBMITTED',
-    kycRejectionReason: user.kycRejectionReason,
+    kycStatus: user.kycStatus || user.kyc_status || inMemory?.kycStatus || 'NOT_SUBMITTED',
+    kycRejectionReason: user.kycRejectionReason || user.kyc_rejection_reason || inMemory?.kycRejectionReason || null,
     profilePhoto: user.profilePhoto || user.profile_photo || inMemory?.profilePhoto || null,
     photos: Array.isArray(user.photos) && user.photos.length > 0 
       ? user.photos 
@@ -4285,6 +4285,14 @@ app.post('/api/admin/kyc/:id/action', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMI
       action === 'REJECT' ? rejectionReason : null,
       admin.id
     );
+    await databaseAdapter.updateUser(submission.userId, {
+      kycStatus: action === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+      kycRejectionReason: action === 'REJECT' ? rejectionReason : null
+    }).catch(err => console.warn('Could not update user KYC status in DB:', err));
+    if (db.users && db.users[submission.userId]) {
+      db.users[submission.userId].kycStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+      db.users[submission.userId].kycRejectionReason = action === 'REJECT' ? rejectionReason : null;
+    }
     const user = await databaseAdapter.getUser(submission.userId);
 
     // Send in-app notification to user

@@ -13,17 +13,17 @@ export const KycWizardModal: React.FC = () => {
     if (activeRole === 'COMPANION' || user?.activeRole === 'COMPANION') return 'COMPANION';
     return 'CLIENT';
   });
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
-  const [legalName, setLegalName] = useState('');
-  const [profileName, setProfileName] = useState('');
-  const [dob, setDob] = useState('');
+  const [ageConfirmed, setAgeConfirmed] = useState(Boolean(user?.dob));
+  const [legalName, setLegalName] = useState(user?.legalName || '');
+  const [profileName, setProfileName] = useState(user?.profileName || '');
+  const [dob, setDob] = useState(user?.dob || '');
   const [idType, setIdType] = useState<GovernmentIdType>('AADHAAR');
   const [idFrontUrl, setIdFrontUrl] = useState<string>('');
   const [idBackUrl, setIdBackUrl] = useState<string>('');
   const [selfieUrl, setSelfieUrl] = useState<string>('');
-  const [bio, setBio] = useState('');
-  const [city, setCity] = useState('Delhi NCR');
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [bio, setBio] = useState(user?.bio || '');
+  const [city, setCity] = useState(user?.city || 'Delhi NCR');
+  const [photos, setPhotos] = useState<string[]>(user?.photos || []);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -40,6 +40,23 @@ export const KycWizardModal: React.FC = () => {
       setSelectedRole(user.activeRole);
     }
   }, [activeRole, user?.activeRole]);
+
+  // Synchronize existing user data into the KYC form for easier re-upload / correction
+  useEffect(() => {
+    if (showKycWizard && user) {
+      if (user.legalName && !legalName) setLegalName(user.legalName);
+      if (user.profileName && !profileName) setProfileName(user.profileName);
+      if (user.dob && !dob) {
+        setDob(user.dob);
+        setAgeConfirmed(true);
+      }
+      if (user.bio && !bio) setBio(user.bio);
+      if (user.city && (!city || city === 'Delhi NCR')) setCity(user.city);
+      if (Array.isArray(user.photos) && user.photos.length > 0 && photos.length === 0) {
+        setPhotos(user.photos);
+      }
+    }
+  }, [showKycWizard, user]);
 
   // Cleanup camera stream on unmount
   useEffect(() => {
@@ -233,7 +250,7 @@ export const KycWizardModal: React.FC = () => {
         </div>
 
         {/* Rejection Reason Notice if previously rejected */}
-        {user?.kycStatus === 'REJECTED' && (
+        {(user?.kycStatus === 'REJECTED' || user?.kycRejectionReason) && (
           <div className="p-4 bg-red-950/40 border-b border-red-500/30 text-xs text-red-200 flex items-start gap-2.5">
             <AlertCircle className="w-5 h-5 shrink-0 text-red-400 mt-0.5" />
             <div className="space-y-1 flex-1">

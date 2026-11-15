@@ -329,7 +329,15 @@ export const CompanionDashboard: React.FC = () => {
       const res = await apiFetch(`/api/notifications/${user.id}`);
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.notifications || []);
+        const items = data.notifications || [];
+        setNotifications(items);
+        if (items.some((item: any) => 
+          item.type === 'KYC_REJECTED' || 
+          item.type === 'KYC_APPROVED' || 
+          (typeof item.title === 'string' && /kyc/i.test(item.title))
+        )) {
+          refreshUserData();
+        }
       }
     } catch (err) {
       console.error('Failed to load notifications', err);
@@ -340,12 +348,13 @@ export const CompanionDashboard: React.FC = () => {
     fetchCompanionStatus();
     fetchBookings();
     fetchNotifications();
+    refreshUserData();
     const interval = setInterval(() => {
       fetchBookings();
       fetchNotifications();
     }, 6000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user?.id]);
 
   // Handle chat messages polling
   useEffect(() => {
@@ -1039,6 +1048,38 @@ export const CompanionDashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Persistent KYC Action Required Banner if rejected */}
+        {(user?.kycStatus === 'REJECTED' || user?.kycRejectionReason) && (
+          <div className="p-4 rounded-2xl bg-red-950/40 border border-red-500/50 text-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-red-950/50 animate-fade-in">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2 rounded-xl bg-red-500/20 text-red-400 shrink-0 mt-0.5 sm:mt-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="font-bold text-sm text-red-300 block">
+                  KYC Verification Action Required
+                </span>
+                <span className="text-xs text-amber-300 block font-medium">
+                  Reason: {user.kycRejectionReason || 'Document photo blur or unreadable. Please re-upload clear photos.'}
+                </span>
+                <span className="text-[11px] text-slate-300 block">
+                  Please fix the issue and submit clear documents to activate your companion host profile.
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                refreshUserData();
+                setActiveTab('kyc-status');
+                openKycWizard();
+              }}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 via-rose-600 to-amber-500 hover:from-pink-500 hover:to-amber-400 text-white font-extrabold text-xs shadow-md shadow-pink-600/30 whitespace-nowrap transition-transform active:scale-95 cursor-pointer"
+            >
+              Fix & Re-upload KYC Documents →
+            </button>
+          </div>
+        )}
+
         {/* Global Action Banner */}
         {actionMsg && (
           <div className="p-3.5 rounded-xl bg-pink-500/10 border border-pink-500/30 text-xs text-pink-300 flex items-center justify-between">
@@ -1588,7 +1629,7 @@ export const CompanionDashboard: React.FC = () => {
               Government KYC Verification
             </h3>
 
-            {user?.kycStatus === 'REJECTED' ? (
+            {(user?.kycStatus === 'REJECTED' || user?.kycRejectionReason) ? (
               <div className="p-5 rounded-xl border bg-red-950/30 border-red-500/40 text-red-200 space-y-3">
                 <div className="flex items-center gap-2.5">
                   <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
@@ -1612,7 +1653,10 @@ export const CompanionDashboard: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={openKycWizard}
+                  onClick={() => {
+                    refreshUserData();
+                    openKycWizard();
+                  }}
                   className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 text-white font-bold text-xs hover:from-pink-500 hover:to-rose-500 transition-all cursor-pointer"
                 >
                   Fix & Re-upload KYC Documents
@@ -2232,7 +2276,12 @@ export const CompanionDashboard: React.FC = () => {
             ) : (
               <div className="space-y-2.5">
                 {notifications.map(n => {
-                  const isKycReject = n.type === 'KYC_REJECTED' || (n.title?.includes('KYC') && (n.title?.includes('Rejected') || n.title?.includes('Action')));
+                  const isKycReject = 
+                    n.type === 'KYC_REJECTED' || 
+                    n.data?.type === 'KYC_REJECTED' || 
+                    n.data?.action === 'OPEN_KYC_WIZARD' || 
+                    (typeof n.title === 'string' && /kyc|verification|document/i.test(n.title)) || 
+                    (typeof n.message === 'string' && /kyc|re-upload|rejection|blur|rejected/i.test(n.message));
                   const isBooking = n.type?.includes('BOOKING') || n.title?.includes('Booking') || n.title?.includes('Session');
                   const isMembership = n.type?.includes('MEMBERSHIP') || n.title?.includes('Membership');
                   return (
@@ -2240,6 +2289,8 @@ export const CompanionDashboard: React.FC = () => {
                       key={n.id}
                       onClick={() => {
                         if (isKycReject) {
+                          refreshUserData();
+                          setActiveTab('kyc-status');
                           openKycWizard();
                         } else if (isBooking) {
                           setActiveTab('upcoming');

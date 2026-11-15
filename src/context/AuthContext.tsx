@@ -307,15 +307,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshUserData = async () => {
-    if (!user) return;
+    if (!token) return;
     try {
-      const res = await apiFetch(`/api/companion/status/${user.id}`);
+      const res = await apiFetch('/api/user/profile', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       if (res.ok) {
         const data = await res.json();
-        setUser(prev => prev ? { ...prev, kycStatus: data.kycStatus } : null);
+        if (data?.success && data?.user) {
+          setUser(data.user);
+          localStorage.setItem('pairup_user', JSON.stringify(data.user));
+          if (data.user.activeRole) {
+            setActiveRole(data.user.activeRole);
+            localStorage.setItem('pairup_active_role', data.user.activeRole);
+          }
+        }
       }
     } catch (err) {
-      console.error('Error refreshing user status', err);
+      console.warn('Error refreshing user profile', err);
     }
   };
 
