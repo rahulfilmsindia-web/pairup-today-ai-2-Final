@@ -10,9 +10,50 @@ import { createRazorpayOrder, createRazorpayRefund, fetchRazorpayPayment, fetchR
 import { databaseAdapter, getDatabaseType, type OtpReservation } from './server/services/database.ts';
 import { updateUserLocation, getUserLocation, startLocationSharing, stopLocationSharing, setUserPresence, getUserPresence, isFirebaseConfigured } from './server/services/firebase.ts';
 import { sendToMultipleDevices } from './server/services/fcm.ts';
-import { getPlaceAutocomplete, geocodeAddress, reverseGeocode, getDistanceMatrix, isGoogleMapsConfigured } from './server/services/googlemaps.ts';
+import { getPlaceAutocomplete, geocodeAddress, reverseGeocode, getDistanceMatrix, calculateDistance, isGoogleMapsConfigured } from './server/services/googlemaps.ts';
 import { hashPassword, verifyPassword } from './server/services/passwords.ts';
 import { PAIRUP_SERVICES } from './src/constants/services.ts';
+
+const KNOWN_CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  'delhi': { lat: 28.6139, lng: 77.2090 },
+  'new delhi': { lat: 28.6139, lng: 77.2090 },
+  'burdwan': { lat: 23.2324, lng: 87.8615 },
+  'bardhaman': { lat: 23.2324, lng: 87.8615 },
+  'baranagar': { lat: 22.6433, lng: 88.3653 },
+  'dumdum': { lat: 22.6420, lng: 88.4312 },
+  'dum dum': { lat: 22.6420, lng: 88.4312 },
+  'saltlake': { lat: 22.5804, lng: 88.4237 },
+  'salt lake': { lat: 22.5804, lng: 88.4237 },
+  'bidhannagar': { lat: 22.5804, lng: 88.4237 },
+  'kolkata': { lat: 22.5726, lng: 88.3639 },
+  'calcutta': { lat: 22.5726, lng: 88.3639 },
+  'azadgarh': { lat: 22.4883, lng: 88.3585 },
+  'golf garden': { lat: 22.4965, lng: 88.3546 },
+  'tollygunge': { lat: 22.4988, lng: 88.3473 },
+  'jadavpur': { lat: 22.4988, lng: 88.3718 },
+  'chennai': { lat: 13.0827, lng: 80.2707 },
+  'mumbai': { lat: 19.0760, lng: 72.8777 },
+  'ahmedabad': { lat: 23.0225, lng: 72.5714 },
+  'bengaluru': { lat: 12.9716, lng: 77.5946 },
+  'bangalore': { lat: 12.9716, lng: 77.5946 },
+  'hyderabad': { lat: 17.3850, lng: 78.4867 },
+  'pune': { lat: 18.5204, lng: 73.8567 },
+  'jaipur': { lat: 26.9124, lng: 75.7873 },
+  'lucknow': { lat: 26.8467, lng: 80.9462 },
+  'chandigarh': { lat: 30.7333, lng: 76.7794 },
+  'goa': { lat: 15.2993, lng: 74.1240 },
+  'kochi': { lat: 9.9312, lng: 76.2673 },
+  'indore': { lat: 22.7196, lng: 75.8577 },
+  'surat': { lat: 21.1702, lng: 72.8311 },
+  'patna': { lat: 25.5941, lng: 85.1376 },
+  'bhopal': { lat: 23.2599, lng: 77.4126 },
+  'nagpur': { lat: 21.1458, lng: 79.0882 },
+  'coimbatore': { lat: 11.0168, lng: 76.9558 },
+  'visakhapatnam': { lat: 17.6868, lng: 83.2185 },
+  'noida': { lat: 28.5355, lng: 77.3910 },
+  'gurugram': { lat: 28.4595, lng: 77.0266 },
+  'gurgaon': { lat: 28.4595, lng: 77.0266 }
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3198,19 +3239,34 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
 // -------------------------------------------------------------
 app.get('/api/companions/search', async (req: Request, res: Response) => {
   const { query, serviceId, city, lat, lng } = req.query;
-  const hasLatitude = lat !== undefined;
-  const hasLongitude = lng !== undefined;
-  if (hasLatitude !== hasLongitude) return res.status(400).json({ error: 'Both lat and lng are required for nearby discovery.' });
+  const hasLatitude = lat !== undefined && lat !== '';
+  const hasLongitude = lng !== undefined && lng !== '';
   let searchLocation: { lat: number; lng: number } | null = null;
   if (hasLatitude && hasLongitude) {
     const latitude = Number(lat);
     const longitude = Number(lng);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
-        latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-      return res.status(400).json({ error: 'Nearby discovery coordinates are invalid.' });
+    if (Number.isFinite(latitude) && Number.isFinite(longitude) &&
+        latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+      searchLocation = { lat: latitude, lng: longitude };
     }
-    if (!isGoogleMapsConfigured()) return res.status(503).json({ error: 'Nearby discovery requires configured Google Maps credentials.' });
-    searchLocation = { lat: latitude, lng: longitude };
+  } else if (city && city !== 'all') {
+    const cStr = String(city).toLowerCase().trim();
+    for (const [k, coords] of Object.entries(KNOWN_CITY_COORDINATES)) {
+      if (cStr.includes(k) || k.includes(cStr)) {
+        searchLocation = coords;
+        break;
+      }
+    }
+    if (!searchLocation && isGoogleMapsConfigured()) {
+      try {
+        const geo = await geocodeAddress(String(city));
+        if (geo?.geometry?.location) {
+          searchLocation = geo.geometry.location;
+        }
+      } catch (e) {
+        // Geocode error ignored
+      }
+    }
   }
 
   const genuineCompanions: any[] = [];
@@ -3300,14 +3356,26 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
       const matchesCity = userCity && (userCity.includes(c) || c.includes(userCity));
       const matchesAddr = userAddr && (userAddr.includes(c) || c.includes(userAddr));
       const matchesState = userState && (userState.includes(c) || c.includes(userState));
-      if (!matchesCity && !matchesAddr && !matchesState) {
+      if (!searchLocation && !matchesCity && !matchesAddr && !matchesState) {
         continue;
       }
     }
 
     const hourlyRate = Math.round((profile.rates?.hourlyPaise || 49900) / 100);
-    const profileLatitude = profile.latitude === null || profile.latitude === undefined ? Number.NaN : Number(profile.latitude);
-    const profileLongitude = profile.longitude === null || profile.longitude === undefined ? Number.NaN : Number(profile.longitude);
+    let profileLatitude = profile.latitude === null || profile.latitude === undefined ? Number.NaN : Number(profile.latitude);
+    let profileLongitude = profile.longitude === null || profile.longitude === undefined ? Number.NaN : Number(profile.longitude);
+
+    if (!Number.isFinite(profileLatitude) || !Number.isFinite(profileLongitude)) {
+      const locKey = `${user.city || ''} ${profile.address || ''} ${user.state || ''}`.toLowerCase();
+      for (const [k, coords] of Object.entries(KNOWN_CITY_COORDINATES)) {
+        if (locKey.includes(k)) {
+          profileLatitude = coords.lat;
+          profileLongitude = coords.lng;
+          break;
+        }
+      }
+    }
+
     if (Number.isFinite(profileLatitude) && Number.isFinite(profileLongitude) &&
         profileLatitude >= -90 && profileLatitude <= 90 && profileLongitude >= -180 && profileLongitude <= 180) {
       coordinatesByUserId.set(userId, { lat: profileLatitude, lng: profileLongitude });
@@ -3382,25 +3450,59 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
     const located = combined
       .map(companion => ({ companion, coordinates: coordinatesByUserId.get(companion.id) }))
       .filter((entry): entry is { companion: any; coordinates: { lat: number; lng: number } } => Boolean(entry.coordinates));
-    if (located.length === 0) return res.json({ count: 0, companions: [] });
-    try {
-      const distances = await getDistanceMatrix(
-        [searchLocation],
-        located.map(entry => entry.coordinates)
-      );
-      combined = located.map((entry, index) => {
-        const result = distances[0]?.[index];
-        if (!result || result.status !== 'OK') return null;
-        return {
-          ...entry.companion,
-          distanceKm: Math.round(result.distance.value / 100) / 10,
-          travelDurationMinutes: Math.ceil(result.duration.value / 60)
-        };
-      }).filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-        .sort((a, b) => a.travelDurationMinutes - b.travelDurationMinutes);
-    } catch (error) {
-      console.error('Nearby Companion distance lookup failed.', error);
-      return res.status(503).json({ error: 'Nearby discovery is temporarily unavailable.' });
+    
+    if (located.length > 0) {
+      let scoredCompanions: any[] = [];
+      try {
+        if (isGoogleMapsConfigured()) {
+          const distances = await getDistanceMatrix(
+            [searchLocation],
+            located.map(entry => entry.coordinates)
+          );
+          scoredCompanions = located.map((entry, index) => {
+            const result = distances[0]?.[index];
+            if (!result || result.status !== 'OK') {
+              const fallbackDist = Math.round(calculateDistance(searchLocation.lat, searchLocation.lng, entry.coordinates.lat, entry.coordinates.lng) * 10) / 10;
+              return {
+                ...entry.companion,
+                distanceKm: fallbackDist,
+                travelDurationMinutes: Math.round(fallbackDist * 2.5)
+              };
+            }
+            return {
+              ...entry.companion,
+              distanceKm: Math.round(result.distance.value / 100) / 10,
+              travelDurationMinutes: Math.ceil(result.duration.value / 60)
+            };
+          });
+        } else {
+          scoredCompanions = located.map(entry => {
+            const dist = Math.round(calculateDistance(searchLocation.lat, searchLocation.lng, entry.coordinates.lat, entry.coordinates.lng) * 10) / 10;
+            return {
+              ...entry.companion,
+              distanceKm: dist,
+              travelDurationMinutes: Math.round(dist * 2.5)
+            };
+          });
+        }
+      } catch (error) {
+        console.warn('Distance lookup using Haversine fallback:', error);
+        scoredCompanions = located.map(entry => {
+          const dist = Math.round(calculateDistance(searchLocation.lat, searchLocation.lng, entry.coordinates.lat, entry.coordinates.lng) * 10) / 10;
+          return {
+            ...entry.companion,
+            distanceKm: dist,
+            travelDurationMinutes: Math.round(dist * 2.5)
+          };
+        });
+      }
+
+      // Sort by distance in ascending order so closest companions are at the very top!
+      scoredCompanions.sort((a, b) => (a.distanceKm ?? 99999) - (b.distanceKm ?? 99999));
+
+      const locatedIds = new Set(scoredCompanions.map(c => c.id));
+      const unlocated = combined.filter(c => !locatedIds.has(c.id));
+      combined = [...scoredCompanions, ...unlocated];
     }
   }
 

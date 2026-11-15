@@ -11,11 +11,14 @@ export interface LocationSuggestion {
   fullAddress: string; // Complete address: "1/92, Graham Road, Azadgarh, Kolkata, West Bengal - 700040"
   cityValue: string;   // Clean city string for filtering
   key: string;         // Unique dedup key
+  lat?: number;
+  lng?: number;
 }
 
 export interface LocationAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
+  onSelectLocation?: (item: LocationSuggestion) => void;
   placeholder?: string;
   className?: string;
   label?: string;
@@ -121,6 +124,8 @@ function parseHousePrefix(raw: string): { houseNumber: string | null; cleanRemai
 interface NominatimResult {
   place_id: number;
   display_name: string;
+  lat?: string;
+  lon?: string;
   address: {
     house_number?: string;
     road?: string;
@@ -181,12 +186,17 @@ function buildFromNominatim(
   const sublabel = subParts.length > 0 ? subParts.join(' - ') : (r.display_name.split(', ').slice(3, 6).join(', ') || 'India');
   const fullAddress = (sublabel && !label.includes(sublabel)) ? `${label}, ${sublabel}` : label;
 
+  const lat = r.lat ? parseFloat(r.lat) : undefined;
+  const lng = r.lon ? parseFloat(r.lon) : undefined;
+
   return {
     label,
     sublabel,
     fullAddress,
     cityValue: city || state || label,
     key: `nom:${label}|${sublabel}`.toLowerCase(),
+    lat: Number.isFinite(lat) ? lat : undefined,
+    lng: Number.isFinite(lng) ? lng : undefined,
   };
 }
 
@@ -195,6 +205,9 @@ function buildFromNominatim(
 // ─────────────────────────────────────────────────────────────
 
 interface PhotonFeature {
+  geometry?: {
+    coordinates?: [number, number]; // [lon, lat]
+  };
   properties: {
     name?: string;
     housenumber?: string;
@@ -250,12 +263,18 @@ function buildFromPhoton(
   if (!label) return null;
   const fullAddress = (sublabel && !label.includes(sublabel)) ? `${label}, ${sublabel}` : label;
 
+  const photonCoords = f.geometry?.coordinates;
+  const lng = Array.isArray(photonCoords) && typeof photonCoords[0] === 'number' ? photonCoords[0] : undefined;
+  const lat = Array.isArray(photonCoords) && typeof photonCoords[1] === 'number' ? photonCoords[1] : undefined;
+
   return {
     label,
     sublabel,
     fullAddress,
     cityValue: city || district || state || label,
     key: `photon:${label}|${sublabel}`.toLowerCase(),
+    lat,
+    lng,
   };
 }
 
@@ -399,6 +418,7 @@ async function executePanIndiaSearch(
 export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   value,
   onChange,
+  onSelectLocation,
   placeholder = 'Search any address, street, hotel, restaurant in India...',
   className = '',
   label,
@@ -489,6 +509,9 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
 
     setInputValue(finalValue);
     onChange(finalValue);
+    if (onSelectLocation) {
+      onSelectLocation({ ...item, fullAddress: finalValue });
+    }
     setSuggestions([]);
     setOpen(false);
     setActiveIndex(-1);
@@ -518,6 +541,9 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   const clearInput = () => {
     setInputValue('');
     onChange('');
+    if (onSelectLocation) {
+      onSelectLocation({ label: '', sublabel: '', fullAddress: '', cityValue: '', key: '' });
+    }
     setSuggestions([]);
     setOpen(false);
     setNoResults(false);

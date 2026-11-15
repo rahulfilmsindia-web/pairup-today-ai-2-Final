@@ -160,6 +160,8 @@ export interface CompanionDiscoveryItem {
   hourlyRateFormatted?: string;
   availability?: CompanionAvailability | null;
   isInitialListing?: boolean;
+  distanceKm?: number;
+  travelDurationMinutes?: number;
 }
 
 export interface BookingContextData {

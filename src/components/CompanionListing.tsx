@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { PAIRUP_SERVICES } from '../constants/services';
 import { CompanionDiscoveryItem } from '../types';
+import { LocationAutocomplete } from './LocationAutocomplete';
 import {
   MapPin,
   Star,
@@ -13,31 +14,16 @@ import {
   AlertCircle,
   X,
   Filter,
-  Search,
   CheckCircle2,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Navigation
 } from 'lucide-react';
 
 interface CompanionListingProps {
   initialServiceId?: number | null;
   onBookCompanion?: (companion: CompanionDiscoveryItem, serviceId?: number) => void;
 }
-
-const INDIAN_LOCATIONS = [
-  { id: 'all', label: 'All India' },
-  { id: 'Kolkata', label: 'Kolkata, West Bengal' },
-  { id: 'Mumbai', label: 'Mumbai, Maharashtra' },
-  { id: 'Delhi NCR', label: 'Delhi NCR' },
-  { id: 'Bengaluru', label: 'Bengaluru, Karnataka' },
-  { id: 'Hyderabad', label: 'Hyderabad, Telangana' },
-  { id: 'Jaipur', label: 'Jaipur, Rajasthan' },
-  { id: 'Pune', label: 'Pune, Maharashtra' },
-  { id: 'Ahmedabad', label: 'Ahmedabad, Gujarat' },
-  { id: 'Chandigarh', label: 'Chandigarh, Punjab' },
-  { id: 'Chennai', label: 'Chennai, Tamil Nadu' },
-  { id: 'Indore', label: 'Indore, Madhya Pradesh' }
-];
 
 export const CompanionListing: React.FC<CompanionListingProps> = ({
   initialServiceId,
@@ -46,11 +32,11 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
   const { t } = useLanguage();
   const { user, openAuthModal, setBookingContext } = useAuth();
 
-  const [selectedCity, setSelectedCity] = useState<string>('all');
+  const [selectedCity, setSelectedCity] = useState<string>('');
+  const [clientCoords, setClientCoords] = useState<{ lat?: number; lng?: number } | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<number | 'all'>(
     initialServiceId || 'all'
   );
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [companions, setCompanions] = useState<CompanionDiscoveryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,9 +58,12 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (selectedCity !== 'all') params.append('city', selectedCity);
+      if (selectedCity && selectedCity !== 'all') params.append('city', selectedCity);
       if (selectedServiceId !== 'all') params.append('serviceId', selectedServiceId.toString());
-      if (searchQuery.trim()) params.append('query', searchQuery.trim());
+      if (clientCoords?.lat !== undefined && clientCoords?.lng !== undefined) {
+        params.append('lat', clientCoords.lat.toString());
+        params.append('lng', clientCoords.lng.toString());
+      }
 
       const res = await fetch(`/api/companions/search?${params.toString()}`);
       if (!res.ok) {
@@ -98,7 +87,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
 
   useEffect(() => {
     fetchCompanions();
-  }, [selectedCity, selectedServiceId, searchQuery]);
+  }, [selectedCity, selectedServiceId, clientCoords]);
 
   const handleBookNow = (companion: CompanionDiscoveryItem) => {
     setBookingAlert(null);
@@ -231,26 +220,30 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
 
         {/* Filter Controls Bar */}
         <div className="mb-8 p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-lg">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
-            {/* Location Selector */}
+            {/* Smart Location Autocomplete Search */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-pink-400" />
-                {t.selectLocationLabel}
+                {t.selectLocationLabel || 'Search City or Location'}
               </label>
-              <select
+              <LocationAutocomplete
                 value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-slate-100 focus:outline-none focus:border-pink-500 transition-colors cursor-pointer"
-              >
-                <option value="all">{t.allLocationsLabel}</option>
-                {INDIAN_LOCATIONS.filter(l => l.id !== 'all').map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => {
+                  setSelectedCity(val);
+                  if (!val) setClientCoords(null);
+                }}
+                onSelectLocation={(item) => {
+                  if (item.lat !== undefined && item.lng !== undefined) {
+                    setClientCoords({ lat: item.lat, lng: item.lng });
+                  } else {
+                    setClientCoords(null);
+                  }
+                }}
+                placeholder="Search any city, town, road or local area in India..."
+                accentColor="pink"
+              />
             </div>
 
             {/* 24-Service Filter Selector */}
@@ -265,7 +258,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                   const val = e.target.value;
                   setSelectedServiceId(val === 'all' ? 'all' : parseInt(val, 10));
                 }}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-slate-100 focus:outline-none focus:border-amber-400 transition-colors cursor-pointer"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-amber-400 transition-colors cursor-pointer"
               >
                 <option value="all">{t.allServicesLabel} (24 Services)</option>
                 {PAIRUP_SERVICES.map((srv) => (
@@ -274,31 +267,6 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                   </option>
                 ))}
               </select>
-            </div>
-
-            {/* Search Input */}
-            <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <Search className="w-3.5 h-3.5 text-slate-400" />
-                Search
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name, city or bio..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-slate-100 focus:outline-none focus:border-pink-500 transition-colors"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
             </div>
 
           </div>
@@ -348,9 +316,9 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
             <p className="text-xs text-slate-500 mt-1">Try resetting the location or service filter.</p>
             <button
               onClick={() => {
-                setSelectedCity('all');
+                setSelectedCity('');
+                setClientCoords(null);
                 setSelectedServiceId('all');
-                setSearchQuery('');
               }}
               className="mt-4 px-4 py-2 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30 text-xs font-bold"
             >
@@ -414,6 +382,14 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                         <MapPin className="w-3.5 h-3.5 text-pink-400 shrink-0" />
                         <span className="font-medium text-slate-300">{comp.locationFormatted}</span>
                       </div>
+
+                      {/* Real Distance Calculation from Client */}
+                      {comp.distanceKm !== undefined && (
+                        <div className="flex items-center gap-1.5 mt-2 text-xs font-semibold text-pink-400 bg-pink-500/10 border border-pink-500/20 px-2.5 py-1 rounded-lg w-fit">
+                          <Navigation className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                          <span>{comp.distanceKm} km away from you</span>
+                        </div>
+                      )}
 
                       {/* Bio snippet */}
                       <p className="mt-3 text-xs text-slate-300 line-clamp-2 leading-relaxed">
@@ -616,7 +592,10 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                   <span className="text-xs text-slate-400 block">Location</span>
                   <div className="flex items-center gap-1.5 mt-0.5 text-sm font-semibold text-slate-200">
                     <MapPin className="w-4 h-4 text-pink-400 shrink-0" />
-                    <span>{quickViewCompanion.locationFormatted || quickViewCompanion.address || quickViewCompanion.city}</span>
+                    <span>
+                      {quickViewCompanion.locationFormatted || quickViewCompanion.address || quickViewCompanion.city}
+                      {quickViewCompanion.distanceKm !== undefined ? ` • ${quickViewCompanion.distanceKm} km away` : ''}
+                    </span>
                   </div>
                 </div>
 
