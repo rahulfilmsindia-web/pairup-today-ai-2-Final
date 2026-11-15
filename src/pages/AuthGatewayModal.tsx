@@ -31,6 +31,12 @@ export const AuthGatewayModal: React.FC = () => {
   const [unregisteredError, setUnregisteredError] = useState(false);
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
 
+  // Forgot Password state
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+
   useEffect(() => {
     setActiveTab(authModalTab);
     setErrorMsg(null);
@@ -133,11 +139,6 @@ export const AuthGatewayModal: React.FC = () => {
   };
 
   // --- FORGOT PASSWORD HANDLERS ---
-  const [forgotPhone, setForgotPhone] = useState('');
-  const [forgotOtp, setForgotOtp] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
-
   const handleForgotSendOtp = async () => {
     setErrorMsg(null);
     if (!forgotPhone || forgotPhone.length < 10) {
