@@ -352,11 +352,27 @@ export const CompanionDashboard: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not create membership payment order.');
-      const checkoutResult = await openRazorpayCheckout(
-        data.payment,
-        `${plan} Companion membership`,
-        { name: user.legalName, contact: user.phone }
-      );
+      let checkoutResult: any;
+      try {
+        checkoutResult = await openRazorpayCheckout(
+          data.payment,
+          `${plan} Companion membership`,
+          { name: user.legalName, contact: user.phone }
+        );
+      } catch (checkoutErr: any) {
+        if (data?.payment?.orderId) {
+          const isCancelled = checkoutErr?.message?.includes('closed') || checkoutErr?.message?.includes('dismiss') || checkoutErr?.message?.includes('cancel');
+          apiFetch(isCancelled ? '/api/payments/razorpay/cancel-order' : '/api/payments/razorpay/fail-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: data.payment.orderId,
+              reason: checkoutErr?.message
+            })
+          }).catch(() => {});
+        }
+        throw checkoutErr;
+      }
       const verifyRes = await apiFetch('/api/payments/razorpay/verify-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

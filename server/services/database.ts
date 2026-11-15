@@ -283,6 +283,7 @@ export interface DatabaseAdapter {
   claimPaymentWebhookEvent(eventId: string, eventType: string, payload: any): Promise<any>;
   completePaymentWebhookEvent(eventId: string, error?: string): Promise<void>;
   markRazorpayOrderFailed(orderId: string, paymentId?: string): Promise<boolean>;
+  markRazorpayOrderCancelled(orderId: string): Promise<boolean>;
   reservePaymentRefund(refund: any): Promise<any>;
   listPaymentRefunds(filters?: any): Promise<any[]>;
   updatePaymentRefund(idempotencyKey: string, status: string, providerRefundId?: string): Promise<any>;
@@ -1114,8 +1115,44 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
     event.processed = !error;
   }
 
-  async markRazorpayOrderFailed(): Promise<boolean> {
-    throw new Error('Razorpay reconciliation requires Supabase.');
+  async markRazorpayOrderFailed(orderId: string, paymentId?: string): Promise<boolean> {
+    const db = this.getDB();
+    let updated = false;
+    for (const b of Object.values(db.bookings) as any[]) {
+      if (b.paymentOrderId === orderId && (b.paymentStatus === 'PENDING' || !b.paymentStatus)) {
+        b.paymentStatus = 'FAILED';
+        b.status = 'CANCELLED';
+        if (paymentId) b.paymentId = paymentId;
+        updated = true;
+      }
+    }
+    for (const m of Object.values(db.companionMemberships) as any[]) {
+      if (m.paymentOrderId === orderId && (m.paymentStatus === 'PENDING' || !m.paymentStatus)) {
+        m.paymentStatus = 'FAILED';
+        if (paymentId) m.paymentId = paymentId;
+        updated = true;
+      }
+    }
+    return updated;
+  }
+
+  async markRazorpayOrderCancelled(orderId: string): Promise<boolean> {
+    const db = this.getDB();
+    let updated = false;
+    for (const b of Object.values(db.bookings) as any[]) {
+      if (b.paymentOrderId === orderId && (b.paymentStatus === 'PENDING' || !b.paymentStatus)) {
+        b.paymentStatus = 'CANCELLED';
+        b.status = 'CANCELLED';
+        updated = true;
+      }
+    }
+    for (const m of Object.values(db.companionMemberships) as any[]) {
+      if (m.paymentOrderId === orderId && (m.paymentStatus === 'PENDING' || !m.paymentStatus)) {
+        m.paymentStatus = 'CANCELLED';
+        updated = true;
+      }
+    }
+    return updated;
   }
 
   async reservePaymentRefund(): Promise<any> {
@@ -1680,7 +1717,7 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       expiryDate: row.expiry_date,
       paymentOrderId: row.payment_order_id,
       paymentId: row.payment_id,
-      paymentStatus: row.payment_status
+      paymentStatus: row.payment_status || (row.payment_id ? 'PAID' : 'PENDING')
     }));
   }
 
@@ -2445,12 +2482,33 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async markRazorpayOrderFailed(orderId: string, paymentId?: string): Promise<boolean> {
-    const { data, error } = await supabase.rpc('mark_razorpay_order_failed', {
-      p_order_id: orderId, p_payment_id: paymentId || null
-    });
-    if (error) throw error;
-    if (typeof data !== 'boolean') throw new Error('Supabase returned an invalid payment failure result.');
-    return data;
+    try {
+      const { data, error } = await supabase.rpc('mark_razorpay_order_failed', {
+        p_order_id: orderId, p_payment_id: paymentId || null
+      });
+      if (!error && typeof data === 'boolean') return data;
+    } catch (e) {
+      console.warn('mark_razorpay_order_failed rpc warning:', e);
+    }
+    try {
+      await db.bookings().update({ payment_status: 'FAILED', status: 'CANCELLED', ...(paymentId ? { payment_id: paymentId } : {}) }).eq('payment_order_id', orderId);
+      await db.companionMemberships().update({ payment_status: 'FAILED', ...(paymentId ? { payment_id: paymentId } : {}) }).eq('payment_order_id', orderId);
+      return true;
+    } catch (e) {
+      console.warn('markRazorpayOrderFailed direct update warning:', e);
+      return false;
+    }
+  }
+
+  async markRazorpayOrderCancelled(orderId: string): Promise<boolean> {
+    try {
+      await db.bookings().update({ payment_status: 'CANCELLED', status: 'CANCELLED' }).eq('payment_order_id', orderId);
+      await db.companionMemberships().update({ payment_status: 'CANCELLED' }).eq('payment_order_id', orderId);
+      return true;
+    } catch (e) {
+      console.warn('markRazorpayOrderCancelled direct update warning:', e);
+      return false;
+    }
   }
 
   async reservePaymentRefund(refund: any): Promise<any> {

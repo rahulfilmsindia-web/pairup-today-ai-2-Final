@@ -1450,6 +1450,8 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     route === 'GET /api/companion/wallet' ||
     route === 'POST /api/bookings/create' ||
     route === 'POST /api/payments/razorpay/verify-payment' ||
+    route === 'POST /api/payments/razorpay/cancel-order' ||
+    route === 'POST /api/payments/razorpay/fail-order' ||
     /^GET \/api\/notifications\/[^/]+$/.test(route) ||
     route === 'POST /api/notifications/read' ||
     route === 'POST /api/notifications/device-token' ||
@@ -2698,6 +2700,38 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
   } catch (error) {
     console.error('Razorpay payment verification failed.', error);
     return res.status(503).json({ success: false, error: 'Payment verification is temporarily unavailable.' });
+  }
+});
+
+app.post('/api/payments/razorpay/cancel-order', async (req: Request, res: Response) => {
+  const authUserId = (req as AuthenticatedRequest).authUser?.id;
+  if (!authUserId) return res.status(401).json({ error: 'Authentication required.' });
+  const { orderId } = req.body || {};
+  if (!orderId || typeof orderId !== 'string') {
+    return res.status(400).json({ error: 'Order ID is required.' });
+  }
+  try {
+    await databaseAdapter.markRazorpayOrderCancelled(orderId);
+    return res.json({ success: true, status: 'CANCELLED' });
+  } catch (error) {
+    console.error('Cancel payment order failed.', error);
+    return res.status(500).json({ error: 'Failed to cancel payment order.' });
+  }
+});
+
+app.post('/api/payments/razorpay/fail-order', async (req: Request, res: Response) => {
+  const authUserId = (req as AuthenticatedRequest).authUser?.id;
+  if (!authUserId) return res.status(401).json({ error: 'Authentication required.' });
+  const { orderId, paymentId } = req.body || {};
+  if (!orderId || typeof orderId !== 'string') {
+    return res.status(400).json({ error: 'Order ID is required.' });
+  }
+  try {
+    await databaseAdapter.markRazorpayOrderFailed(orderId, paymentId);
+    return res.json({ success: true, status: 'FAILED' });
+  } catch (error) {
+    console.error('Record failed payment order error:', error);
+    return res.status(500).json({ error: 'Failed to update order status.' });
   }
 });
 
@@ -4328,20 +4362,23 @@ app.get('/api/admin/memberships', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMI
     const rawMemberships = await databaseAdapter.listMemberships();
     const users = await databaseAdapter.listUsers();
     const userMap = new Map(users.map((u: any) => [u.id, u]));
-    const memberships = rawMemberships.map((m: any) => {
-      const user = userMap.get(m.userId);
-      return {
-        id: m.id || m.paymentId || `mem_${m.userId}`,
-        userId: m.userId,
-        userName: user?.legalName || 'Companion Host',
-        userPhone: user?.phone,
-        plan: m.plan,
-        pricePaise: m.pricePaise,
-        startDate: m.startDate,
-        expiryDate: m.expiryDate,
-        isActive: m.paymentStatus === 'PAID' && new Date(m.expiryDate) > new Date()
-      };
-    });
+    // Strictly include ONLY memberships where payment succeeded (PAID)
+    const memberships = rawMemberships
+      .filter((m: any) => m.paymentStatus === 'PAID')
+      .map((m: any) => {
+        const user = userMap.get(m.userId);
+        return {
+          id: m.id || m.paymentId || `mem_${m.userId}`,
+          userId: m.userId,
+          userName: user?.legalName || 'Companion Host',
+          userPhone: user?.phone,
+          plan: m.plan,
+          pricePaise: m.pricePaise,
+          startDate: m.startDate,
+          expiryDate: m.expiryDate,
+          isActive: m.paymentStatus === 'PAID' && new Date(m.expiryDate) > new Date()
+        };
+      });
     return res.json({ memberships });
   } catch (error) {
     console.error('Failed to list memberships.', error);
@@ -4382,9 +4419,11 @@ app.get('/api/admin/payments', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN',
     const userMap = new Map(users.map((u: any) => [u.id, u]));
 
     for (const b of bookings) {
-      if (b.paymentId) {
+      if (b.paymentId || b.paymentOrderId) {
+        let paymentStatus = b.paymentStatus || 'PENDING';
+        if (b.paymentId && paymentStatus === 'PENDING') paymentStatus = 'PAID';
         payments.push({
-          id: b.paymentId,
+          id: b.paymentId || b.paymentOrderId,
           type: 'BOOKING_ESCROW',
           bookingCode: b.bookingCode,
           payerName: b.clientName,
@@ -4392,7 +4431,7 @@ app.get('/api/admin/payments', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN',
           grossAmountPaise: b.bookingAmountPaise,
           adminFeePaise: b.adminPlatformFeePaise,
           companionSharePaise: b.companionNetSharePaise,
-          status: b.paymentStatus || 'PAID',
+          status: paymentStatus,
           createdAt: b.createdAt
         });
       }
@@ -4401,6 +4440,8 @@ app.get('/api/admin/payments', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN',
     for (const m of memberships) {
       if (m.paymentOrderId || m.paymentId) {
         const user = userMap.get(m.userId);
+        let paymentStatus = m.paymentStatus || 'PENDING';
+        if (m.paymentId && paymentStatus === 'PENDING') paymentStatus = 'PAID';
         payments.push({
           id: m.paymentId || m.paymentOrderId,
           type: 'COMPANION_MEMBERSHIP',
@@ -4410,11 +4451,13 @@ app.get('/api/admin/payments', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN',
           grossAmountPaise: m.pricePaise,
           adminFeePaise: m.pricePaise,
           companionSharePaise: 0,
-          status: 'PAID',
+          status: paymentStatus,
           createdAt: m.createdAt || m.startDate
         });
       }
     }
+
+    payments.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
     return res.json({ payments });
   } catch (error) {

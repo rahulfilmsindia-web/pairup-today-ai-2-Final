@@ -69,6 +69,7 @@ export const AdminPortal: React.FC = () => {
   const [membershipsList, setMembershipsList] = useState<any[]>([]);
   const [bookingsList, setBookingsList] = useState<any[]>([]);
   const [paymentsList, setPaymentsList] = useState<any[]>([]);
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'ALL' | 'PAID' | 'FAILED' | 'CANCELLED' | 'PENDING'>('ALL');
 
   // Finance desk state
   const [settlements, setSettlements] = useState<any[]>([]);
@@ -1078,17 +1079,35 @@ export const AdminPortal: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {membershipsList.map(m => (
-                      <tr key={m.id} className="hover:bg-slate-800/40">
-                        <td className="p-3 font-mono text-amber-400">{m.id}</td>
-                        <td className="p-3 font-bold text-slate-200">{m.userName}</td>
-                        <td className="p-3 font-semibold text-pink-400">{m.plan}</td>
-                        <td className="p-3 font-bold text-emerald-400">₹{(m.pricePaise / 100).toFixed(2)}</td>
-                        <td className="p-3 font-mono text-slate-400">{new Date(m.startDate).toLocaleDateString()}</td>
-                        <td className="p-3 font-mono text-slate-400">{new Date(m.expiryDate).toLocaleDateString()}</td>
-                        <td className="p-3">{m.isActive ? '✓ Active' : 'Expired'}</td>
+                    {membershipsList.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-6 text-center text-slate-500">
+                          No verified paid companion memberships recorded yet.
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      membershipsList.map(m => (
+                        <tr key={m.id} className="hover:bg-slate-800/40">
+                          <td className="p-3 font-mono text-amber-400">{m.id}</td>
+                          <td className="p-3 font-bold text-slate-200">{m.userName}</td>
+                          <td className="p-3 font-semibold text-pink-400">{m.plan}</td>
+                          <td className="p-3 font-bold text-emerald-400">₹{(m.pricePaise / 100).toFixed(2)}</td>
+                          <td className="p-3 font-mono text-slate-400">{new Date(m.startDate).toLocaleDateString()}</td>
+                          <td className="p-3 font-mono text-slate-400">{new Date(m.expiryDate).toLocaleDateString()}</td>
+                          <td className="p-3 font-semibold">
+                            {m.isActive ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold inline-flex items-center gap-1">
+                                <span>✓</span> Active
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 font-medium">
+                                Expired
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1133,7 +1152,27 @@ export const AdminPortal: React.FC = () => {
           {/* 10. PAYMENT RECORDS */}
           {currentSection === 'payments' && (
             <div className="space-y-4">
-              <h2 className="text-lg font-bold text-slate-100">Payment Records & Escrow Ledger</h2>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100">Payment Records & Escrow Ledger</h2>
+                  <p className="text-xs text-slate-400">Real-time ledger of booking escrows and companion memberships with verified payment statuses.</p>
+                </div>
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs overflow-x-auto">
+                  {(['ALL', 'PAID', 'FAILED', 'CANCELLED', 'PENDING'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setPaymentStatusFilter(tab)}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+                        paymentStatusFilter === tab
+                          ? 'bg-amber-400 text-slate-950 shadow'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {tab === 'ALL' ? 'All Records' : tab}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-x-auto">
                 <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800">
@@ -1143,22 +1182,49 @@ export const AdminPortal: React.FC = () => {
                       <th className="p-3">Payer</th>
                       <th className="p-3">Recipient</th>
                       <th className="p-3">Gross Amount</th>
-                      <th className="p-3">Admin Fee (15%)</th>
+                      <th className="p-3">Admin Fee</th>
                       <th className="p-3">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {paymentsList.map(p => (
-                      <tr key={p.id} className="hover:bg-slate-800/40">
-                        <td className="p-3 font-mono text-amber-400">{p.id}</td>
-                        <td className="p-3">{p.type}</td>
-                        <td className="p-3 font-semibold text-slate-200">{p.payerName}</td>
-                        <td className="p-3 text-slate-300">{p.recipientName}</td>
-                        <td className="p-3 font-bold text-emerald-400">₹{(p.grossAmountPaise / 100).toFixed(2)}</td>
-                        <td className="p-3 text-amber-400">₹{(p.adminFeePaise / 100).toFixed(2)}</td>
-                        <td className="p-3 font-bold text-emerald-400">{p.status}</td>
+                    {paymentsList
+                      .filter(p => paymentStatusFilter === 'ALL' || p.status === paymentStatusFilter)
+                      .map(p => (
+                        <tr key={p.id} className="hover:bg-slate-800/40">
+                          <td className="p-3 font-mono text-amber-400">{p.id}</td>
+                          <td className="p-3">{p.type}</td>
+                          <td className="p-3 font-semibold text-slate-200">{p.payerName}</td>
+                          <td className="p-3 text-slate-300">{p.recipientName}</td>
+                          <td className="p-3 font-bold text-emerald-400">₹{(p.grossAmountPaise / 100).toFixed(2)}</td>
+                          <td className="p-3 text-amber-400">₹{(p.adminFeePaise / 100).toFixed(2)}</td>
+                          <td className="p-3 font-semibold">
+                            {p.status === 'PAID' ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold inline-flex items-center gap-1">
+                                <span>✓</span> PAID
+                              </span>
+                            ) : p.status === 'FAILED' ? (
+                              <span className="px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 font-bold inline-flex items-center gap-1">
+                                <span>✕</span> FAILED
+                              </span>
+                            ) : p.status === 'CANCELLED' ? (
+                              <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold inline-flex items-center gap-1">
+                                <span>⊘</span> CANCELLED
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-medium inline-flex items-center gap-1">
+                                <span>⏳</span> {p.status || 'PENDING'}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    {paymentsList.filter(p => paymentStatusFilter === 'ALL' || p.status === paymentStatusFilter).length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-6 text-center text-slate-500">
+                          No payment records found for {paymentStatusFilter} status.
+                        </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
