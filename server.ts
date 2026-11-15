@@ -3291,13 +3291,16 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
       if (!matchName && !matchBio && !matchCity) continue;
     }
 
-    // Filter by city
+    // Filter by city / region / address
     if (city && city !== 'all') {
-      const c = (city as string).toLowerCase();
-      const userCity = (user.city || '').toLowerCase();
-      const userAddr = (profile.address || '').toLowerCase();
-      const userState = (user.state || profile.state || '').toLowerCase();
-      if (!userCity.includes(c) && !userAddr.includes(c) && !userState.includes(c)) {
+      const c = (city as string).toLowerCase().trim();
+      const userCity = (user.city || '').toLowerCase().trim();
+      const userAddr = (profile.address || '').toLowerCase().trim();
+      const userState = (user.state || profile.state || '').toLowerCase().trim();
+      const matchesCity = userCity && (userCity.includes(c) || c.includes(userCity));
+      const matchesAddr = userAddr && (userAddr.includes(c) || c.includes(userAddr));
+      const matchesState = userState && (userState.includes(c) || c.includes(userState));
+      if (!matchesCity && !matchesAddr && !matchesState) {
         continue;
       }
     }

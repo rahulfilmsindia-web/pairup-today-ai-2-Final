@@ -8,6 +8,7 @@ import { MapPin, Search, Loader2, X } from 'lucide-react';
 export interface LocationSuggestion {
   label: string;       // Primary line (e.g. "1/92, Graham Road, Azadgarh")
   sublabel: string;    // Secondary line (e.g. "Kolkata, West Bengal - 700040")
+  fullAddress: string; // Complete address: "1/92, Graham Road, Azadgarh, Kolkata, West Bengal - 700040"
   cityValue: string;   // Clean city string for filtering
   key: string;         // Unique dedup key
 }
@@ -150,27 +151,14 @@ function buildFromNominatim(
   mode: 'city' | 'full'
 ): LocationSuggestion | null {
   const a = r.address || {};
-
-  if (mode === 'city') {
-    const city = a.city || a.town || a.village || a.district || a.state_district || '';
-    const state = a.state || '';
-    const lbl = city && state ? `${city}, ${state}` : city || state;
-    if (!lbl) return null;
-    return {
-      label: lbl,
-      sublabel: state ? `${state}, India` : 'India',
-      cityValue: city || state,
-      key: `nom:city:${lbl}`.toLowerCase(),
-    };
-  }
+  const city = a.city || a.town || a.village || a.district || a.state_district || '';
+  const state = a.state || '';
+  const pin = a.postcode || '';
 
   const hNo = houseNo || a.house_number || '';
   const street = a.road || '';
   const poi = a.amenity || a.tourism || a.shop || a.hotel || a.restaurant || a.leisure || a.building || a.commercial || '';
   const locality = a.neighbourhood || a.suburb || a.quarter || '';
-  const city = a.city || a.town || a.village || a.district || '';
-  const state = a.state || '';
-  const pin = a.postcode || '';
 
   const mainParts: string[] = [];
   if (poi) mainParts.push(poi);
@@ -189,13 +177,15 @@ function buildFromNominatim(
   if (state) subParts.push(state);
   if (pin) subParts.push(pin);
 
-  const label = mainParts.length > 0 ? mainParts.join(', ') : r.display_name.split(', ').slice(0, 4).join(', ');
-  const sublabel = subParts.join(' - ');
+  const label = mainParts.length > 0 ? mainParts.join(', ') : r.display_name.split(', ').slice(0, 3).join(', ');
+  const sublabel = subParts.length > 0 ? subParts.join(' - ') : (r.display_name.split(', ').slice(3, 6).join(', ') || 'India');
+  const fullAddress = (sublabel && !label.includes(sublabel)) ? `${label}, ${sublabel}` : label;
 
   return {
     label,
     sublabel,
-    cityValue: city || state,
+    fullAddress,
+    cityValue: city || state || label,
     key: `nom:${label}|${sublabel}`.toLowerCase(),
   };
 }
@@ -236,18 +226,6 @@ function buildFromPhoton(
   const state = p.state || '';
   const pin = p.postcode || '';
 
-  if (mode === 'city') {
-    const cityLabel = city || district || suburb || state;
-    if (!cityLabel) return null;
-    const lbl = state && cityLabel !== state ? `${cityLabel}, ${state}` : cityLabel;
-    return {
-      label: lbl,
-      sublabel: pin ? `${state} (${pin})` : state || 'India',
-      cityValue: city || district || suburb || '',
-      key: `photon:city:${lbl}`.toLowerCase(),
-    };
-  }
-
   const mainParts: string[] = [];
   if (name && name !== street) mainParts.push(name);
   if (hNo && street) mainParts.push(`${hNo}, ${street}`);
@@ -270,11 +248,13 @@ function buildFromPhoton(
   const label = mainParts.length > 0 ? mainParts.join(', ') : (name || city || state || '');
   const sublabel = subParts.join(' - ');
   if (!label) return null;
+  const fullAddress = (sublabel && !label.includes(sublabel)) ? `${label}, ${sublabel}` : label;
 
   return {
     label,
     sublabel,
-    cityValue: city || district || '',
+    fullAddress,
+    cityValue: city || district || state || label,
     key: `photon:${label}|${sublabel}`.toLowerCase(),
   };
 }
@@ -322,7 +302,8 @@ async function executePanIndiaSearch(
           addResult({
             label: mainText,
             sublabel: secondary,
-            cityValue: secondary.split(',')[0] || mainText,
+            fullAddress: p.description || (secondary ? `${mainText}, ${secondary}` : mainText),
+            cityValue: secondary.split(',')[0]?.trim() || mainText,
             key: `gmaps:${p.place_id || p.description}`.toLowerCase(),
           });
         }
@@ -396,9 +377,12 @@ async function executePanIndiaSearch(
       { area: 'Sector 18 Market', city: 'Noida', state: 'Uttar Pradesh', pin: '201301' },
     ];
     popularHubs.forEach(hub => {
+      const label = `${houseNumber}, ${hub.area}`;
+      const sublabel = `${hub.city}, ${hub.state} - ${hub.pin}`;
       addResult({
-        label: `${houseNumber}, ${hub.area}`,
-        sublabel: `${hub.city}, ${hub.state} - ${hub.pin}`,
+        label,
+        sublabel,
+        fullAddress: `${label}, ${sublabel}`,
         cityValue: hub.city,
         key: `hub:${houseNumber}:${hub.area}`.toLowerCase(),
       });
@@ -499,12 +483,9 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   };
 
   const selectSuggestion = (item: LocationSuggestion) => {
-    let finalValue: string;
-    if (mode === 'city') {
-      finalValue = item.cityValue || item.label;
-    } else {
-      finalValue = item.sublabel ? `${item.label}, ${item.sublabel}` : item.label;
-    }
+    // Always select the complete, full proper address:
+    // e.g. "1/92, Golf Garden, Kolkata, West Bengal - 700040"
+    const finalValue = item.fullAddress || (item.sublabel ? `${item.label}, ${item.sublabel}` : item.label);
 
     setInputValue(finalValue);
     onChange(finalValue);
