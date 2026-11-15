@@ -43,6 +43,90 @@ export interface DistanceMatrixResult {
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || '';
 
 /**
+ * Fallback India-wide place predictions using OpenStreetMap Nominatim & Photon
+ */
+export async function getFallbackIndiaPredictions(input: string): Promise<AutocompletePrediction[]> {
+  const predictions: AutocompletePrediction[] = [];
+  const seen = new Set<string>();
+
+  // 1. Nominatim (India-restricted)
+  try {
+    const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(input)}&countrycodes=IN&format=json&addressdetails=1&limit=8&accept-language=en`;
+    const res = await fetch(nomUrl, {
+      signal: AbortSignal.timeout(6_000),
+      headers: {
+        'User-Agent': 'PairUpToday/1.0 (pairuptoday.in contact@pairuptoday.in)',
+        'Accept': 'application/json'
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        for (const r of data) {
+          const parts = (r.display_name || '').split(', ');
+          const main = parts.slice(0, 2).join(', ');
+          const secondary = parts.slice(2).join(', ');
+          const key = main.toLowerCase().replace(/[\s,.\-]+/g, '');
+          if (!seen.has(key)) {
+            seen.add(key);
+            predictions.push({
+              description: r.display_name,
+              place_id: `osm_${r.place_id}`,
+              structured_formatting: {
+                main_text: main,
+                secondary_text: secondary || 'India'
+              }
+            });
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    // Continue to Photon
+  }
+
+  // 2. Photon (India geographical center bias: lat 20.5937, lon 78.9629)
+  if (predictions.length < 5) {
+    try {
+      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(input)}&limit=8&lang=en&lat=20.5937&lon=78.9629`;
+      const res = await fetch(photonUrl, {
+        signal: AbortSignal.timeout(5_000),
+        headers: { 'Accept': 'application/json' }
+      });
+      if (res.ok) {
+        const text = await res.text();
+        if (text.startsWith('{')) {
+          const data = JSON.parse(text);
+          for (const f of (data.features || [])) {
+            const p = f.properties;
+            if (p.country && !['India', 'IN'].includes(p.country)) continue;
+            const main = [p.name || '', p.housenumber || '', p.street || ''].filter(Boolean).join(' ') || p.city || p.district || '';
+            const sec = [p.suburb, p.city || p.district, p.state, p.postcode].filter(Boolean).join(', ');
+            const full = [main, sec].filter(Boolean).join(', ');
+            const key = main.toLowerCase().replace(/[\s,.\-]+/g, '');
+            if (main && !seen.has(key)) {
+              seen.add(key);
+              predictions.push({
+                description: full,
+                place_id: `photon_${p.osm_id || Math.random()}`,
+                structured_formatting: {
+                  main_text: main,
+                  secondary_text: sec || 'India'
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      // Ignore
+    }
+  }
+
+  return predictions;
+}
+
+/**
  * Get place autocomplete predictions
  */
 export async function getPlaceAutocomplete(
@@ -50,40 +134,43 @@ export async function getPlaceAutocomplete(
   location?: { lat: number; lng: number },
   radius?: number
 ): Promise<AutocompletePrediction[]> {
-  if (!GOOGLE_MAPS_API_KEY) {
-    throw new Error('Google Maps API key is not configured.');
+  if (GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY') {
+    try {
+      const params = new URLSearchParams({
+        input,
+        key: GOOGLE_MAPS_API_KEY,
+        components: 'country:IN', // Restrict to India
+        types: 'geocode|establishment'
+      });
+
+      if (location && radius) {
+        params.append('location', `${location.lat},${location.lng}`);
+        params.append('radius', radius.toString());
+      }
+
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`,
+        { signal: AbortSignal.timeout(8_000) }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'OK' && Array.isArray(data.predictions)) {
+          return data.predictions;
+        }
+        if (data.status === 'ZERO_RESULTS') {
+          return [];
+        }
+        console.warn(`[GooglePlaces] API status '${data.status}': ${data.error_message || 'Falling back to India OSM geocoder'}`);
+      } else {
+        console.warn(`[GooglePlaces] HTTP ${response.status}: Falling back to India OSM geocoder`);
+      }
+    } catch (error: any) {
+      console.warn(`[GooglePlaces] Error: ${error.message}. Falling back to India OSM geocoder`);
+    }
   }
 
-  try {
-    const params = new URLSearchParams({
-      input,
-      key: GOOGLE_MAPS_API_KEY,
-      components: 'country:IN', // Restrict to India
-      types: 'geocode|establishment'
-    });
-
-    if (location && radius) {
-      params.append('location', `${location.lat},${location.lng}`);
-      params.append('radius', radius.toString());
-    }
-
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`,
-      { signal: AbortSignal.timeout(15_000) }
-    );
-    if (!response.ok) throw new Error(`Google Places returned HTTP ${response.status}.`);
-    const data = await response.json();
-
-    if (data.status === 'OK' && Array.isArray(data.predictions)) {
-      return data.predictions;
-    }
-    if (data.status === 'ZERO_RESULTS') return [];
-
-    throw new Error(`Google Places autocomplete failed: ${data.status || 'invalid response'}.`);
-  } catch (error) {
-    console.error('Failed to fetch place autocomplete:', error);
-    throw error;
-  }
+  // Fallback to high-speed server-side India geocoder
+  return getFallbackIndiaPredictions(input);
 }
 
 /**

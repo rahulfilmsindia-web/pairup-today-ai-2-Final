@@ -5598,13 +5598,6 @@ app.get('/api/maps/autocomplete', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Input query is required' });
   }
 
-  if (!isGoogleMapsConfigured()) {
-    return res.status(503).json({
-      error: 'Google Maps API not configured',
-      message: 'GOOGLE_MAPS_API_KEY environment variable is required'
-    });
-  }
-
   const location = lat && lng ? { lat: parseFloat(lat as string), lng: parseFloat(lng as string) } : undefined;
   const radiusKm = radius ? parseInt(radius as string) : undefined;
 
@@ -5612,8 +5605,8 @@ app.get('/api/maps/autocomplete', async (req: Request, res: Response) => {
     const predictions = await getPlaceAutocomplete(input, location, radiusKm);
     return res.json({ predictions });
   } catch (error) {
-    console.error('Maps autocomplete request failed.', error);
-    return res.status(502).json({ error: 'Place autocomplete is temporarily unavailable.' });
+    console.error('Maps autocomplete request failed:', error);
+    return res.json({ predictions: [] });
   }
 });
 
