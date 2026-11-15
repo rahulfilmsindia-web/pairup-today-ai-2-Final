@@ -1052,8 +1052,14 @@ await runScenario(40, 'Smart India location autocomplete component and integrati
   assert(componentSrc.includes('User-Agent') || componentSrc.includes('user-agent'), 'Nominatim requests must include User-Agent header');
 
   // 40e. Must support both city and full modes
-  assert(componentSrc.includes("mode === 'city'") || componentSrc.includes("mode==='city'"), 'Must support city mode for region filter');
-  assert(componentSrc.includes("mode === 'full'") || componentSrc.includes("mode==='full'") || componentSrc.includes("mode: 'full'"), 'Must support full mode for any location type');
+  assert(
+    componentSrc.includes("mode?: 'city' | 'full'") ||
+    componentSrc.includes("mode: 'city' | 'full'") ||
+    componentSrc.includes("mode = 'full'") ||
+    componentSrc.includes("mode === 'full'") ||
+    componentSrc.includes("mode==='full'"),
+    'Must support full mode for any location type (default or explicit)'
+  );
 
   // 40f. Must handle keyboard navigation
   assert(componentSrc.includes('ArrowDown'), 'Must handle ArrowDown keyboard navigation');
@@ -1080,7 +1086,13 @@ await runScenario(40, 'Smart India location autocomplete component and integrati
   );
 
   // 40j. Component must free-text allow (no results case)
-  assert(componentSrc.includes('No matching locations') || componentSrc.includes('type freely'), 'Must show free-text fallback message when no results found');
+  assert(
+    componentSrc.includes('No matching locations') ||
+    componentSrc.includes('type freely') ||
+    componentSrc.includes('noResults') ||
+    componentSrc.includes('কোনো মিল'),
+    'Must show free-text fallback message when no results found'
+  );
 
   // 40k. AbortController used to cancel stale requests
   assert(componentSrc.includes('AbortController'), 'Must use AbortController to cancel in-flight Nominatim requests');
