@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { apiFetch } from '../utils/api';
@@ -37,6 +37,12 @@ export const ClientDashboard: React.FC = () => {
     | 'settings';
 
   const [activeTab, setActiveTab] = useState<ClientTab>('overview');
+
+  // Tab scroll ref for desktop Left/Right arrow navigation
+  const tabsNavRef = useRef<HTMLDivElement>(null);
+  const scrollTabs = (dir: 'left' | 'right') => {
+    tabsNavRef.current?.scrollBy({ left: dir === 'left' ? -240 : 240, behavior: 'smooth' });
+  };
 
   // Companions and filter state
   const [companions, setCompanions] = useState<any[]>([]);
@@ -451,7 +457,7 @@ export const ClientDashboard: React.FC = () => {
           </div>
 
           {/* EXACT KYC STATUS REQUIREMENT (SECTION 7) */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {isKycApproved ? (
               <div className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 shadow-inner">
                 <ShieldCheck className="w-4 h-4" />
@@ -463,6 +469,23 @@ export const ClientDashboard: React.FC = () => {
                 <span>Client Inactive: Wait for KYC Approval</span>
               </div>
             )}
+            {/* Notification Bell — always visible in header */}
+            <button
+              onClick={() => setActiveTab('notifications')}
+              title="Notifications"
+              className={`relative p-2.5 rounded-xl border transition-all shadow ${
+                activeTab === 'notifications'
+                  ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-amber-400/20'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
+              }`}
+            >
+              <Bell className="w-4 h-4" />
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-extrabold px-1 shadow">
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -479,8 +502,19 @@ export const ClientDashboard: React.FC = () => {
           </span>
         </div>
 
-        {/* 16 Visible Navigation Tabs Bar */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2 overflow-x-auto shadow-lg scrollbar-none">
+        {/* 16 Visible Navigation Tabs Bar with Left/Right Scroll Arrows */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2 shadow-lg">
+          <div className="relative flex items-center gap-1.5">
+            {/* Left scroll arrow */}
+            <button
+              onClick={() => scrollTabs('left')}
+              className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shrink-0 shadow"
+              title="Scroll tabs left"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            {/* Scrollable tabs */}
+            <div ref={tabsNavRef} className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-smooth text-xs font-medium">
           <div className="flex items-center gap-1.5 min-w-max text-xs font-medium">
             <button
               onClick={() => setActiveTab('overview')}
@@ -643,7 +677,17 @@ export const ClientDashboard: React.FC = () => {
               <LogOut className="w-3.5 h-3.5" />
               <span>Logout</span>
             </button>
-          </div>
+            </div>{/* end min-w-max scrollable inner */}
+            </div>{/* end flex-1 scrollable container */}
+            {/* Right scroll arrow */}
+            <button
+              onClick={() => scrollTabs('right')}
+              className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shrink-0 shadow"
+              title="Scroll tabs right"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>{/* end relative flex wrapper */}
         </div>
 
         {/* TAB 1: OVERVIEW */}
