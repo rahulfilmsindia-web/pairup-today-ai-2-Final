@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { MapPin, Search, Loader2, X } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -13,6 +14,8 @@ export interface LocationSuggestion {
   key: string;         // Unique dedup key
   lat?: number;
   lng?: number;
+  placeId?: string;
+  postalCode?: string;
 }
 
 export interface LocationAutocompleteProps {
@@ -26,6 +29,130 @@ export interface LocationAutocompleteProps {
   mode?: 'city' | 'full';
   accentColor?: 'amber' | 'pink';
   required?: boolean;
+}
+
+// Multilingual no-results messaging
+export const NO_RESULTS_MESSAGES: Record<'en' | 'bn' | 'hi', string> = {
+  en: 'No matching locations found — you can type freely',
+  bn: 'কোনো মিল পাওয়া যায়নি — আপনি নিজে লিখতে পারবেন',
+  hi: 'कोई परिणाम नहीं मिला — आप सीधे लिख सकते हैं',
+};
+
+// ─────────────────────────────────────────────────────────────
+// PAN-INDIA AREA TO PIN CODE DICTIONARY
+// Guarantees proper postal codes for Indian addresses & localities
+// ─────────────────────────────────────────────────────────────
+
+export const INDIAN_AREA_PINCODES: Record<string, string> = {
+  // Kolkata & West Bengal
+  'azadgarh': '700040',
+  'golf garden': '700040',
+  'graham road': '700040',
+  'regent park': '700040',
+  'ranikuthi': '700040',
+  'netaji nagar': '700040',
+  'jadavpur': '700032',
+  'tollygunge': '700033',
+  'baranagar': '700036',
+  'barranagar': '700036',
+  'dumdum': '700028',
+  'dum dum': '700028',
+  'saltlake': '700064',
+  'salt lake': '700064',
+  'bidhannagar': '700064',
+  'sector v': '700091',
+  'sector 5': '700091',
+  'new town': '700156',
+  'rajarhat': '700135',
+  'park street': '700016',
+  'ballygunge': '700019',
+  'alipore': '700027',
+  'behala': '700034',
+  'howrah': '711101',
+  'burdwan': '713101',
+  'bardhaman': '713101',
+  'durgapur': '713216',
+  'asansol': '713301',
+  'siliguri': '734001',
+  'kolkata': '700001',
+
+  // Delhi NCR
+  'connaught place': '110001',
+  'najafgarh': '110043',
+  'jhatikra': '110043',
+  'saket': '110017',
+  'hauz khas': '110016',
+  'karol bagh': '110005',
+  'chandni chowk': '110006',
+  'sector 18 noida': '201301',
+  'noida': '201301',
+  'cyber city gurugram': '122002',
+  'gurugram': '122001',
+  'gurgaon': '122001',
+  'delhi': '110001',
+
+  // Mumbai & Maharashtra
+  'bandra': '400050',
+  'andheri': '400058',
+  'juhu': '400049',
+  'colaba': '400005',
+  'dadar': '400028',
+  'borivali': '400092',
+  'mumbai': '400001',
+  'shivaji nagar pune': '411005',
+  'kothrud pune': '411038',
+  'pune': '411001',
+
+  // Bengaluru & Karnataka
+  'indiranagar': '560038',
+  'koramangala': '560034',
+  'whitefield': '560066',
+  'hsr layout': '560102',
+  'electronic city': '560100',
+  'jayanagar': '560011',
+  'bengaluru': '560001',
+  'bangalore': '560001',
+
+  // Hyderabad & Telangana
+  'gachibowli': '500032',
+  'hitec city': '500081',
+  'banjara hills': '500034',
+  'jubilee hills': '500033',
+  'hyderabad': '500001',
+
+  // Chennai & Tamil Nadu
+  't nagar': '600017',
+  'velachery': '600042',
+  'anna nagar': '600040',
+  'mylapore': '600004',
+  'chennai': '600001',
+
+  // Ahmedabad & Gujarat
+  'navrangpura': '380009',
+  'vastrapur': '380015',
+  'satellite': '380015',
+  'ahmedabad': '380001',
+
+  // Other Major Centers
+  'jaipur': '302001',
+  'lucknow': '226001',
+  'chandigarh': '160017',
+  'indore': '452001',
+  'patna': '800001',
+  'bhopal': '462001',
+  'nagpur': '440001',
+  'kochi': '682001'
+};
+
+export function lookupPincodeForAddress(text: string): string | null {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  for (const [area, pin] of Object.entries(INDIAN_AREA_PINCODES)) {
+    if (lower.includes(area)) {
+      return pin;
+    }
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -158,7 +285,10 @@ function buildFromNominatim(
   const a = r.address || {};
   const city = a.city || a.town || a.village || a.district || a.state_district || '';
   const state = a.state || '';
-  const pin = a.postcode || '';
+  let pin = a.postcode || (r.display_name.match(/\b([1-9]\d{5})\b/)?.[1] || '');
+  if (!pin) {
+    pin = lookupPincodeForAddress(`${r.display_name} ${houseNo || ''}`) || '';
+  }
 
   const hNo = houseNo || a.house_number || '';
   const street = a.road || '';
@@ -184,7 +314,10 @@ function buildFromNominatim(
 
   const label = mainParts.length > 0 ? mainParts.join(', ') : r.display_name.split(', ').slice(0, 3).join(', ');
   const sublabel = subParts.length > 0 ? subParts.join(' - ') : (r.display_name.split(', ').slice(3, 6).join(', ') || 'India');
-  const fullAddress = (sublabel && !label.includes(sublabel)) ? `${label}, ${sublabel}` : label;
+  let fullAddress = (sublabel && !label.includes(sublabel)) ? `${label}, ${sublabel}` : label;
+  if (pin && !fullAddress.includes(pin)) {
+    fullAddress = `${fullAddress} - ${pin}`;
+  }
 
   const lat = r.lat ? parseFloat(r.lat) : undefined;
   const lng = r.lon ? parseFloat(r.lon) : undefined;
@@ -197,6 +330,7 @@ function buildFromNominatim(
     key: `nom:${label}|${sublabel}`.toLowerCase(),
     lat: Number.isFinite(lat) ? lat : undefined,
     lng: Number.isFinite(lng) ? lng : undefined,
+    postalCode: pin || undefined,
   };
 }
 
@@ -237,7 +371,10 @@ function buildFromPhoton(
   const district = p.district || '';
   const city = p.city || p.county || '';
   const state = p.state || '';
-  const pin = p.postcode || '';
+  let pin = p.postcode || (JSON.stringify(f).match(/\b([1-9]\d{5})\b/)?.[1] || '');
+  if (!pin) {
+    pin = lookupPincodeForAddress(`${p.name || ''} ${p.street || ''} ${p.suburb || ''} ${p.city || ''} ${houseNo || ''}`) || '';
+  }
 
   const mainParts: string[] = [];
   if (name && name !== street) mainParts.push(name);
@@ -261,7 +398,10 @@ function buildFromPhoton(
   const label = mainParts.length > 0 ? mainParts.join(', ') : (name || city || state || '');
   const sublabel = subParts.join(' - ');
   if (!label) return null;
-  const fullAddress = (sublabel && !label.includes(sublabel)) ? `${label}, ${sublabel}` : label;
+  let fullAddress = (sublabel && !label.includes(sublabel)) ? `${label}, ${sublabel}` : label;
+  if (pin && !fullAddress.includes(pin)) {
+    fullAddress = `${fullAddress} - ${pin}`;
+  }
 
   const photonCoords = f.geometry?.coordinates;
   const lng = Array.isArray(photonCoords) && typeof photonCoords[0] === 'number' ? photonCoords[0] : undefined;
@@ -275,6 +415,7 @@ function buildFromPhoton(
     key: `photon:${label}|${sublabel}`.toLowerCase(),
     lat,
     lng,
+    postalCode: pin || undefined,
   };
 }
 
@@ -318,12 +459,19 @@ async function executePanIndiaSearch(
         for (const p of mapsData.predictions) {
           const mainText = p.structured_formatting?.main_text || p.description.split(',')[0];
           const secondary = p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(',').trim();
+          let baseAddress = p.description || (secondary ? `${mainText}, ${secondary}` : mainText);
+          const detectedPin = baseAddress.match(/\b([1-9]\d{5})\b/)?.[1] || lookupPincodeForAddress(baseAddress) || lookupPincodeForAddress(mainText) || '';
+          if (detectedPin && !baseAddress.includes(detectedPin)) {
+            baseAddress = `${baseAddress} - ${detectedPin}`;
+          }
           addResult({
             label: mainText,
-            sublabel: secondary,
-            fullAddress: p.description || (secondary ? `${mainText}, ${secondary}` : mainText),
+            sublabel: secondary ? (detectedPin && !secondary.includes(detectedPin) ? `${secondary} - ${detectedPin}` : secondary) : (detectedPin || 'India'),
+            fullAddress: baseAddress,
             cityValue: secondary.split(',')[0]?.trim() || mainText,
             key: `gmaps:${p.place_id || p.description}`.toLowerCase(),
+            placeId: p.place_id,
+            postalCode: detectedPin || undefined
           });
         }
         if (results.length >= 5) return results.slice(0, 6);
@@ -433,6 +581,30 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   const [activeIndex, setActiveIndex] = useState(-1);
   const [noResults, setNoResults] = useState(false);
 
+  // Resolve current active language safely
+  let currentLanguage: 'en' | 'bn' | 'hi' = 'en';
+  try {
+    const langCtx = useLanguage();
+    if (langCtx?.language) {
+      currentLanguage = langCtx.language;
+    }
+  } catch {
+    try {
+      const savedLang = localStorage.getItem('pairup_language') as 'en' | 'bn' | 'hi';
+      if (savedLang === 'bn' || savedLang === 'hi' || savedLang === 'en') {
+        currentLanguage = savedLang;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const defaultPlaceholder = currentLanguage === 'bn'
+    ? 'ভারতে যেকোনো ঠিকানা, রাস্তা, হোটেল বা এলাকা সার্চ করুন...'
+    : currentLanguage === 'hi'
+    ? 'भारत में कोई भी पता, सड़क, होटल या स्थान खोजें...'
+    : 'Search any address, street, hotel, restaurant in India...';
+
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -502,10 +674,37 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     debounceTimer.current = setTimeout(() => fetchSuggestions(val), 300);
   };
 
-  const selectSuggestion = (item: LocationSuggestion) => {
+  const selectSuggestion = async (item: LocationSuggestion) => {
     // Always select the complete, full proper address:
     // e.g. "1/92, Golf Garden, Kolkata, West Bengal - 700040"
-    const finalValue = item.fullAddress || (item.sublabel ? `${item.label}, ${item.sublabel}` : item.label);
+    let finalValue = item.fullAddress || (item.sublabel ? `${item.label}, ${item.sublabel}` : item.label);
+
+    // 1. If Google PlaceId is available and finalValue does not yet have a PIN code, try geocoding
+    if (item.placeId && !finalValue.match(/\b[1-9]\d{5}\b/)) {
+      try {
+        const geoRes = await fetch(`/api/maps/geocode?place_id=${encodeURIComponent(item.placeId)}`);
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          if (geoData.formatted_address) {
+            finalValue = geoData.formatted_address;
+          }
+          if (typeof geoData.latitude === 'number' && typeof geoData.longitude === 'number') {
+            item.lat = geoData.latitude;
+            item.lng = geoData.longitude;
+          }
+        }
+      } catch (e) {
+        // Fallback to local pin lookup
+      }
+    }
+
+    // 2. Guarantee 6-digit Indian PIN code is attached if missing
+    if (!finalValue.match(/\b[1-9]\d{5}\b/)) {
+      const pin = item.postalCode || lookupPincodeForAddress(finalValue) || lookupPincodeForAddress(inputValue);
+      if (pin) {
+        finalValue = `${finalValue} - ${pin}`;
+      }
+    }
 
     setInputValue(finalValue);
     onChange(finalValue);
@@ -571,7 +770,7 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
           onFocus={() => {
             if (suggestions.length > 0) setOpen(true);
           }}
-          placeholder={placeholder}
+          placeholder={placeholder || defaultPlaceholder}
           required={required}
           className={`w-full pl-9 pr-8 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none ${accent} transition-colors`}
           autoComplete="off"
@@ -598,7 +797,7 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
           {noResults ? (
             <div className="px-4 py-3 text-xs text-slate-500 flex items-center gap-2">
               <Search className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>কোনো মিল পাওয়া যায়নি — আপনি নিজে লিখতে পারবেন</span>
+              <span>{NO_RESULTS_MESSAGES[currentLanguage] || NO_RESULTS_MESSAGES.en}</span>
             </div>
           ) : (
             <ul className="max-h-64 overflow-y-auto divide-y divide-slate-800/60">

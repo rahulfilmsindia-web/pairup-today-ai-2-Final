@@ -29,7 +29,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
   initialServiceId,
   onBookCompanion
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { user, openAuthModal, setBookingContext } = useAuth();
 
   const [selectedCity, setSelectedCity] = useState<string>('');
@@ -226,7 +226,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-pink-400" />
-                {t.selectLocationLabel || 'Search City or Location'}
+                {t.selectLocationLabel || (language === 'bn' ? 'শহর বা অবস্থান খুঁজুন' : language === 'hi' ? 'शहर या स्थान खोजें' : 'Search City or Location')}
               </label>
               <LocationAutocomplete
                 value={selectedCity}
@@ -241,7 +241,13 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                     setClientCoords(null);
                   }
                 }}
-                placeholder="Search any city, town, road or local area in India..."
+                placeholder={
+                  language === 'bn'
+                    ? 'ভারতে যেকোনো শহর, এলাকা, রাস্তা বা ঠিকানা দিয়ে খুঁজুন...'
+                    : language === 'hi'
+                    ? 'भारत में कोई भी शहर, क्षेत्र, सड़क या पता खोजें...'
+                    : 'Search any city, town, road or local area in India...'
+                }
                 accentColor="pink"
               />
             </div>
@@ -387,7 +393,13 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                       {comp.distanceKm !== undefined && (
                         <div className="flex items-center gap-1.5 mt-2 text-xs font-semibold text-pink-400 bg-pink-500/10 border border-pink-500/20 px-2.5 py-1 rounded-lg w-fit">
                           <Navigation className="w-3.5 h-3.5 text-pink-400 shrink-0" />
-                          <span>{comp.distanceKm} km away from you</span>
+                          <span>
+                            {language === 'bn'
+                              ? `আপনার থেকে ${comp.distanceKm} কিমি দূরত্বে`
+                              : language === 'hi'
+                              ? `आपसे ${comp.distanceKm} किमी दूरी पर`
+                              : `${comp.distanceKm} km away from you`}
+                          </span>
                         </div>
                       )}
 
@@ -594,7 +606,13 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                     <MapPin className="w-4 h-4 text-pink-400 shrink-0" />
                     <span>
                       {quickViewCompanion.locationFormatted || quickViewCompanion.address || quickViewCompanion.city}
-                      {quickViewCompanion.distanceKm !== undefined ? ` • ${quickViewCompanion.distanceKm} km away` : ''}
+                      {quickViewCompanion.distanceKm !== undefined
+                        ? language === 'bn'
+                          ? ` • আপনার থেকে ${quickViewCompanion.distanceKm} কিমি দূরত্বে`
+                          : language === 'hi'
+                          ? ` • आपसे ${quickViewCompanion.distanceKm} किमी दूरी पर`
+                          : ` • ${quickViewCompanion.distanceKm} km away`
+                        : ''}
                     </span>
                   </div>
                 </div>
