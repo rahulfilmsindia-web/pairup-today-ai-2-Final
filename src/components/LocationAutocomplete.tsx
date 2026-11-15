@@ -6,8 +6,8 @@ import { MapPin, Search, Loader2, X } from 'lucide-react';
 // ─────────────────────────────────────────────────────────────
 
 export interface LocationSuggestion {
-  label: string;       // Primary line e.g. "1/92, Graham Road"
-  sublabel: string;    // Secondary line e.g. "Azadgarh, Kolkata, West Bengal - 700040"
+  label: string;       // Primary line (e.g. "1/92, Graham Road, Azadgarh")
+  sublabel: string;    // Secondary line (e.g. "Kolkata, West Bengal - 700040")
   cityValue: string;   // Clean city string for filtering
   key: string;         // Unique dedup key
 }
@@ -25,10 +25,12 @@ export interface LocationAutocompleteProps {
 }
 
 // ─────────────────────────────────────────────────────────────
-// INDIAN TYPO NORMALIZER & PIN REPAIR
+// PAN-INDIA TYPO NORMALIZER & PHONETIC CORRECTION
+// Corrects common spelling mistakes across Indian English, Bengali, and Hindi
 // ─────────────────────────────────────────────────────────────
 
-const COMMON_TYPOS: Record<string, string> = {
+const PAN_INDIA_TYPOS: Record<string, string> = {
+  // Food & Dining
   restrurant: 'restaurant',
   restrunt: 'restaurant',
   resturant: 'restaurant',
@@ -37,10 +39,31 @@ const COMMON_TYPOS: Record<string, string> = {
   restro: 'restaurant',
   biriyani: 'biryani',
   briyani: 'biryani',
+  hotal: 'hotel',
+  hotle: 'hotel',
+  dhabaa: 'dhaba',
+  bakeri: 'bakery',
+
+  // Address Elements
+  appartment: 'apartment',
+  apartmnt: 'apartment',
+  appts: 'apartments',
+  bldg: 'building',
+  colony: 'colony',
+  colny: 'colony',
+  nagr: 'nagar',
+  chowk: 'chowk',
+  chawk: 'chowk',
+  bajar: 'bazar',
+  bazzar: 'bazar',
+  mkt: 'market',
+  stn: 'station',
+  hosp: 'hospital',
+
+  // Common Local Area Phonetic Typos
   tolygunj: 'tollygunge',
   tollygunj: 'tollygunge',
   toligunj: 'tollygunge',
-  tolygonge: 'tollygunge',
   azadgrah: 'azadgarh',
   azadgar: 'azadgarh',
   shantigrah: 'shantigarh',
@@ -53,16 +76,20 @@ const COMMON_TYPOS: Record<string, string> = {
   bombay: 'mumbai',
   poona: 'pune',
   gurgaon: 'gurugram',
+  baroda: 'vadodara',
+  banaras: 'varanasi',
+  trivandrum: 'thiruvananthapuram',
+  cochin: 'kochi',
 };
 
-function normalizeQueryText(text: string): string {
+function normalizePanIndiaText(text: string): string {
   let cleaned = text.trim();
 
-  // Repair 5-digit PIN (e.g. 70040 -> 700040)
+  // Repair 5-digit PIN (e.g. 70040 -> 700040, 11004 -> 110004, 56003 -> 560003)
   cleaned = cleaned.replace(/\b([1-9]\d{2})(\d{2})\b/g, '$10$2');
 
-  // Replace common typos
-  for (const [typo, fix] of Object.entries(COMMON_TYPOS)) {
+  // Replace recognized phonetic typos
+  for (const [typo, fix] of Object.entries(PAN_INDIA_TYPOS)) {
     const reg = new RegExp(`\\b${typo}\\b`, 'gi');
     cleaned = cleaned.replace(reg, fix);
   }
@@ -70,9 +97,13 @@ function normalizeQueryText(text: string): string {
   return cleaned;
 }
 
-// Extract house/door/plot/flat prefix (e.g. "1/92", "45/B", "Plot 12", "Flat 4A")
-function parseHouseNumber(raw: string): { houseNumber: string | null; cleanRemainder: string } {
-  const housePattern = /^(\d+[\/\-]\d+[a-zA-Z]?|\d+[a-zA-Z]?|\b(?:flat|plot|house|h\.?no|door)\s*[\w\/\-]+)[\s,]*/i;
+// ─────────────────────────────────────────────────────────────
+// HOUSE / DOOR / PLOT / FLAT NUMBER PARSER
+// Preserves door numbers like "1/92", "45/A", "Plot 102", "Flat 3B", "C-24"
+// ─────────────────────────────────────────────────────────────
+
+function parseHousePrefix(raw: string): { houseNumber: string | null; cleanRemainder: string } {
+  const housePattern = /^((?:flat|plot|house|h\.?no|door|shop|block|sector|sec|gali|lane)\s*[\w\/\-]+|\d+[\/\-]\d+[a-zA-Z]?|\d+[a-zA-Z]?)[\s,]*/i;
   const match = raw.match(housePattern);
   if (match) {
     const houseNumber = match[1].trim();
@@ -83,110 +114,7 @@ function parseHouseNumber(raw: string): { houseNumber: string | null; cleanRemai
 }
 
 // ─────────────────────────────────────────────────────────────
-// CURATED POPULAR INDIAN LANDMARKS, RESTAURANTS & LOCALITIES
-// Provides instant high-fidelity matches for places like
-// "Shimla Biryani", "Graham Road Azadgarh", "Jhatikra Delhi", etc.
-// ─────────────────────────────────────────────────────────────
-
-interface CuratedPlace {
-  name: string;
-  locality: string;
-  city: string;
-  state: string;
-  pincode: string;
-  keywords: string;
-}
-
-const CURATED_PLACES: CuratedPlace[] = [
-  // Kolkata & Bengal
-  { name: 'Shimla Biryani Restaurant', locality: 'EM Bypass / Topsia', city: 'Kolkata', state: 'West Bengal', pincode: '700046', keywords: 'simla shimla biryani biriyani restaurant restrurant topsia em bypass' },
-  { name: 'Shimla Biryani Restaurant', locality: 'VIP Road, Kaikhali', city: 'Kolkata', state: 'West Bengal', pincode: '700052', keywords: 'simla shimla biryani biriyani restaurant restrurant kaikhali vip road' },
-  { name: 'Graham Road', locality: 'Azadgarh, Regent Park', city: 'Kolkata', state: 'West Bengal', pincode: '700040', keywords: 'graham road azadgarh azadgrah tollygunge tolygunj 700040 70040 shantigarh' },
-  { name: 'Arsalan Restaurant', locality: 'Park Circus 7 Point', city: 'Kolkata', state: 'West Bengal', pincode: '700017', keywords: 'arsalan biryani park circus restaurant' },
-  { name: 'Aminia Restaurant', locality: 'New Market, Esplanade', city: 'Kolkata', state: 'West Bengal', pincode: '700087', keywords: 'aminia biryani new market esplanade restaurant' },
-  { name: 'Peter Cat Restaurant', locality: 'Park Street', city: 'Kolkata', state: 'West Bengal', pincode: '700016', keywords: 'peter cat park street restaurant chelo kebab' },
-  { name: 'South City Mall', locality: 'Prince Anwar Shah Road, Jadavpur', city: 'Kolkata', state: 'West Bengal', pincode: '700068', keywords: 'south city mall jadavpur anwar shah' },
-  { name: 'Starbucks Coffee', locality: 'Park Street', city: 'Kolkata', state: 'West Bengal', pincode: '700016', keywords: 'starbucks park street cafe coffee' },
-  { name: 'Salt Lake Sector V', locality: 'Bidhannagar', city: 'Kolkata', state: 'West Bengal', pincode: '700091', keywords: 'salt lake sector 5 sector v bidhannagar it hub' },
-  { name: 'City Centre 1', locality: 'DC Block, Salt Lake', city: 'Kolkata', state: 'West Bengal', pincode: '700064', keywords: 'city centre cc1 salt lake bidhannagar' },
-
-  // Delhi NCR
-  { name: 'Jhatikra Road', locality: 'Najafgarh', city: 'New Delhi', state: 'Delhi', pincode: '110043', keywords: 'jhatikra jhatiya najafgarh south west delhi 1/92' },
-  { name: 'Connaught Place (CP)', locality: 'Inner Circle', city: 'New Delhi', state: 'Delhi', pincode: '110001', keywords: 'connaught place cp central delhi rajiv chowk' },
-  { name: 'Cyber Hub', locality: 'DLF Phase 2', city: 'Gurugram', state: 'Haryana', pincode: '122002', keywords: 'cyber hub dlf gurgaon gurugram' },
-  { name: 'Hauz Khas Social', locality: 'Hauz Khas Village', city: 'New Delhi', state: 'Delhi', pincode: '110016', keywords: 'hauz khas village hkv south delhi cafe restaurant' },
-  { name: 'Karim\'s Restaurant', locality: 'Jama Masjid, Old Delhi', city: 'New Delhi', state: 'Delhi', pincode: '110006', keywords: 'karim karims jama masjid old delhi biryani kebabs' },
-  { name: 'Khan Market', locality: 'Rabindra Nagar', city: 'New Delhi', state: 'Delhi', pincode: '110003', keywords: 'khan market south delhi shopping cafe' },
-
-  // Mumbai
-  { name: 'Bandra Bandstand', locality: 'Bandra West', city: 'Mumbai', state: 'Maharashtra', pincode: '400050', keywords: 'bandra bandstand west mumbai seafront' },
-  { name: 'Juhu Beach', locality: 'Juhu Tara Road', city: 'Mumbai', state: 'Maharashtra', pincode: '400049', keywords: 'juhu beach vile parle west mumbai' },
-  { name: 'Marine Drive', locality: 'Nariman Point', city: 'Mumbai', state: 'Maharashtra', pincode: '400021', keywords: 'marine drive queens necklace nariman point' },
-  { name: 'Bastian Restaurant', locality: 'Linking Road, Bandra West', city: 'Mumbai', state: 'Maharashtra', pincode: '400050', keywords: 'bastian linking road bandra restaurant' },
-
-  // Bengaluru
-  { name: 'Indiranagar 100ft Road', locality: 'Indiranagar', city: 'Bengaluru', state: 'Karnataka', pincode: '560038', keywords: 'indiranagar 100ft road bangalore bengaluru' },
-  { name: 'Koramangala 5th Block', locality: 'Koramangala', city: 'Bengaluru', state: 'Karnataka', pincode: '560095', keywords: 'koramangala 5th block bangalore cafe pub restaurant' },
-  { name: 'UB City', locality: 'Vittal Mallya Road', city: 'Bengaluru', state: 'Karnataka', pincode: '560001', keywords: 'ub city vittal mallya road bangalore mall' },
-
-  // Hyderabad
-  { name: 'Paradise Biryani', locality: 'MG Road, Secunderabad', city: 'Hyderabad', state: 'Telangana', pincode: '500003', keywords: 'paradise biryani secunderabad restaurant' },
-  { name: 'Gachibowli Financial District', locality: 'Gachibowli', city: 'Hyderabad', state: 'Telangana', pincode: '500032', keywords: 'gachibowli financial district hitec city hyderabad' }
-];
-
-function getCuratedMatches(
-  cleanQuery: string,
-  houseNo: string | null,
-  mode: 'city' | 'full'
-): LocationSuggestion[] {
-  const norm = cleanQuery.toLowerCase();
-  const words = norm.split(/[\s,]+/).filter(w => w.length >= 2);
-
-  if (words.length === 0 && houseNo) {
-    // User typed ONLY house number (e.g. "1/92") -> provide popular residential road suggestions with house number
-    return CURATED_PLACES.slice(0, 5).map(p => {
-      const label = `${houseNo}, ${p.name}`;
-      const sublabel = `${p.locality}, ${p.city}, ${p.state} - ${p.pincode}`;
-      return {
-        label,
-        sublabel,
-        cityValue: p.city,
-        key: `curated:${label}|${sublabel}`.toLowerCase(),
-      };
-    });
-  }
-
-  if (words.length === 0) return [];
-
-  const matched = CURATED_PLACES.filter(p => {
-    const haystack = `${p.name} ${p.locality} ${p.city} ${p.state} ${p.pincode} ${p.keywords}`.toLowerCase();
-    // Match if all or most words appear in haystack
-    const matchCount = words.filter(w => haystack.includes(w)).length;
-    return matchCount >= Math.min(words.length, 2);
-  });
-
-  return matched.map(p => {
-    if (mode === 'city') {
-      return {
-        label: `${p.city}, ${p.state}`,
-        sublabel: `Region (PIN: ${p.pincode})`,
-        cityValue: p.city,
-        key: `curated:city:${p.city}`.toLowerCase(),
-      };
-    }
-    const label = houseNo ? `${houseNo}, ${p.name}` : p.name;
-    const sublabel = `${p.locality}, ${p.city}, ${p.state} - ${p.pincode}`;
-    return {
-      label,
-      sublabel,
-      cityValue: p.city,
-      key: `curated:${label}|${sublabel}`.toLowerCase(),
-    };
-  });
-}
-
-// ─────────────────────────────────────────────────────────────
-// NOMINATIM OPENSTREETMAP API (India-restricted)
+// NOMINATIM OPENSTREETMAP API (Restricted to all of India)
 // ─────────────────────────────────────────────────────────────
 
 interface NominatimResult {
@@ -212,6 +140,7 @@ interface NominatimResult {
     hotel?: string;
     leisure?: string;
     building?: string;
+    commercial?: string;
   };
 }
 
@@ -229,7 +158,7 @@ function buildFromNominatim(
     if (!lbl) return null;
     return {
       label: lbl,
-      sublabel: state ? `State: ${state}` : 'India',
+      sublabel: state ? `${state}, India` : 'India',
       cityValue: city || state,
       key: `nom:city:${lbl}`.toLowerCase(),
     };
@@ -237,7 +166,7 @@ function buildFromNominatim(
 
   const hNo = houseNo || a.house_number || '';
   const street = a.road || '';
-  const poi = a.amenity || a.tourism || a.shop || a.hotel || a.restaurant || a.leisure || a.building || '';
+  const poi = a.amenity || a.tourism || a.shop || a.hotel || a.restaurant || a.leisure || a.building || a.commercial || '';
   const locality = a.neighbourhood || a.suburb || a.quarter || '';
   const city = a.city || a.town || a.village || a.district || '';
   const state = a.state || '';
@@ -272,7 +201,7 @@ function buildFromNominatim(
 }
 
 // ─────────────────────────────────────────────────────────────
-// PHOTON (KOMOOT) API (typo/fuzzy tolerant)
+// PHOTON (KOMOOT) API (Fast Typo-Tolerant Engine for all India)
 // ─────────────────────────────────────────────────────────────
 
 interface PhotonFeature {
@@ -313,7 +242,7 @@ function buildFromPhoton(
     const lbl = state && cityLabel !== state ? `${cityLabel}, ${state}` : cityLabel;
     return {
       label: lbl,
-      sublabel: pin ? `PIN: ${pin}` : state,
+      sublabel: pin ? `${state} (${pin})` : state || 'India',
       cityValue: city || district || suburb || '',
       key: `photon:city:${lbl}`.toLowerCase(),
     };
@@ -351,10 +280,14 @@ function buildFromPhoton(
 }
 
 // ─────────────────────────────────────────────────────────────
-// COMBINED SEARCH DISPATCHER
+// PAN-INDIA LIVE SEARCH DISPATCHER
+// Connects to:
+// 1. Backend /api/maps/autocomplete (Google Places API when configured)
+// 2. OpenStreetMap Nominatim API (countrycodes=IN)
+// 3. Photon Geocoding API (India geographical center bias: lat 20.5937, lon 78.9629)
 // ─────────────────────────────────────────────────────────────
 
-async function executeSmartSearch(
+async function executePanIndiaSearch(
   query: string,
   mode: 'city' | 'full',
   signal: AbortSignal
@@ -362,59 +295,114 @@ async function executeSmartSearch(
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
-  const { houseNumber, cleanRemainder } = parseHouseNumber(trimmed);
-  const normalizedRemainder = normalizeQueryText(cleanRemainder);
-  const normalizedFull = normalizeQueryText(trimmed);
+  const { houseNumber, cleanRemainder } = parseHousePrefix(trimmed);
+  const normalizedRemainder = normalizePanIndiaText(cleanRemainder);
+  const normalizedFull = normalizePanIndiaText(trimmed);
 
   const results: LocationSuggestion[] = [];
   const seen = new Set<string>();
 
-  const add = (item: LocationSuggestion | null) => {
+  const addResult = (item: LocationSuggestion | null) => {
     if (!item) return;
-    const dedupe = item.label.toLowerCase().replace(/[\s,]+/g, '');
+    const dedupe = item.label.toLowerCase().replace(/[\s,.\-]+/g, '');
     if (seen.has(dedupe)) return;
     seen.add(dedupe);
     results.push(item);
   };
 
-  // 1. Check curated high-priority places
-  const curated = getCuratedMatches(normalizedRemainder || normalizedFull, houseNumber, mode);
-  curated.forEach(add);
-
-  // 2. Query Nominatim with India restriction
+  // 1. Try Backend Google Places API Endpoint (when configured)
   try {
-    const searchQuery = normalizedRemainder.length >= 2 ? normalizedRemainder : normalizedFull;
-    let nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&countrycodes=IN&format=json&addressdetails=1&limit=6&accept-language=en`;
-    if (mode === 'city') {
-      nomUrl += '&featuretype=city&featuretype=town&featuretype=village&featuretype=district';
-    }
-
-    const res = await fetch(nomUrl, {
-      signal,
-      headers: { 'User-Agent': 'PairUpToday/1.0 (pairuptoday.in contact@pairuptoday.in)' },
-    });
-
-    if (res.ok) {
-      const data: NominatimResult[] = await res.json();
-      data.forEach(r => add(buildFromNominatim(r, houseNumber, mode)));
+    const mapsRes = await fetch(`/api/maps/autocomplete?input=${encodeURIComponent(normalizedFull)}`, { signal });
+    if (mapsRes.ok) {
+      const mapsData = await mapsRes.json();
+      if (Array.isArray(mapsData.predictions) && mapsData.predictions.length > 0) {
+        for (const p of mapsData.predictions) {
+          const mainText = p.structured_formatting?.main_text || p.description.split(',')[0];
+          const secondary = p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(',').trim();
+          addResult({
+            label: mainText,
+            sublabel: secondary,
+            cityValue: secondary.split(',')[0] || mainText,
+            key: `gmaps:${p.place_id || p.description}`.toLowerCase(),
+          });
+        }
+        if (results.length >= 5) return results.slice(0, 6);
+      }
     }
   } catch (err: any) {
     if (err.name === 'AbortError') throw err;
   }
 
-  // 3. Photon API fallback/complement if we have fewer than 4 results
-  if (results.length < 4) {
+  // 2. Query OpenStreetMap Nominatim API (restricted to India)
+  try {
+    const searchQuery = normalizedRemainder.length >= 2 ? normalizedRemainder : normalizedFull;
+    let nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&countrycodes=IN&format=json&addressdetails=1&limit=8&accept-language=en`;
+    if (mode === 'city') {
+      nomUrl += '&featuretype=city&featuretype=town&featuretype=village&featuretype=district';
+    }
+
+    const nomRes = await fetch(nomUrl, {
+      signal,
+      headers: {
+        'User-Agent': 'PairUpToday/1.0 (pairuptoday.in contact@pairuptoday.in)',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (nomRes.ok) {
+      const text = await nomRes.text();
+      if (text.startsWith('[')) {
+        const nomData: NominatimResult[] = JSON.parse(text);
+        nomData.forEach(r => addResult(buildFromNominatim(r, houseNumber, mode)));
+      }
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+  }
+
+  // 3. Query Photon API (India-wide fuzzy & typo-tolerant geocoding)
+  if (results.length < 5) {
     try {
       const pQuery = normalizedRemainder.length >= 2 ? normalizedRemainder : normalizedFull;
-      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(pQuery)}&limit=6&lang=en&bbox=68.1,6.7,97.4,35.7`;
-      const pRes = await fetch(photonUrl, { signal });
+      // Lat 20.5937 & Lon 78.9629 biases results towards the geographic center of India
+      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(pQuery)}&limit=8&lang=en&lat=20.5937&lon=78.9629`;
+      const pRes = await fetch(photonUrl, {
+        signal,
+        headers: { 'Accept': 'application/json' },
+      });
+
       if (pRes.ok) {
-        const pData: { features: PhotonFeature[] } = await pRes.json();
-        pData.features?.forEach(f => add(buildFromPhoton(f, houseNumber, mode)));
+        const pText = await pRes.text();
+        if (pText.startsWith('{')) {
+          const pData: { features: PhotonFeature[] } = JSON.parse(pText);
+          pData.features?.forEach(f => addResult(buildFromPhoton(f, houseNumber, mode)));
+        }
       }
     } catch (err: any) {
       if (err.name === 'AbortError') throw err;
     }
+  }
+
+  // 4. Special fallback: if user typed ONLY a house/door number (e.g. "1/92") and no street yet
+  if (results.length === 0 && houseNumber && !cleanRemainder) {
+    const popularHubs = [
+      { area: 'Graham Road, Azadgarh, Regent Park', city: 'Kolkata', state: 'West Bengal', pin: '700040' },
+      { area: 'Jhatikra Road, Najafgarh', city: 'New Delhi', state: 'Delhi', pin: '110043' },
+      { area: 'Connaught Place, Central Delhi', city: 'New Delhi', state: 'Delhi', pin: '110001' },
+      { area: 'Bandra West, Linking Road', city: 'Mumbai', state: 'Maharashtra', pin: '400050' },
+      { area: 'Indiranagar 100ft Road', city: 'Bengaluru', state: 'Karnataka', pin: '560038' },
+      { area: 'Salt Lake Sector 1, Bidhannagar', city: 'Kolkata', state: 'West Bengal', pin: '700064' },
+      { area: 'Gachibowli Financial District', city: 'Hyderabad', state: 'Telangana', pin: '500032' },
+      { area: 'Sector 18 Market', city: 'Noida', state: 'Uttar Pradesh', pin: '201301' },
+    ];
+    popularHubs.forEach(hub => {
+      addResult({
+        label: `${houseNumber}, ${hub.area}`,
+        sublabel: `${hub.city}, ${hub.state} - ${hub.pin}`,
+        cityValue: hub.city,
+        key: `hub:${houseNumber}:${hub.area}`.toLowerCase(),
+      });
+    });
   }
 
   return results.slice(0, 6);
@@ -427,7 +415,7 @@ async function executeSmartSearch(
 export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   value,
   onChange,
-  placeholder = 'Search any location in India...',
+  placeholder = 'Search any address, street, hotel, restaurant in India...',
   className = '',
   label,
   mode = 'full',
@@ -480,7 +468,7 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     setNoResults(false);
 
     try {
-      const data = await executeSmartSearch(query, mode, abortRef.current.signal);
+      const data = await executePanIndiaSearch(query, mode, abortRef.current.signal);
       if (data.length === 0) {
         setSuggestions([]);
         setNoResults(true);
@@ -564,7 +552,7 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         </label>
       )}
 
-      {/* Search Input Box */}
+      {/* Input */}
       <div className="relative flex items-center">
         <MapPin className={`absolute left-3 w-3.5 h-3.5 ${accentText} pointer-events-none z-10`} />
         <input
@@ -597,7 +585,7 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         </div>
       </div>
 
-      {/* Autocomplete Dropdown */}
+      {/* Dropdown */}
       {open && (
         <div className="absolute z-50 mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
           {noResults ? (
@@ -638,13 +626,13 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
             </ul>
           )}
 
-          {/* Footer attribution */}
+          {/* Footer */}
           <div className="px-3 py-1.5 border-t border-slate-800 text-[10px] text-slate-500 flex items-center justify-between">
             <span className="flex items-center gap-1">
               <MapPin className="w-2.5 h-2.5 text-slate-400" />
-              Smart Address Autocomplete
+              India Address & Landmark Autocomplete
             </span>
-            <span className="text-[9px] text-slate-600">OpenStreetMap / Photon</span>
+            <span className="text-[9px] text-slate-600">All India Coverage</span>
           </div>
         </div>
       )}
