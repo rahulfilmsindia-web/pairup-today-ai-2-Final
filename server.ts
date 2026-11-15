@@ -2873,6 +2873,27 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
       delete safeBooking.completion_otp_hash;
       delete safeBooking.start_otp_encrypted;
       delete safeBooking.completion_otp_encrypted;
+
+      // Send in-app notifications
+      try {
+        await createAndSendNotification({
+          userId: booking.clientId,
+          type: 'BOOKING_CONFIRMED',
+          title: 'Booking Confirmed 📅',
+          body: `Your booking #${booking.bookingCode || ''} for ${booking.serviceName || 'Session'} is confirmed.`,
+          data: { type: 'BOOKING', bookingId: booking.id }
+        });
+        await createAndSendNotification({
+          userId: booking.companionId,
+          type: 'BOOKING_CONFIRMED',
+          title: 'New Confirmed Booking 💰',
+          body: `Booking #${booking.bookingCode || ''} payment confirmed for ${booking.date} (${booking.durationHours} hrs).`,
+          data: { type: 'BOOKING', bookingId: booking.id }
+        });
+      } catch (nErr) {
+        console.warn('Booking payment notification warning:', nErr);
+      }
+
       return res.json({
         success: true,
         message: 'Razorpay confirmed the captured payment and the booking is confirmed.',
@@ -2884,6 +2905,19 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
         }
       });
     }
+
+    try {
+      await createAndSendNotification({
+        userId: result.record.userId,
+        type: 'MEMBERSHIP_ACTIVATED',
+        title: 'Membership Activated 👑',
+        body: `Your ${result.record.planType} membership is now active!`,
+        data: { type: 'MEMBERSHIP' }
+      });
+    } catch (nErr) {
+      console.warn('Membership notification warning:', nErr);
+    }
+
     return res.json({
       success: true,
       message: 'Razorpay confirmed the captured membership payment.',
@@ -3466,6 +3500,20 @@ app.post('/api/bookings/:bookingId/arrived', async (req: Request, res: Response)
   if (getDatabaseType() === 'supabase') {
     try {
       await databaseAdapter.markBookingCompanionArrived(bookingId, companionId);
+      try {
+        const bk = await databaseAdapter.getBooking(bookingId);
+        if (bk?.clientId) {
+          await createAndSendNotification({
+            userId: bk.clientId,
+            type: 'COMPANION_ARRIVED',
+            title: 'Companion Arrived 📍',
+            body: 'Your companion has reached the meeting location. Provide your Start OTP to begin the session.',
+            data: { type: 'BOOKING', bookingId }
+          });
+        }
+      } catch (nErr) {
+        console.warn('Arrival notification warning:', nErr);
+      }
       return res.json({ success: true, message: 'Arrival recorded. The Client can access the Start OTP in their booking details.' });
     } catch (error) {
       console.error('Booking arrival update failed.', error);
@@ -3483,6 +3531,20 @@ app.post('/api/bookings/:bookingId/arrived', async (req: Request, res: Response)
   booking.startOtpHmac = hashOtp(freshStartOtp);
   booking.startOtpAttempts = 0;
   saveDB(db);
+
+  try {
+    if (booking.clientId) {
+      await createAndSendNotification({
+        userId: booking.clientId,
+        type: 'COMPANION_ARRIVED',
+        title: 'Companion Arrived 📍',
+        body: 'Your companion has reached the meeting location. Provide your Start OTP to begin the session.',
+        data: { type: 'BOOKING', bookingId }
+      });
+    }
+  } catch (nErr) {
+    console.warn('Arrival notification warning:', nErr);
+  }
 
   return res.json({
     success: true,
@@ -3599,6 +3661,30 @@ app.post('/api/bookings/:bookingId/complete', async (req: Request, res: Response
       delete booking.completion_otp_hash;
       delete booking.start_otp_encrypted;
       delete booking.completion_otp_encrypted;
+
+      try {
+        if (booking.clientId) {
+          createAndSendNotification({
+            userId: booking.clientId,
+            type: 'BOOKING_COMPLETED',
+            title: 'Session Completed 🎉',
+            body: `Booking #${booking.bookingCode || ''} completed successfully. Thank you for choosing PairUp!`,
+            data: { type: 'BOOKING', bookingId }
+          }).catch(() => null);
+        }
+        if (booking.companionId) {
+          createAndSendNotification({
+            userId: booking.companionId,
+            type: 'BOOKING_COMPLETED',
+            title: 'Session Completed 🎉',
+            body: `Booking #${booking.bookingCode || ''} completed successfully. Earnings recorded in locked balance.`,
+            data: { type: 'BOOKING', bookingId }
+          }).catch(() => null);
+        }
+      } catch (nErr) {
+        console.warn('Completion notification error:', nErr);
+      }
+
       return res.json({
         success: true,
         message: 'Booking completed. Settlement is locked for at least 48 hours.',
@@ -4161,6 +4247,30 @@ app.post('/api/admin/kyc/:id/action', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMI
       timestamp: submission.decidedAt
     });
     saveDB(db);
+
+    // Send in-app notification to user
+    try {
+      if (action === 'REJECT') {
+        await createAndSendNotification({
+          userId: submission.userId,
+          type: 'KYC_REJECTED',
+          title: 'KYC Verification Action Required ⚠️',
+          body: `Rejection reason: ${rejectionReason}. Tap to view details and re-upload clear documents.`,
+          data: { type: 'KYC_REJECTED', action: 'OPEN_KYC_WIZARD', rejectionReason }
+        });
+      } else {
+        await createAndSendNotification({
+          userId: submission.userId,
+          type: 'KYC_APPROVED',
+          title: 'KYC Verification Approved ✅',
+          body: 'Congratulations! Your identity documents and live selfie have been approved by PairUp Security Network.',
+          data: { type: 'KYC_APPROVED' }
+        });
+      }
+    } catch (nErr) {
+      console.warn('KYC notification delivery warning:', nErr);
+    }
+
     return res.json({
       success: true,
       submission: { ...omitKycDocumentPaths(submission), userPhone: user?.phone || null }
@@ -4176,6 +4286,30 @@ app.post('/api/admin/kyc/:id/action', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMI
       admin.id
     );
     const user = await databaseAdapter.getUser(submission.userId);
+
+    // Send in-app notification to user
+    try {
+      if (action === 'REJECT') {
+        await createAndSendNotification({
+          userId: submission.userId,
+          type: 'KYC_REJECTED',
+          title: 'KYC Verification Action Required ⚠️',
+          body: `Rejection reason: ${rejectionReason}. Tap to view details and re-upload clear documents.`,
+          data: { type: 'KYC_REJECTED', action: 'OPEN_KYC_WIZARD', rejectionReason }
+        });
+      } else {
+        await createAndSendNotification({
+          userId: submission.userId,
+          type: 'KYC_APPROVED',
+          title: 'KYC Verification Approved ✅',
+          body: 'Congratulations! Your identity documents and live selfie have been approved by PairUp Security Network.',
+          data: { type: 'KYC_APPROVED' }
+        });
+      }
+    } catch (nErr) {
+      console.warn('KYC notification delivery warning:', nErr);
+    }
+
     return res.json({ success: true, submission: { ...omitKycDocumentPaths(submission), userPhone: user?.phone || null } });
   } catch (error) {
     console.error('KYC decision could not be persisted.', error);

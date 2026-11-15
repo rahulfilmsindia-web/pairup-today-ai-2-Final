@@ -1544,12 +1544,41 @@ export const AdminPortal: React.FC = () => {
               <label className="block text-xs font-semibold text-slate-300">
                 Rejection Reason (Required if Rejecting):
               </label>
+
+              {/* Predefined Quick-Select Rejection Reasons */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 block font-medium">Quick Select Preset Reason:</span>
+                <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {[
+                    'Document photo is blur or unreadable. Please re-upload clear photos.',
+                    'Government ID expired or invalid document type. Please upload valid Govt ID.',
+                    'Live selfie photo does not match document photo. Please retake clear selfie.',
+                    'Document front or back side is missing or cut off. Please re-upload full document.',
+                    'Name or Date of Birth does not match document details. Please verify your details.',
+                    'ID document has glare, reflection or partial coverage. Please re-upload clear scan.'
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setRejectionReasonInput(preset)}
+                      className={`text-left text-[11px] p-2 rounded-lg border transition-all ${
+                        rejectionReasonInput === preset
+                          ? 'bg-red-500/20 border-red-500 text-red-200 font-semibold shadow-sm'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                      }`}
+                    >
+                      • {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <input
                 type="text"
                 value={rejectionReasonInput}
                 onChange={e => setRejectionReasonInput(e.target.value)}
-                placeholder="e.g. Identity photo does not match live selfie"
-                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100"
+                placeholder="Or type a custom rejection reason..."
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-red-400"
               />
             </div>
 

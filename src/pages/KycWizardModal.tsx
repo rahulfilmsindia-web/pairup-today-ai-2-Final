@@ -232,6 +232,24 @@ export const KycWizardModal: React.FC = () => {
           </p>
         </div>
 
+        {/* Rejection Reason Notice if previously rejected */}
+        {user?.kycStatus === 'REJECTED' && (
+          <div className="p-4 bg-red-950/40 border-b border-red-500/30 text-xs text-red-200 flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-400 mt-0.5" />
+            <div className="space-y-1 flex-1">
+              <strong className="text-red-300 font-bold block">
+                KYC Verification Action Required
+              </strong>
+              <div className="p-2.5 rounded-lg bg-black/50 border border-red-500/30 font-medium text-amber-300 text-xs">
+                Reason: {user.kycRejectionReason || 'Document photo blur or unreadable. Please re-upload clear photos.'}
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Please re-upload clear, valid documents according to the instruction above, and submit for re-audit.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4 sm:space-y-5">
           

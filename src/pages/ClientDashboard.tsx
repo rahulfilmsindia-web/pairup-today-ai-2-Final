@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 export const ClientDashboard: React.FC = () => {
-  const { user, token, logout, bookingContext, setBookingContext, updateProfile, requestOtp, changePassword, deleteAccount } = useAuth();
+  const { user, token, logout, bookingContext, setBookingContext, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard } = useAuth();
   const { t } = useLanguage();
 
   // 16 Complete Visible Navigation Tabs per Section 7
@@ -197,7 +197,6 @@ export const ClientDashboard: React.FC = () => {
   // Settings state
   const [notifSound, setNotifSound] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
-  const [emergencyPhone, setEmergencyPhone] = useState('+919876543210');
 
   // Change Password state
   const [cpOtpSent, setCpOtpSent] = useState(false);
@@ -1088,23 +1087,55 @@ export const ClientDashboard: React.FC = () => {
               Identity Verification Status
             </h3>
 
-            <div className={`p-6 rounded-2xl border ${
-              isKycApproved 
-                ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300' 
-                : 'bg-amber-950/20 border-amber-500/30 text-amber-300'
-            }`}>
-              <div className="flex items-center gap-3 mb-2">
-                {isKycApproved ? <CheckCircle2 className="w-6 h-6 text-emerald-400" /> : <AlertCircle className="w-6 h-6 text-amber-400" />}
-                <span className="text-base font-bold">
-                  {isKycApproved ? 'Client Profile Active' : 'Client Inactive: Wait for KYC Approval'}
-                </span>
+            {user?.kycStatus === 'REJECTED' ? (
+              <div className="p-6 rounded-2xl border bg-red-950/30 border-red-500/40 text-red-200 space-y-4">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-6 h-6 text-red-400 shrink-0" />
+                  <div>
+                    <span className="text-base font-bold text-red-300 block">
+                      KYC Verification Rejected
+                    </span>
+                    <span className="text-xs text-red-400">
+                      Your submitted documents require correction before your profile can be activated.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-red-500/30 text-xs space-y-1">
+                  <span className="text-slate-400 block text-[11px] font-semibold uppercase tracking-wider">
+                    Reason for Rejection:
+                  </span>
+                  <p className="text-amber-300 font-medium">
+                    {user?.kycRejectionReason || 'Document photo blur or unreadable. Please re-upload clear photos.'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={openKycWizard}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 text-white font-bold text-xs shadow-lg shadow-red-500/20 hover:scale-[1.01] transition-all cursor-pointer"
+                >
+                  Fix & Re-upload KYC Documents
+                </button>
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {isKycApproved 
-                  ? 'Your identity documents and live selfie have been independently verified by the PairUp Security Network administration. You can book any verified companion.' 
-                  : 'Your government ID documents are currently in review. As per security rules, companion booking features unlock immediately once our audit team approves your submission.'}
-              </p>
-            </div>
+            ) : (
+              <div className={`p-6 rounded-2xl border ${
+                isKycApproved 
+                  ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300' 
+                  : 'bg-amber-950/20 border-amber-500/30 text-amber-300'
+              }`}>
+                <div className="flex items-center gap-3 mb-2">
+                  {isKycApproved ? <CheckCircle2 className="w-6 h-6 text-emerald-400" /> : <AlertCircle className="w-6 h-6 text-amber-400" />}
+                  <span className="text-base font-bold">
+                    {isKycApproved ? 'Client Profile Active' : 'Client Inactive: Wait for KYC Approval'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {isKycApproved 
+                    ? 'Your identity documents and live selfie have been independently verified by the PairUp Security Network administration. You can book any verified companion.' 
+                    : 'Your government ID documents are currently in review. As per security rules, companion booking features unlock immediately once our audit team approves your submission.'}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-3">
               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Submitted Document Checklist</h4>
@@ -1534,23 +1565,63 @@ export const ClientDashboard: React.FC = () => {
         {/* TAB 12: NOTIFICATIONS */}
         {activeTab === 'notifications' && (
           <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <Bell className="w-4 h-4 text-amber-400" />
-              In-App Notifications
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-400" />
+                In-App Notifications
+              </h3>
+              <span className="text-xs text-slate-400 font-medium">{notifications.length} alerts</span>
+            </div>
+
             {notifications.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-500">No new notifications.</div>
             ) : (
-              <div className="space-y-2">
-                {notifications.map(n => (
-                  <div key={n.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-                    <span className="font-bold text-slate-200 block mb-0.5">{n.title}</span>
-                    <p className="text-slate-400">{n.message}</p>
-                    <span className="text-[10px] text-slate-600 mt-1 block font-mono">
-                      {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-2.5">
+                {notifications.map(n => {
+                  const isKycReject = n.type === 'KYC_REJECTED' || (n.title?.includes('KYC') && (n.title?.includes('Rejected') || n.title?.includes('Action')));
+                  const isBooking = n.type?.includes('BOOKING') || n.title?.includes('Booking') || n.title?.includes('Session') || n.title?.includes('Companion Arrived');
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => {
+                        if (isKycReject) {
+                          openKycWizard();
+                        } else if (isBooking) {
+                          setActiveTab('upcoming');
+                        }
+                      }}
+                      className={`p-3.5 rounded-xl border text-xs transition-all cursor-pointer ${
+                        isKycReject
+                          ? 'bg-red-950/25 border-red-500/40 hover:border-red-400 shadow-sm'
+                          : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`font-bold block ${isKycReject ? 'text-red-300' : 'text-slate-200'}`}>
+                          {n.title}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {new Date(n.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-slate-300 leading-relaxed">{n.message}</p>
+                      {isKycReject && (
+                        <div className="mt-2.5 pt-2 border-t border-red-500/20 flex items-center justify-between">
+                          <span className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
+                            ⚠️ Tap to Fix & Re-upload Documents
+                          </span>
+                          <span className="text-[10px] text-red-400 underline font-bold">Open KYC Wizard →</span>
+                        </div>
+                      )}
+                      {isBooking && (
+                        <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between">
+                          <span className="text-[11px] text-sky-400">Tap to view booking status</span>
+                          <span className="text-[10px] text-slate-400 font-bold">View Details →</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1635,19 +1706,6 @@ export const ClientDashboard: React.FC = () => {
                   checked={notifSound}
                   onChange={e => setNotifSound(e.target.checked)}
                   className="w-4 h-4 accent-amber-400"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <div>
-                  <span className="font-bold text-slate-200 block">Emergency SMS Contact</span>
-                  <span className="text-slate-500 text-[11px]">Auto-notify trusted contact on SOS trigger</span>
-                </div>
-                <input
-                  type="text"
-                  value={emergencyPhone}
-                  onChange={e => setEmergencyPhone(e.target.value)}
-                  className="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs"
                 />
               </div>
             </div>

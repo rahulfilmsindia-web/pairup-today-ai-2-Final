@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export const CompanionDashboard: React.FC = () => {
-  const { user, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount } = useAuth();
+  const { user, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard } = useAuth();
   const { t } = useLanguage();
 
   // Complete Visible Navigation Tabs per Section 8
@@ -1587,16 +1587,49 @@ export const CompanionDashboard: React.FC = () => {
               <ShieldCheck className="w-5 h-5 text-pink-400" />
               Government KYC Verification
             </h3>
-            <div className={`p-4 rounded-xl border ${conditions.kycApproved ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300' : 'bg-amber-950/20 border-amber-500/30 text-amber-300'}`}>
-              <span className="font-bold block mb-1">
-                Status: {conditions.kycApproved ? 'APPROVED ✓' : 'UNDER AUDIT'}
-              </span>
-              <p className="text-slate-300">
-                {conditions.kycApproved 
-                  ? 'Your identity documents and live selfie are fully approved by PairUp Security Network.' 
-                  : 'Your submission is undergoing security inspection. Approval typically takes 24-48 hours.'}
-              </p>
-            </div>
+
+            {user?.kycStatus === 'REJECTED' ? (
+              <div className="p-5 rounded-xl border bg-red-950/30 border-red-500/40 text-red-200 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                  <div>
+                    <span className="font-bold text-red-300 block text-sm">
+                      KYC Verification Rejected
+                    </span>
+                    <span className="text-[11px] text-red-400">
+                      Action required to activate your companion host profile.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-950/80 border border-red-500/30 space-y-1">
+                  <span className="text-slate-400 block text-[10px] font-semibold uppercase tracking-wider">
+                    Reason for Rejection:
+                  </span>
+                  <p className="text-amber-300 font-medium text-xs">
+                    {user?.kycRejectionReason || 'Document photo blur or unreadable. Please re-upload clear photos.'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={openKycWizard}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 text-white font-bold text-xs hover:from-pink-500 hover:to-rose-500 transition-all cursor-pointer"
+                >
+                  Fix & Re-upload KYC Documents
+                </button>
+              </div>
+            ) : (
+              <div className={`p-4 rounded-xl border ${conditions.kycApproved ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300' : 'bg-amber-950/20 border-amber-500/30 text-amber-300'}`}>
+                <span className="font-bold block mb-1">
+                  Status: {conditions.kycApproved ? 'APPROVED ✓' : 'UNDER AUDIT'}
+                </span>
+                <p className="text-slate-300">
+                  {conditions.kycApproved 
+                    ? 'Your identity documents and live selfie are fully approved by PairUp Security Network.' 
+                    : 'Your submission is undergoing security inspection. Approval typically takes 24-48 hours.'}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -2186,23 +2219,66 @@ export const CompanionDashboard: React.FC = () => {
         {/* TAB 15: NOTIFICATIONS */}
         {activeTab === 'notifications' && (
           <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 text-xs">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <Bell className="w-4 h-4 text-amber-400" />
-              Companion Host Notifications
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-pink-400" />
+                Companion Host Notifications
+              </h3>
+              <span className="text-xs text-slate-400 font-medium">{notifications.length} alerts</span>
+            </div>
+
             {notifications.length === 0 ? (
               <div className="p-8 text-center text-slate-500">No new alerts.</div>
             ) : (
-              <div className="space-y-2">
-                {notifications.map(n => (
-                  <div key={n.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                    <span className="font-bold text-slate-200 block mb-0.5">{n.title}</span>
-                    <p className="text-slate-400">{n.message}</p>
-                    <span className="text-[10px] text-slate-600 mt-1 block font-mono">
-                      {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-2.5">
+                {notifications.map(n => {
+                  const isKycReject = n.type === 'KYC_REJECTED' || (n.title?.includes('KYC') && (n.title?.includes('Rejected') || n.title?.includes('Action')));
+                  const isBooking = n.type?.includes('BOOKING') || n.title?.includes('Booking') || n.title?.includes('Session');
+                  const isMembership = n.type?.includes('MEMBERSHIP') || n.title?.includes('Membership');
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => {
+                        if (isKycReject) {
+                          openKycWizard();
+                        } else if (isBooking) {
+                          setActiveTab('upcoming');
+                        } else if (isMembership) {
+                          setActiveTab('membership');
+                        }
+                      }}
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                        isKycReject
+                          ? 'bg-red-950/25 border-red-500/40 hover:border-red-400 shadow-sm'
+                          : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`font-bold block ${isKycReject ? 'text-red-300' : 'text-slate-200'}`}>
+                          {n.title}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {new Date(n.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-slate-300 leading-relaxed">{n.message}</p>
+                      {isKycReject && (
+                        <div className="mt-2.5 pt-2 border-t border-red-500/20 flex items-center justify-between">
+                          <span className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
+                            ⚠️ Tap to Fix & Re-upload Documents
+                          </span>
+                          <span className="text-[10px] text-pink-400 underline font-bold">Open KYC Wizard →</span>
+                        </div>
+                      )}
+                      {isBooking && (
+                        <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between">
+                          <span className="text-[11px] text-pink-400">Tap to manage bookings</span>
+                          <span className="text-[10px] text-slate-400 font-bold">View →</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
