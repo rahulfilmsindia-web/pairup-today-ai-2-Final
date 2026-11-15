@@ -117,6 +117,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [activeRole]);
 
+  // Cross-device synchronization: Fetch latest profile whenever token is available
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    apiFetch('/api/user/profile', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (active && data?.success && data?.user) {
+          setUser(data.user);
+          localStorage.setItem('pairup_user', JSON.stringify(data.user));
+          if (data.user.activeRole) {
+            setActiveRole(data.user.activeRole);
+            localStorage.setItem('pairup_active_role', data.user.activeRole);
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Cross-device profile auto-sync warning:', err);
+      });
+    return () => { active = false; };
+  }, [token]);
+
   const openAuthModal = (tab: 'login' | 'signin' = 'login') => {
     setAuthModalTab(tab);
     setShowAuthModal(true);
@@ -164,6 +188,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setUser(data.user);
       setToken(data.token);
+      localStorage.setItem('pairup_user', JSON.stringify(data.user));
+      localStorage.setItem('pairup_token', data.token);
+      if (data.user?.activeRole) {
+        setActiveRole(data.user.activeRole);
+        localStorage.setItem('pairup_active_role', data.user.activeRole);
+      }
       setShowAuthModal(false);
       // First-time users are prompted to the Unified Profile & KYC Wizard
       setShowKycWizard(true);
@@ -191,6 +221,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser(data.user);
       setToken(data.token);
+      localStorage.setItem('pairup_user', JSON.stringify(data.user));
+      localStorage.setItem('pairup_token', data.token);
+      if (data.user?.activeRole) {
+        setActiveRole(data.user.activeRole);
+        localStorage.setItem('pairup_active_role', data.user.activeRole);
+      }
       setShowAuthModal(false);
 
       // Check if user still needs KYC
@@ -220,7 +256,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: data.error };
       }
       setActiveRole(role);
-      setUser(prev => prev ? { ...prev, activeRole: role } : null);
+      localStorage.setItem('pairup_active_role', role);
+      setUser(prev => prev ? { ...prev, role: data.role || prev.role, activeRole: role } : null);
       setShowRoleSelection(false);
       return { success: true };
     } catch (err: any) {

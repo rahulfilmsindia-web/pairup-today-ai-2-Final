@@ -394,7 +394,7 @@ function verifyAdminSessionToken(token: string): { adminId: string; tokenId: str
 function publicAuthUser(user: any) {
   if (!user) return null;
   const inMemory = db.users?.[user.id];
-  const profileName = user.profileName || inMemory?.profileName || user.legalName || 'User';
+  const profileName = user.profileName || user.profile_name || inMemory?.profileName || user.legalName || 'User';
   return {
     id: user.id,
     phone: user.phone,
@@ -402,16 +402,16 @@ function publicAuthUser(user: any) {
     profileName: profileName,
     email: user.email,
     role: user.role,
-    activeRole: user.activeRole,
+    activeRole: user.activeRole || user.active_role || inMemory?.activeRole || (user.role === 'COMPANION' ? 'COMPANION' : 'CLIENT'),
     dob: user.dob,
     age: user.age,
-    kycStatus: user.kycStatus || 'NOT_SUBMITTED',
+    kycStatus: user.kycStatus || user.kyc_status || 'NOT_SUBMITTED',
     kycRejectionReason: user.kycRejectionReason,
-    profilePhoto: user.profilePhoto || inMemory?.profilePhoto || null,
+    profilePhoto: user.profilePhoto || user.profile_photo || inMemory?.profilePhoto || null,
     photos: Array.isArray(user.photos) && user.photos.length > 0 
       ? user.photos 
       : (inMemory?.photos || (user.profilePhoto ? [user.profilePhoto] : [])),
-    bio: user.bio || inMemory?.bio || '',
+    bio: user.bio !== undefined ? user.bio : (inMemory?.bio || ''),
     city: user.city || 'India'
   };
 }
@@ -1961,15 +1961,25 @@ app.post('/api/auth/select-role', async (req: Request, res: Response) => {
   if (role !== 'CLIENT' && role !== 'COMPANION') {
     return res.status(400).json({ error: 'Invalid role selection.' });
   }
+  // Seamlessly upgrade single-role account to DUAL when choosing the other role
+  let targetRole = user.role;
   if (user.role !== 'DUAL' && user.role !== role) {
-    return res.status(403).json({ error: 'Your account is not permitted to use this role.' });
+    targetRole = 'DUAL';
   }
   try {
-    const updated = await databaseAdapter.updateUser(userId, { activeRole: role });
+    const updated = await databaseAdapter.updateUser(userId, { 
+      role: targetRole,
+      activeRole: role 
+    });
+    if (db.users && db.users[userId]) {
+      db.users[userId].role = targetRole;
+      db.users[userId].activeRole = role;
+    }
     return res.json({
       success: true,
-      activeRole: updated.activeRole || role,
-      kycStatus: updated.kycStatus || user.kycStatus
+      role: targetRole,
+      activeRole: updated?.activeRole || role,
+      kycStatus: updated?.kycStatus || user.kycStatus
     });
   } catch (error) {
     console.error('Role selection could not be persisted.', error);
@@ -1999,12 +2009,20 @@ app.post('/api/kyc/submit', async (req: Request, res: Response) => {
 
   const authenticatedUser = (req as AuthenticatedRequest).authUser;
   const authenticatedUserId = authenticatedUser.id;
-  const requestedKycRole = authenticatedUser.role === 'DUAL'
-    ? authenticatedUser.activeRole
-    : authenticatedUser.role;
+  let effectiveRole = authenticatedUser.role;
+  let effectiveActiveRole = authenticatedUser.activeRole;
+  if (userType && ['CLIENT', 'COMPANION'].includes(userType) && authenticatedUser.role !== 'DUAL' && authenticatedUser.role !== userType) {
+    effectiveRole = 'DUAL';
+    effectiveActiveRole = userType;
+    await databaseAdapter.updateUser(authenticatedUserId, { role: 'DUAL', activeRole: userType }).catch(() => null);
+    if (db.users && db.users[authenticatedUserId]) {
+      db.users[authenticatedUserId].role = 'DUAL';
+      db.users[authenticatedUserId].activeRole = userType;
+    }
+  }
+  const requestedKycRole = userType || (effectiveRole === 'DUAL' ? effectiveActiveRole : effectiveRole);
   if ((userId && userId !== authenticatedUserId) ||
-      !['CLIENT', 'COMPANION'].includes(requestedKycRole) ||
-      (userType && userType !== requestedKycRole)) {
+      !['CLIENT', 'COMPANION'].includes(requestedKycRole)) {
     return res.status(403).json({ error: 'Your account is not permitted to submit KYC for this role.' });
   }
   let user: any;
@@ -2335,15 +2353,26 @@ app.post('/api/companion/services-rates', async (req: Request, res: Response) =>
       });
     }
 
-    const [companionKyc, membership, bankVerification] = await Promise.all([
+    if (user.role === 'CLIENT') {
+      await databaseAdapter.updateUser(userId, { role: 'DUAL', activeRole: 'COMPANION' }).catch(() => null);
+      if (db.users && db.users[userId]) {
+        db.users[userId].role = 'DUAL';
+        db.users[userId].activeRole = 'COMPANION';
+      }
+    }
+
+    const [companionKyc, clientKyc, membership, bankVerification] = await Promise.all([
       databaseAdapter.getUserKycSubmission(userId, 'COMPANION'),
+      databaseAdapter.getUserKycSubmission(userId, 'CLIENT').catch(() => null),
       databaseAdapter.getActiveMembership(userId),
       databaseAdapter.getBankVerification(userId)
     ]);
     const membershipValid = Boolean(membership?.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date());
     const bankVerified = bankVerification?.verificationStatus === 'VERIFIED' || bankVerification?.isVerified === true;
+    const effectiveKyc = companionKyc || (clientKyc?.status === 'APPROVED' ? clientKyc : null);
+    const kycApproved = Boolean(effectiveKyc?.status === 'APPROVED' || user.kycStatus === 'APPROVED' || user.kyc_status === 'APPROVED');
     const isLive = Boolean(
-      companionKyc?.status === 'APPROVED' &&
+      kycApproved &&
       profile &&
       membershipValid &&
       bankVerified &&
@@ -2389,6 +2418,13 @@ app.post('/api/companion/membership/subscribe', async (req: Request, res: Respon
   try {
     const user = await databaseAdapter.getUser(userId);
     if (!user) return res.status(401).json({ error: 'Authenticated Companion account was not found.' });
+    if (user.role === 'CLIENT') {
+      await databaseAdapter.updateUser(userId, { role: 'DUAL', activeRole: 'COMPANION' }).catch(() => null);
+      if (db.users && db.users[userId]) {
+        db.users[userId].role = 'DUAL';
+        db.users[userId].activeRole = 'COMPANION';
+      }
+    }
     const startedAt = new Date();
     const membershipId = crypto.randomUUID();
     const order = await createRazorpayOrder({
@@ -2443,6 +2479,13 @@ app.post('/api/companion/bank/verify', async (req: Request, res: Response) => {
   try {
     const user = await databaseAdapter.getUser(userId);
     if (!user) return res.status(401).json({ error: 'Authenticated Companion account was not found.' });
+    if (user.role === 'CLIENT') {
+      await databaseAdapter.updateUser(userId, { role: 'DUAL', activeRole: 'COMPANION' }).catch(() => null);
+      if (db.users && db.users[userId]) {
+        db.users[userId].role = 'DUAL';
+        db.users[userId].activeRole = 'COMPANION';
+      }
+    }
     const accountNumberLast4 = accountNumber.slice(-4);
     await databaseAdapter.createBankVerification({
       userId,
@@ -2885,9 +2928,10 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
     const user = await databaseAdapter.getUser(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const [profile, companionKyc, membership, bankVerification, balance, ledgerEntries] = await Promise.all([
+    const [profile, companionKyc, clientKyc, membership, bankVerification, balance, ledgerEntries] = await Promise.all([
       databaseAdapter.getCompanionProfile(userId),
       databaseAdapter.getUserKycSubmission(userId, 'COMPANION'),
+      databaseAdapter.getUserKycSubmission(userId, 'CLIENT').catch(() => null),
       databaseAdapter.getActiveMembership(userId),
       databaseAdapter.getBankVerification(userId),
       databaseAdapter.getWalletBalance(userId),
@@ -2895,8 +2939,9 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
     ]);
     const membershipValid = Boolean(membership?.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date());
     const bankVerified = bankVerification?.verificationStatus === 'VERIFIED' || bankVerification?.isVerified === true;
-    const kycApproved = companionKyc?.status === 'APPROVED' || user.kycStatus === 'APPROVED' || user.kyc_status === 'APPROVED';
-    const isLive = Boolean(companionKyc?.status === 'APPROVED' && profile?.isLive && membershipValid && bankVerified && !profile.isPaused);
+    const effectiveKyc = companionKyc || (clientKyc?.status === 'APPROVED' ? clientKyc : null);
+    const kycApproved = Boolean(effectiveKyc?.status === 'APPROVED' || user.kycStatus === 'APPROVED' || user.kyc_status === 'APPROVED');
+    const isLive = Boolean(kycApproved && profile?.isLive && membershipValid && bankVerified && !profile.isPaused);
     const totalSettledPaise = ledgerEntries
       .filter((entry: any) => entry.balanceStatus === 'PAID_OUT' || entry.balance_status === 'PAID_OUT')
       .reduce((sum: number, entry: any) => sum + Number(entry.netAmountPaise ?? entry.net_amount_paise ?? 0), 0);
@@ -4304,13 +4349,19 @@ app.get('/api/admin/companions', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', '
     const profileMap = new Map(companionProfiles.map((p: any) => [p.userId, p]));
     const companions = await Promise.all(
       allUsers
-        .filter((u: any) => u.role === 'COMPANION' || u.activeRole === 'COMPANION')
+        .filter((u: any) => 
+          u.role === 'COMPANION' || 
+          u.role === 'DUAL' || 
+          u.activeRole === 'COMPANION' || 
+          profileMap.has(u.id)
+        )
         .map(async (u: any) => {
           const profile = profileMap.get(u.id);
-          const [wallet, bankVerification, companionKyc, membership] = await Promise.all([
+          const [wallet, bankVerification, companionKyc, clientKyc, membership] = await Promise.all([
             databaseAdapter.getWalletBalance(u.id).catch(() => null),
             databaseAdapter.getBankVerification(u.id).catch(() => null),
             databaseAdapter.getUserKycSubmission(u.id, 'COMPANION').catch(() => null),
+            databaseAdapter.getUserKycSubmission(u.id, 'CLIENT').catch(() => null),
             databaseAdapter.getActiveMembership(u.id).catch(() => null)
           ]);
 
@@ -4319,7 +4370,8 @@ app.get('/api/admin/companions', requireAdminRoles('SUPER_ADMIN', 'KYC_ADMIN', '
             bankVerification?.isVerified === true ||
             profile?.bankDetails?.isVerified
           );
-          const kycStatus = companionKyc?.status || u.kycStatus || u.kyc_status || 'NOT_SUBMITTED';
+          const effectiveKyc = companionKyc || clientKyc;
+          const kycStatus = effectiveKyc?.status || u.kycStatus || u.kyc_status || 'NOT_SUBMITTED';
           const membershipActive = Boolean(
             profile?.membership?.isActive ||
             (membership?.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date())

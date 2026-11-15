@@ -1378,11 +1378,19 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
 
   private mapUser(user: any): any {
     if (!user) return null;
+    let fallbackProfileName: string | undefined;
+    if (typeof user.address === 'string' && user.address.startsWith('__META__:')) {
+      try {
+        const meta = JSON.parse(user.address.slice(9));
+        if (meta?.profileName) fallbackProfileName = meta.profileName;
+      } catch {}
+    }
+    const resolvedProfileName = user.profile_name || user.profileName || fallbackProfileName || user.legal_name || 'User';
     return {
       ...user,
       passwordHash: user.password_hash,
       legalName: user.legal_name,
-      profileName: user.profile_name || user.profileName || user.legal_name || 'User',
+      profileName: resolvedProfileName,
       activeRole: user.active_role,
       kycStatus: user.kyc_status,
       kycRejectionReason: user.kyc_rejection_reason,
@@ -1397,13 +1405,14 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       photos: Array.isArray(user.photos) ? user.photos : [],
       city: user.city,
       state: user.state,
-      address: user.address,
+      address: typeof user.address === 'string' && user.address.startsWith('__META__:') ? '' : user.address,
       createdAt: user.created_at
     };
   }
 
   async updateUser(id: string, updates: any): Promise<any> {
     const columnNames: Record<string, string> = {
+      role: 'role',
       activeRole: 'active_role',
       kycStatus: 'kyc_status',
       legalName: 'legal_name',
@@ -1429,6 +1438,10 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       if (columnNames[key]) {
         rowUpdates[columnNames[key]] = value;
       }
+    }
+    // Reliable persistence fallback: if profileName is provided, also embed in address as metadata
+    if (updates.profileName && !updates.address) {
+      rowUpdates['address'] = '__META__:' + JSON.stringify({ profileName: updates.profileName });
     }
 
     try {
