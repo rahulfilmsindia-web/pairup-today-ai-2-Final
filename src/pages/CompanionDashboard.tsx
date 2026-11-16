@@ -12,9 +12,51 @@ import {
   MessageSquare, Navigation, AlertTriangle, PhoneCall, RefreshCw, X,
   User, Calendar, DollarSign, Bell, Settings, LifeBuoy, LogOut,
   Pause, Power, Shield, FileText, CheckSquare, Star, ArrowLeft,
-  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin
+  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
+
+const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
+    const started = new Date(booking.startedAt || booking.meetingStartedAt || booking.updatedAt || Date.now()).getTime();
+    const durationMs = (booking.durationHours || 1) * 3600 * 1000;
+    const end = started + durationMs;
+    return Math.max(0, Math.floor((end - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const started = new Date(booking.startedAt || booking.meetingStartedAt || booking.updatedAt || Date.now()).getTime();
+      const durationMs = (booking.durationHours || 1) * 3600 * 1000;
+      const end = started + durationMs;
+      const rem = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      setSecondsRemaining(rem);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [booking.startedAt, booking.meetingStartedAt, booking.updatedAt, booking.durationHours]);
+
+  const hours = Math.floor(secondsRemaining / 3600);
+  const minutes = Math.floor((secondsRemaining % 3600) / 60);
+  const seconds = secondsRemaining % 60;
+  const timeFormatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  const isFinished = secondsRemaining === 0;
+
+  return (
+    <div className={`p-4 rounded-xl border text-center space-y-1.5 ${isFinished ? 'bg-amber-500/10 border-amber-500/40' : 'bg-pink-500/10 border-pink-500/30'}`}>
+      <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+        {isFinished ? '⏰ Scheduled Slot Completed — Ready to End Session' : '⏱️ Official Meeting in Progress'}
+      </span>
+      <div className="font-mono text-2xl font-black text-pink-400">
+        {timeFormatted}
+      </div>
+      <p className="text-[10px] text-slate-400">
+        {isFinished 
+          ? 'Slot duration reached. The Ending OTP has been unlocked on client’s dashboard and dispatched. Enter it below to complete and lock earnings.'
+          : `Session active for ${booking.durationHours || 1} hour(s). Live synchronized countdown timer.`}
+      </p>
+    </div>
+  );
+};
 
 export const CompanionDashboard: React.FC = () => {
   const { user, activeRole, selectActiveRole, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard } = useAuth();
@@ -243,6 +285,7 @@ export const CompanionDashboard: React.FC = () => {
     } catch (e) {}
   };
 
+  const [completedBookingEarned, setCompletedBookingEarned] = useState<{ id: string; amountPaise: number; code: string } | null>(null);
   const [startOtpInputs, setStartOtpInputs] = useState<Record<string, string>>({});
   const [delayMinutesInputs, setDelayMinutesInputs] = useState<Record<string, number>>({});
   const [endOtpInputs, setEndOtpInputs] = useState<Record<string, string>>({});
@@ -825,10 +868,15 @@ export const CompanionDashboard: React.FC = () => {
       });
       const data = await res.json();
       if (res.ok) {
+        setCompletedBookingEarned({
+          id: bookingId,
+          amountPaise: data.booking?.companionNetSharePaise || 0,
+          code: data.booking?.bookingCode || ''
+        });
         fetchBookings();
         fetchCompanionStatus();
-        setActionMsg('Booking completed! 85% companion share locked under 48-hour UTC hold.');
-        setTimeout(() => setActionMsg(null), 4000);
+        setActionMsg(`Meeting Completed! Great! You Earned: ₹${((data.booking?.companionNetSharePaise || 0) / 100).toFixed(2)}`);
+        setTimeout(() => setActionMsg(null), 6000);
       } else {
         alert(data.error || 'Failed to complete booking.');
       }
@@ -2444,8 +2492,22 @@ export const CompanionDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-slate-950 border border-slate-800">
-                    <span>Meeting Venue: <strong>{b.meetingLocation}</strong></span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 gap-2">
+                    <div>
+                      <span className="text-slate-400">Meeting Venue: </span>
+                      <strong className="text-slate-200">{b.meetingLocation}</strong>
+                      {b.meetingLocation && (
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 ml-2 text-sky-400 hover:text-sky-300 font-semibold underline text-xs"
+                        >
+                          <Navigation className="w-3 h-3 inline" />
+                          <span>Map Directions</span>
+                        </a>
+                      )}
+                    </div>
                     <span className="text-emerald-400 font-bold">Your Share: ₹{(b.companionNetSharePaise / 100).toFixed(2)}</span>
                   </div>
 
@@ -2467,93 +2529,171 @@ export const CompanionDashboard: React.FC = () => {
         {activeTab === 'upcoming' && (
           <div className="space-y-6 text-xs">
             <h3 className="text-base font-bold text-slate-100">Live Meeting Execution & OTP Verification</h3>
-            {upcomingBookings.map(b => (
-              <div key={b.id} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+
+            {/* CELEBRATION EARNINGS CARD */}
+            {completedBookingEarned && (
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/60 to-slate-900 border-2 border-emerald-500/50 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-100 text-sm block">{b.serviceName} ({b.bookingCode})</span>
-                    <span className="text-slate-400">Meeting with {b.clientName} · Venue: {b.meetingLocation}</span>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-emerald-400" />
+                    <h4 className="text-base font-black text-emerald-300">
+                      Great! You Earned ₹{(completedBookingEarned.amountPaise / 100).toFixed(2)}
+                    </h4>
                   </div>
-                  <span className="px-2.5 py-1 rounded bg-sky-500/20 text-sky-300 font-bold">{b.status}</span>
+                  <button 
+                    onClick={() => setCompletedBookingEarned(null)} 
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-
-                {/* 0. ARRIVAL TRIGGER (If still in CONFIRMED status) */}
-                {b.status === 'CONFIRMED' && (
-                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3">
-                    <span className="text-xs text-amber-300">
-                      Have you arrived at the venue? Confirm arrival to dispatch the 6-digit Start OTP to the client.
-                    </span>
-                    <button
-                      onClick={() => handleSlideMeetingArrived(b.id)}
-                      className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 font-bold hover:bg-amber-500 shrink-0 text-xs"
-                    >
-                      Confirm Arrival
-                    </button>
-                  </div>
-                )}
-
-                {/* 1. START OTP INPUT FORM */}
-                {!b.startOtpVerified && (
-                  <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/30 space-y-3">
-                    <span className="font-bold text-amber-300 block">Step 1: Verify Start OTP</span>
-                    <p className="text-slate-400 text-[11px]">
-                      Ask the client for their 6-digit Start OTP when meeting in person. Enter it below to start the official session.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="6-digit Start OTP"
-                        value={startOtpInputs[b.id] || ''}
-                        onChange={e => setStartOtpInputs({ ...startOtpInputs, [b.id]: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                        className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono font-bold text-amber-400 text-sm"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        max={180}
-                        placeholder="Late delay mins (0 if on time)"
-                        value={delayMinutesInputs[b.id] ?? ''}
-                        onChange={e => setDelayMinutesInputs({ ...delayMinutesInputs, [b.id]: Math.max(0, parseInt(e.target.value, 10) || 0) })}
-                        className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-slate-200 text-xs"
-                      />
-                      <button
-                        onClick={() => handleVerifyStartOtp(b.id)}
-                        className="px-4 py-2 bg-amber-400 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-500 transition-colors"
-                      >
-                        Verify & Start
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. COMPLETION OTP INPUT FORM */}
-                {b.startOtpVerified && !b.endOtpVerified && (
-                  <div className="p-4 rounded-xl bg-slate-950 border border-emerald-500/30 space-y-3">
-                    <span className="font-bold text-emerald-300 block">Step 2: Verify Completion OTP</span>
-                    <p className="text-slate-400 text-[11px]">
-                      At the end of the meeting, ask the client for the final 6-digit Completion OTP to lock your earnings.
-                    </p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="6-digit Completion OTP"
-                        value={endOtpInputs[b.id] || ''}
-                        onChange={e => setEndOtpInputs({ ...endOtpInputs, [b.id]: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                        className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono font-bold text-emerald-400 text-sm"
-                      />
-                      <button
-                        onClick={() => handleCompleteBooking(b.id)}
-                        className="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl"
-                      >
-                        Complete Session
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <p className="text-xs text-slate-300">
+                  Booking <strong>#{completedBookingEarned.code}</strong> completed successfully! Your 85% companion share has been calculated and locked in escrow. It will automatically settle to your bank account after 48 hours according to platform safety policy.
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => setActiveTab('locked-earnings')}
+                    className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 text-xs transition-colors"
+                  >
+                    View Locked Escrow Balance
+                  </button>
+                  <button
+                    onClick={() => setCompletedBookingEarned(null)}
+                    className="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
-            ))}
+            )}
+
+            {upcomingBookings.length === 0 ? (
+              <div className="p-8 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400">
+                No active or upcoming meetings found. Confirmed bookings will appear here once accepted and paid.
+              </div>
+            ) : (
+              upcomingBookings.map(b => (
+                <div key={b.id} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-100 text-sm block">{b.serviceName} ({b.bookingCode})</span>
+                      <span className="text-slate-400">Meeting with {b.clientName}</span>
+                    </div>
+                    <span className="px-2.5 py-1 rounded bg-sky-500/20 text-sky-300 font-bold">{b.status}</span>
+                  </div>
+
+                  {/* CLIENT-SPECIFIED VENUE & GOOGLE MAP DIRECTIONS */}
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Client's Booked Meeting Venue</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <MapPin className="w-4 h-4 text-pink-500 shrink-0" />
+                        <span className="text-sm font-bold text-slate-100">{b.meetingLocation || 'Specified Meeting Venue'}</span>
+                      </div>
+                    </div>
+                    {b.meetingLocation && (
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 text-xs font-semibold shrink-0 transition-colors"
+                      >
+                        <Navigation className="w-3.5 h-3.5" />
+                        <span>Open Map Directions</span>
+                      </a>
+                    )}
+                  </div>
+
+                  {/* 0. ARRIVAL TRIGGER (If still in CONFIRMED status) */}
+                  {b.status === 'CONFIRMED' && (
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <span className="text-xs text-amber-300">
+                        Have you arrived at the venue? Click to record your arrival and dispatch the 6-digit Start OTP to the client's registered phone.
+                      </span>
+                      <button
+                        onClick={() => handleSlideMeetingArrived(b.id)}
+                        className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 font-bold hover:bg-amber-500 shrink-0 text-xs transition-colors"
+                      >
+                        I Have Arrived at Location
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 1. START OTP INPUT FORM */}
+                  {!b.startOtpVerified && (
+                    <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/30 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="w-4 h-4 text-amber-400" />
+                        <span className="font-bold text-amber-300 text-sm">Step 1: Enter Start OTP</span>
+                      </div>
+                      <p className="text-slate-400 text-[11px]">
+                        The client receives this 6-digit Start OTP on their registered phone number upon arrival. Enter the code below to start the official session timer.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          placeholder="6-digit Start OTP"
+                          value={startOtpInputs[b.id] || ''}
+                          onChange={e => setStartOtpInputs({ ...startOtpInputs, [b.id]: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                          className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono font-bold text-amber-400 text-sm"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={180}
+                          placeholder="Late delay mins (0 if on time)"
+                          value={delayMinutesInputs[b.id] ?? ''}
+                          onChange={e => setDelayMinutesInputs({ ...delayMinutesInputs, [b.id]: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                          className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-slate-200 text-xs"
+                        />
+                        <button
+                          onClick={() => handleVerifyStartOtp(b.id)}
+                          className="px-4 py-2 bg-amber-400 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-500 transition-colors"
+                        >
+                          Verify & Start Session
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. IN-PROGRESS COUNTDOWN & COMPLETION OTP FORM */}
+                  {b.startOtpVerified && !b.endOtpVerified && (
+                    <div className="space-y-4">
+                      {/* LIVE COUNTDOWN TIMER */}
+                      <MeetingCountdown booking={b} />
+
+                      {/* COMPLETION OTP INPUT FORM */}
+                      <div className="p-4 rounded-xl bg-slate-950 border border-emerald-500/30 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <KeyRound className="w-4 h-4 text-emerald-400" />
+                          <span className="font-bold text-emerald-300 text-sm">Step 2: Enter Meeting Ending OTP</span>
+                        </div>
+                        <p className="text-slate-400 text-[11px]">
+                          Once the scheduled slot finishes, ask the client for their 6-digit Completion OTP (unlocked automatically on their dashboard) to finalize the session and claim your earnings.
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={6}
+                            placeholder="6-digit Ending OTP"
+                            value={endOtpInputs[b.id] || ''}
+                            onChange={e => setEndOtpInputs({ ...endOtpInputs, [b.id]: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                            className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono font-bold text-emerald-400 text-sm max-w-[200px]"
+                          />
+                          <button
+                            onClick={() => handleCompleteBooking(b.id)}
+                            className="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl hover:bg-emerald-400 transition-colors"
+                          >
+                            Complete Session & Claim Earnings
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         )}
 
