@@ -5198,35 +5198,53 @@ app.post('/api/companion/availability/toggle', async (req: Request, res: Respons
   if (getDatabaseType() === 'json') {
     const profile = db.companionProfiles[userId];
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    const user = db.users[userId];
+    const isEligible = Boolean(
+      (user?.kycStatus === 'APPROVED' || user?.kyc_status === 'APPROVED') &&
+      profile.membership?.isActive &&
+      new Date(profile.membership.expiryDate) > new Date() &&
+      profile.bankDetails?.isVerified
+    );
     if (!req.body.isPaused) {
-      const user = db.users[userId];
-      const isEligible = user?.kycStatus === 'APPROVED' &&
-        profile.membership?.isActive &&
-        new Date(profile.membership.expiryDate) > new Date() &&
-        profile.bankDetails?.isVerified;
       if (!isEligible) return res.status(403).json({ error: 'Approved KYC, an active paid membership, and verified bank details are required to resume.' });
     }
     profile.isPaused = req.body.isPaused;
+    profile.isLive = !req.body.isPaused && isEligible;
     saveDB(db);
-    return res.json({ success: true, isPaused: profile.isPaused });
+    return res.json({ success: true, isPaused: profile.isPaused, isLive: profile.isLive });
   }
   try {
     const profile = await databaseAdapter.getCompanionProfile(userId);
     if (!profile) return res.status(404).json({ error: 'Profile not found' });
+    let isEligible = false;
     if (!req.body.isPaused) {
-      const [companionKyc, membership, bankVerification] = await Promise.all([
+      const [userRecord, companionKyc, clientKyc, membership, bankVerification] = await Promise.all([
+        databaseAdapter.getUser(userId),
         databaseAdapter.getUserKycSubmission(userId, 'COMPANION'),
+        databaseAdapter.getUserKycSubmission(userId, 'CLIENT').catch(() => null),
         databaseAdapter.getActiveMembership(userId),
         databaseAdapter.getBankVerification(userId)
       ]);
-      const isEligible = companionKyc?.status === 'APPROVED' &&
+      const effectiveKyc = companionKyc || (clientKyc?.status === 'APPROVED' ? clientKyc : null);
+      const kycApproved = Boolean(effectiveKyc?.status === 'APPROVED' || userRecord?.kycStatus === 'APPROVED' || userRecord?.kyc_status === 'APPROVED');
+      isEligible = Boolean(
+        kycApproved &&
         membership?.paymentStatus === 'PAID' &&
         new Date(membership.expiryDate) > new Date() &&
-        (bankVerification?.verificationStatus === 'VERIFIED' || bankVerification?.isVerified === true);
+        (bankVerification?.verificationStatus === 'VERIFIED' || bankVerification?.isVerified === true)
+      );
       if (!isEligible) return res.status(403).json({ error: 'Approved KYC, an active paid membership, and verified bank details are required to resume.' });
     }
-    const updated = await databaseAdapter.updateCompanionProfile(userId, { isPaused: req.body.isPaused });
-    return res.json({ success: true, isPaused: updated.isPaused });
+    const isLive = !req.body.isPaused && isEligible;
+    const updated = await databaseAdapter.updateCompanionProfile(userId, { 
+      isPaused: req.body.isPaused,
+      isLive: isLive
+    });
+    if (db.companionProfiles && db.companionProfiles[userId]) {
+      db.companionProfiles[userId].isPaused = req.body.isPaused;
+      db.companionProfiles[userId].isLive = isLive;
+    }
+    return res.json({ success: true, isPaused: updated.isPaused, isLive });
   } catch (error) {
     console.error('Companion availability could not be updated.', error);
     return res.status(503).json({ error: 'Availability is temporarily unavailable.' });

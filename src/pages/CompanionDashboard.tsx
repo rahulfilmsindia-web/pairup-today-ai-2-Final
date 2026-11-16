@@ -490,8 +490,10 @@ export const CompanionDashboard: React.FC = () => {
   };
 
   // Step A: Save Services & Rates
+  const [savingServicesAndRates, setSavingServicesAndRates] = useState(false);
   const handleSaveServicesAndRates = async () => {
-    if (!user) return;
+    if (!user || savingServicesAndRates) return;
+    setSavingServicesAndRates(true);
     try {
       const res = await apiFetch('/api/companion/services-rates', {
         method: 'POST',
@@ -511,13 +513,21 @@ export const CompanionDashboard: React.FC = () => {
           }
         })
       });
+      const data = await res.json();
       if (res.ok) {
-        fetchCompanionStatus();
-        setActionMsg('Services, rates and availability schedule updated successfully.');
-        setTimeout(() => setActionMsg(null), 3000);
+        await fetchCompanionStatus();
+        setActionMsg('✅ Services, rates and availability schedule saved and updated successfully.');
+        setTimeout(() => setActionMsg(null), 3500);
+      } else {
+        setActionMsg(data.error || 'Could not save settings. Please try again.');
+        setTimeout(() => setActionMsg(null), 4000);
       }
     } catch (err) {
       console.error('Error saving services', err);
+      setActionMsg('Network error — settings could not be saved.');
+      setTimeout(() => setActionMsg(null), 4000);
+    } finally {
+      setSavingServicesAndRates(false);
     }
   };
 
@@ -617,9 +627,11 @@ export const CompanionDashboard: React.FC = () => {
     }
   };
 
-  // Toggle Pause/Resume Availability
+  // Toggle Online/Offline (Pause/Resume) Availability
+  const [togglingOnline, setTogglingOnline] = useState(false);
   const handleToggleAvailabilityPause = async () => {
-    if (!user) return;
+    if (!user || togglingOnline) return;
+    setTogglingOnline(true);
     try {
       const nextPaused = !isAvailabilityPaused;
       const res = await apiFetch('/api/companion/availability/toggle', {
@@ -627,13 +639,26 @@ export const CompanionDashboard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, isPaused: nextPaused })
       });
+      const data = await res.json();
       if (res.ok) {
         setIsAvailabilityPaused(nextPaused);
-        setActionMsg(nextPaused ? 'Availability paused. You will not receive new booking requests.' : 'Availability resumed. You are active for new bookings.');
-        setTimeout(() => setActionMsg(null), 3000);
+        await fetchCompanionStatus();
+        setActionMsg(
+          nextPaused
+            ? '🔴 You are now OFFLINE — not visible to nearby clients.'
+            : '🟢 You are now ONLINE — visible to nearby clients in your area!'
+        );
+        setTimeout(() => setActionMsg(null), 4000);
+      } else {
+        setActionMsg(data.error || 'Could not update online status. Please try again.');
+        setTimeout(() => setActionMsg(null), 5000);
       }
     } catch (err) {
       console.error('Error toggling availability pause', err);
+      setActionMsg('Network error — could not update online status.');
+      setTimeout(() => setActionMsg(null), 4000);
+    } finally {
+      setTogglingOnline(false);
     }
   };
 
@@ -1140,6 +1165,45 @@ export const CompanionDashboard: React.FC = () => {
                 </span>
               )}
             </button>
+
+            {/* GO LIVE (ONLINE / OFFLINE) TOGGLE SWITCH RIGHT NEXT TO NOTIFICATION */}
+            <div className="flex items-center pl-1 sm:pl-2 border-l border-slate-800 ml-1">
+              <button
+                type="button"
+                onClick={handleToggleAvailabilityPause}
+                disabled={togglingOnline}
+                title={!isAvailabilityPaused ? 'Status: ONLINE (Live & visible to clients) — Click to go Offline' : 'Status: OFFLINE — Click to go Online'}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
+                  !isAvailabilityPaused
+                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/25 shadow-emerald-950/40 ring-1 ring-emerald-500/30'
+                    : 'bg-slate-800/90 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 shadow-black/40'
+                }`}
+              >
+                {/* Glowing status indicator dot */}
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  {!isAvailabilityPaused && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${!isAvailabilityPaused ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
+                </span>
+
+                <div className="flex flex-col text-left">
+                  <span className="text-[9px] uppercase font-bold tracking-wider leading-none text-slate-400">
+                    Go Live
+                  </span>
+                  <span className={`text-[11px] font-extrabold leading-tight ${!isAvailabilityPaused ? 'text-emerald-300' : 'text-slate-300'}`}>
+                    {!isAvailabilityPaused ? 'ONLINE' : 'OFFLINE'}
+                  </span>
+                </div>
+
+                {/* Animated pill switch */}
+                <div className={`w-8 h-4.5 rounded-full p-0.5 transition-colors ml-0.5 flex items-center ${
+                  !isAvailabilityPaused ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'
+                }`}>
+                  <div className="w-3.5 h-3.5 rounded-full bg-white shadow-sm" />
+                </div>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1409,12 +1473,13 @@ export const CompanionDashboard: React.FC = () => {
 
             <button
               onClick={handleToggleAvailabilityPause}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 font-bold ${
+              disabled={togglingOnline}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 font-bold cursor-pointer ${
                 isAvailabilityPaused ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30' : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
               }`}
             >
               {isAvailabilityPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
-              <span>{isAvailabilityPaused ? 'Resume Availability' : 'Pause Availability'}</span>
+              <span>{isAvailabilityPaused ? 'Go Online (Live)' : 'Go Offline'}</span>
             </button>
 
             <button
@@ -1822,9 +1887,17 @@ export const CompanionDashboard: React.FC = () => {
               </div>
               <button
                 onClick={handleSaveServicesAndRates}
-                className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl"
+                disabled={savingServicesAndRates}
+                className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl disabled:opacity-50 flex items-center gap-1.5 transition-colors"
               >
-                Save Services
+                {savingServicesAndRates ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Services</span>
+                )}
               </button>
             </div>
 
@@ -1911,9 +1984,17 @@ export const CompanionDashboard: React.FC = () => {
 
             <button
               onClick={handleSaveServicesAndRates}
-              className="px-5 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl"
+              disabled={savingServicesAndRates}
+              className="px-5 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl disabled:opacity-50 flex items-center gap-1.5 transition-colors"
             >
-              Update Pricing
+              {savingServicesAndRates ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Updating Pricing...</span>
+                </>
+              ) : (
+                <span>Update Pricing</span>
+              )}
             </button>
           </div>
         )}
@@ -1931,11 +2012,13 @@ export const CompanionDashboard: React.FC = () => {
               </div>
               <button
                 onClick={handleToggleAvailabilityPause}
-                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 ${
-                  isAvailabilityPaused ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                disabled={togglingOnline}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isAvailabilityPaused ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30' : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
                 }`}
               >
-                {isAvailabilityPaused ? 'Resume Availability' : 'Pause Availability'}
+                {isAvailabilityPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                <span>{isAvailabilityPaused ? 'Go Online (Resume)' : 'Go Offline (Pause)'}</span>
               </button>
             </div>
 
@@ -1988,9 +2071,17 @@ export const CompanionDashboard: React.FC = () => {
 
             <button
               onClick={handleSaveServicesAndRates}
-              className="px-5 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl"
+              disabled={savingServicesAndRates}
+              className="px-5 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-xl disabled:opacity-50 flex items-center gap-1.5 transition-colors"
             >
-              Save Schedule
+              {savingServicesAndRates ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Saving Schedule...</span>
+                </>
+              ) : (
+                <span>Save Schedule</span>
+              )}
             </button>
           </div>
         )}
@@ -2406,6 +2497,48 @@ export const CompanionDashboard: React.FC = () => {
               <span className="text-xs text-slate-400 font-medium">{notifications.length} alerts</span>
             </div>
 
+            {/* Quick Go Live (Online / Offline) Card */}
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+              !isAvailabilityPaused
+                ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-200'
+                : 'bg-slate-950 border-slate-800 text-slate-300'
+            }`}>
+              <div className="flex items-start sm:items-center gap-3">
+                <span className="relative flex h-3 w-3 shrink-0 mt-1 sm:mt-0">
+                  {!isAvailabilityPaused && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  )}
+                  <span className={`relative inline-flex rounded-full h-3 w-3 ${!isAvailabilityPaused ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
+                </span>
+                <div>
+                  <div className="font-bold text-sm text-slate-100 flex items-center gap-2">
+                    <span>Live Discovery Status:</span>
+                    <span className={!isAvailabilityPaused ? 'text-emerald-400' : 'text-amber-400'}>
+                      {!isAvailabilityPaused ? 'ONLINE (Accepting Bookings)' : 'OFFLINE (Paused)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {!isAvailabilityPaused
+                      ? 'You are active & visible to nearby clients searching for companions in your area.'
+                      : 'You are currently offline and hidden from search results. Go online to receive bookings.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleAvailabilityPause}
+                disabled={togglingOnline}
+                className={`px-4 py-2 rounded-xl font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap ${
+                  !isAvailabilityPaused
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+                }`}
+              >
+                {!isAvailabilityPaused ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                <span>{!isAvailabilityPaused ? 'Switch to Offline' : 'Go Live / Online Now'}</span>
+              </button>
+            </div>
+
             {notifications.length === 0 ? (
               <div className="p-8 text-center text-slate-500">No new alerts.</div>
             ) : (
@@ -2512,14 +2645,22 @@ export const CompanionDashboard: React.FC = () => {
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
                 <div>
-                  <span className="font-bold text-slate-200 block">Availability Pause Toggle</span>
-                  <span className="text-slate-500 text-[11px]">Temporarily stop receiving requests</span>
+                  <span className="font-bold text-slate-200 block">Go Live (Online / Offline) Status</span>
+                  <span className="text-slate-500 text-[11px]">
+                    Current status: <strong className={!isAvailabilityPaused ? 'text-emerald-400' : 'text-amber-400'}>
+                      {!isAvailabilityPaused ? 'ONLINE (Live to clients)' : 'OFFLINE (Paused)'}
+                    </strong>
+                  </span>
                 </div>
                 <button
+                  type="button"
                   onClick={handleToggleAvailabilityPause}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 font-bold hover:bg-slate-700"
+                  disabled={togglingOnline}
+                  className={`px-3.5 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                    isAvailabilityPaused ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  }`}
                 >
-                  {isAvailabilityPaused ? 'Resume' : 'Pause'}
+                  {isAvailabilityPaused ? 'Go Online' : 'Go Offline'}
                 </button>
               </div>
             </div>
