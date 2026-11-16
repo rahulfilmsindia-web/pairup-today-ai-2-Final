@@ -1530,7 +1530,8 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     /^GET \/api\/chat\/[^/]+$/.test(route) ||
     /^POST \/api\/chat\/[^/]+$/.test(route) ||
     /^GET \/api\/chat\/[^/]+\/stream$/.test(route) ||
-    /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete|accept|reject)$/.test(route) ||
+    route === 'GET /api/companion/alerts/stream' ||
+    /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete|accept|reject|cancel)$/.test(route) ||
     /^GET \/api\/bookings\/[^/]+\/status$/.test(route) ||
     /^GET \/api\/bookings\/my\/[^/]+$/.test(route) ||
     /^GET \/api\/companion\/status\/[^/]+$/.test(route) ||
@@ -2939,6 +2940,25 @@ const bookingAcceptanceMap = new Map<string, {
   paymentOrderId?: string;
 }>();
 
+// Real-time Companion SSE Alert Streams for instant booking & cancel notifications
+const companionAlertStreams = new Map<string, Set<Response>>();
+
+function pushCompanionAlert(companionId: string, event: { type: string; [key: string]: any }) {
+  if (!companionId) return;
+  const streams = companionAlertStreams.get(companionId);
+  if (!streams || streams.size === 0) return;
+  const payload = `data: ${JSON.stringify(event)}\n\n`;
+  streams.forEach((res) => {
+    try {
+      if (!res.writableEnded) {
+        res.write(payload);
+      }
+    } catch {
+      streams.delete(res);
+    }
+  });
+}
+
 // Verify Razorpay payment signature (server-side HMAC-SHA256)
 app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Response) => {
   const { orderId, paymentId, signature, bookingId, membershipPlan } = req.body || {};
@@ -3721,6 +3741,23 @@ app.post('/api/bookings/create', async (req: Request, res: Response) => {
       paymentOrderId
     });
 
+    // Instantly push real-time booking request alert to companion (<50ms)
+    pushCompanionAlert(booking.companionId, {
+      type: 'NEW_BOOKING_REQUEST',
+      booking: {
+        ...booking,
+        paymentOrderId,
+        status: 'PENDING',
+        paymentStatus: 'PENDING',
+        companionAccepted: false,
+        baseAmountPaise,
+        cgstPaise,
+        sgstPaise,
+        gstAmountPaise,
+        totalPayablePaise
+      }
+    });
+
     return res.status(201).json({
       success: true,
       booking: {
@@ -3815,6 +3852,11 @@ app.post('/api/bookings/:id/accept', async (req: Request, res: Response) => {
       }
     }
 
+    pushCompanionAlert(booking.companionId, {
+      type: 'BOOKING_ACCEPTED',
+      bookingId
+    });
+
     return res.json({ success: true, bookingId, companionAccepted: true });
   } catch (error: any) {
     console.error('Failed to accept booking', error);
@@ -3861,11 +3903,113 @@ app.post('/api/bookings/:id/reject', async (req: Request, res: Response) => {
       }
     }
 
+    pushCompanionAlert(booking.companionId, {
+      type: 'BOOKING_CANCELLED',
+      bookingId,
+      reason: 'COMPANION_BUSY'
+    });
+
     return res.json({ success: true, bookingId, rejected: true });
   } catch (error: any) {
     console.error('Failed to reject booking', error);
     return res.status(500).json({ error: error.message || 'Failed to reject booking.' });
   }
+});
+
+// Client or Companion cancels a pending booking request
+app.post('/api/bookings/:id/cancel', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const bookingId = req.params.id;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const booking = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getBooking(bookingId)
+      : db.bookings[bookingId];
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.clientId !== authUser.id && booking.companionId !== authUser.id && authUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'You are not authorized to cancel this booking.' });
+    }
+
+    const cancelReason = req.body?.reason || (booking.clientId === authUser.id ? 'CLIENT_CANCELLED' : 'COMPANION_CANCELLED');
+    const baseAmt = Number(booking.bookingAmountPaise || booking.amountPaise || 49900);
+    const cgst = Math.round(baseAmt * 0.09);
+    const sgst = Math.round(baseAmt * 0.09);
+    const current = bookingAcceptanceMap.get(bookingId) || {
+      companionAccepted: false,
+      rejectionReason: cancelReason,
+      baseAmountPaise: baseAmt,
+      cgstPaise: cgst,
+      sgstPaise: sgst,
+      gstAmountPaise: cgst + sgst,
+      totalPayablePaise: baseAmt + cgst + sgst,
+      paymentOrderId: booking.paymentOrderId
+    };
+    current.companionAccepted = false;
+    current.rejectionReason = cancelReason;
+    bookingAcceptanceMap.set(bookingId, current);
+
+    if (getDatabaseType() === 'supabase') {
+      await databaseAdapter.updateBooking(bookingId, { status: 'CANCELLED', companionAccepted: false });
+    } else {
+      if (db.bookings[bookingId]) {
+        db.bookings[bookingId].status = 'CANCELLED';
+        db.bookings[bookingId].companionAccepted = false;
+      }
+    }
+
+    // Instantly notify companion stream to dismiss ringtone & popup
+    pushCompanionAlert(booking.companionId, {
+      type: 'BOOKING_CANCELLED',
+      bookingId,
+      reason: cancelReason
+    });
+
+    return res.json({ success: true, bookingId, status: 'CANCELLED', reason: cancelReason });
+  } catch (error: any) {
+    console.error('Failed to cancel booking', error);
+    return res.status(500).json({ error: error.message || 'Failed to cancel booking.' });
+  }
+});
+
+// Real-time Companion SSE Alert Stream for sub-second booking arrival and instant dismissals
+app.get('/api/companion/alerts/stream', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+
+  res.status(200).set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  res.flushHeaders();
+  res.write(': stream-connected\n\n');
+
+  const companionId = authUser.id;
+  if (!companionAlertStreams.has(companionId)) {
+    companionAlertStreams.set(companionId, new Set());
+  }
+  const streamSet = companionAlertStreams.get(companionId)!;
+  streamSet.add(res);
+
+  const keepAlive = setInterval(() => {
+    if (!res.writableEnded) {
+      res.write(': keepalive\n\n');
+    }
+  }, 15000);
+
+  const cleanup = () => {
+    clearInterval(keepAlive);
+    const set = companionAlertStreams.get(companionId);
+    if (set) {
+      set.delete(res);
+      if (set.size === 0) companionAlertStreams.delete(companionId);
+    }
+  };
+
+  req.on('close', cleanup);
+  res.on('finish', cleanup);
+  res.on('error', cleanup);
 });
 
 // Client & Companion real-time booking status polling

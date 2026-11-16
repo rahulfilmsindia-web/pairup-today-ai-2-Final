@@ -60,28 +60,43 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
 };
 
 // Safe system notification helper that never throws "Illegal constructor" on Android/Mobile Chrome
-const triggerSystemNotification = (title: string, options?: NotificationOptions) => {
+const triggerSystemNotification = (title: string, options?: any) => {
   try {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission === 'granted') {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification(title, options).catch(() => {});
-        }).catch(() => {});
-      } else {
-        try {
-          new Notification(title, options);
-        } catch {
-          // On Android / mobile browsers, new Notification() is forbidden and throws "Illegal constructor".
-          // Handled gracefully here so React never crashes.
-        }
-      }
-    } else if (Notification.permission === 'default') {
+    if (Notification.permission === 'default') {
       try {
         const p = Notification.requestPermission();
         if (p && typeof (p as any).catch === 'function') {
           (p as any).catch(() => {});
         }
+      } catch {}
+      return;
+    }
+    if (Notification.permission !== 'granted') return;
+
+    const notifOptions = {
+      icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
+      badge: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
+      tag: 'pairuptoday-booking',
+      renotify: true,
+      requireInteraction: true,
+      vibrate: [500, 250, 500, 250, 500, 250, 500],
+      ...(options || {})
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg && typeof reg.showNotification === 'function') {
+          reg.showNotification(title, notifOptions).catch(() => {});
+        }
+      }).catch(() => {});
+      return;
+    }
+
+    const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (!isMobile) {
+      try {
+        new Notification(title, notifOptions);
       } catch {}
     }
   } catch (err) {
@@ -601,15 +616,19 @@ export const CompanionDashboard: React.FC = () => {
         if (pendingRequest) {
           setIncomingBookingRequest((prev: any) => {
             if (!prev || prev.id !== pendingRequest.id) {
-              triggerSystemNotification('🚨 New Booking Request Received!', {
+              triggerSystemNotification('🚨 URGENT: New Booking Request!', {
                 body: `${pendingRequest.clientName || 'A Client'} requested a ${pendingRequest.serviceName} session on ${pendingRequest.date} at ${pendingRequest.startTime}. Tap to review!`,
-                icon: '/favicon.ico'
+                icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
+                tag: `booking-${pendingRequest.id}`,
+                data: { bookingId: pendingRequest.id, url: '/companion-dashboard' }
               });
             }
             return pendingRequest;
           });
+          startRingtone();
         } else {
           setIncomingBookingRequest(null);
+          stopRingtone();
         }
       }
     } catch (err) {
@@ -684,11 +703,84 @@ export const CompanionDashboard: React.FC = () => {
     fetchBookings();
     fetchNotifications();
     refreshUserData();
+
+    // Auto-prompt notification permission when dashboard mounts so background overlay alerts work
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      try {
+        Notification.requestPermission().catch(() => {});
+      } catch {}
+    }
+
+    // Connect to real-time Companion Alerts SSE Stream (<50ms delivery)
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/companion/alerts/stream');
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'NEW_BOOKING_REQUEST' && data.booking) {
+            setIncomingBookingRequest(data.booking);
+            startRingtone();
+            triggerSystemNotification('🚨 URGENT: New Booking Request!', {
+              body: `${data.booking.clientName || 'A Client'} requested a ${data.booking.serviceName || 'Social'} session. Tap to review!`,
+              icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
+              tag: `booking-${data.booking.id}`,
+              requireInteraction: true,
+              data: { bookingId: data.booking.id, url: '/companion-dashboard' }
+            });
+            fetchBookings();
+          } else if (data.type === 'BOOKING_CANCELLED') {
+            stopRingtone();
+            setIncomingBookingRequest((current: any) => {
+              if (current && current.id === data.bookingId) return null;
+              return current;
+            });
+            fetchBookings();
+          } else if (data.type === 'BOOKING_ACCEPTED') {
+            stopRingtone();
+            setIncomingBookingRequest(null);
+            fetchBookings();
+          }
+        } catch (parseErr) {
+          console.warn('Companion SSE parse error:', parseErr);
+        }
+      };
+      eventSource.onerror = () => {
+        // Fallback to polling if SSE disconnected
+      };
+    } catch (sseErr) {
+      console.warn('Failed to initialize SSE EventSource:', sseErr);
+    }
+
     const interval = setInterval(() => {
       fetchBookings();
       fetchNotifications();
     }, 3000);
-    return () => clearInterval(interval);
+
+    // Also listen for Service Worker postMessage actions (e.g. from notification clicks)
+    const handleSwMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'NOTIFICATION_ACTION') {
+        const { action, bookingId } = e.data;
+        if (action === 'decline') {
+          handleRejectIncomingBooking(bookingId);
+        } else {
+          window.focus();
+        }
+      }
+    };
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+    };
   }, [user?.id]);
 
   // Handle chat messages polling
@@ -887,6 +979,9 @@ export const CompanionDashboard: React.FC = () => {
       if (res.ok) {
         setIsAvailabilityPaused(nextPaused);
         await fetchCompanionStatus();
+        if (!nextPaused && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission().catch(() => {});
+        }
         setActionMsg(
           nextPaused
             ? '🔴 You are now OFFLINE — not visible to nearby clients.'
