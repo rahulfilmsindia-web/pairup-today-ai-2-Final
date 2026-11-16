@@ -15,25 +15,26 @@ import {
   Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
   const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
-    const started = new Date(booking.startedAt || booking.meetingStartedAt || booking.updatedAt || Date.now()).getTime();
-    const durationMs = (booking.durationHours || 1) * 3600 * 1000;
+    const started = new Date(booking?.startedAt || booking?.meetingStartedAt || booking?.updatedAt || Date.now()).getTime();
+    const durationMs = (booking?.durationHours || 1) * 3600 * 1000;
     const end = started + durationMs;
     return Math.max(0, Math.floor((end - Date.now()) / 1000));
   });
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const started = new Date(booking.startedAt || booking.meetingStartedAt || booking.updatedAt || Date.now()).getTime();
-      const durationMs = (booking.durationHours || 1) * 3600 * 1000;
+      const started = new Date(booking?.startedAt || booking?.meetingStartedAt || booking?.updatedAt || Date.now()).getTime();
+      const durationMs = (booking?.durationHours || 1) * 3600 * 1000;
       const end = started + durationMs;
       const rem = Math.max(0, Math.floor((end - Date.now()) / 1000));
       setSecondsRemaining(rem);
     }, 1000);
     return () => clearInterval(timer);
-  }, [booking.startedAt, booking.meetingStartedAt, booking.updatedAt, booking.durationHours]);
+  }, [booking?.startedAt, booking?.meetingStartedAt, booking?.updatedAt, booking?.durationHours]);
 
   const hours = Math.floor(secondsRemaining / 3600);
   const minutes = Math.floor((secondsRemaining % 3600) / 60);
@@ -264,80 +265,87 @@ export const CompanionDashboard: React.FC = () => {
   const ringtoneTimerRef = useRef<any>(null);
 
   const stopRingtone = () => {
-    if (ringtoneTimerRef.current) {
-      clearInterval(ringtoneTimerRef.current);
-      ringtoneTimerRef.current = null;
-    }
     try {
-      if ('vibrate' in navigator && typeof navigator.vibrate === 'function') {
+      if (ringtoneTimerRef.current) {
+        clearInterval(ringtoneTimerRef.current);
+        ringtoneTimerRef.current = null;
+      }
+      if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
         navigator.vibrate(0);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('stopRingtone error', e);
+    }
   };
 
   const startRingtone = () => {
-    stopRingtone();
-    const playBurst = () => {
-      try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = audioContextRef.current || new AudioCtx();
-        audioContextRef.current = ctx;
-        if (ctx.state === 'suspended') {
-          ctx.resume();
+    try {
+      stopRingtone();
+      const playBurst = () => {
+        try {
+          if (typeof window === 'undefined') return;
+          const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = audioContextRef.current || new AudioCtx();
+          audioContextRef.current = ctx;
+          if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+          }
+          const now = ctx.currentTime || 0;
+
+          // Tone 1: High energetic chime
+          const osc1 = ctx.createOscillator();
+          const gain1 = ctx.createGain();
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(784, now); // G5
+          osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.18); // C6
+          gain1.gain.setValueAtTime(0.35, now);
+          gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+          osc1.connect(gain1);
+          gain1.connect(ctx.destination);
+          osc1.start(now);
+          osc1.stop(now + 0.35);
+
+          // Tone 2: Harmonious ascending pulse
+          const osc2 = ctx.createOscillator();
+          const gain2 = ctx.createGain();
+          osc2.type = 'triangle';
+          osc2.frequency.setValueAtTime(1046.5, now + 0.2); // C6
+          osc2.frequency.exponentialRampToValueAtTime(1318.51, now + 0.45); // E6
+          gain2.gain.setValueAtTime(0.3, now + 0.2);
+          gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
+          osc2.connect(gain2);
+          gain2.connect(ctx.destination);
+          osc2.start(now + 0.2);
+          osc2.stop(now + 0.55);
+
+          // Tone 3: Urgent telephone dual-strike
+          const osc3 = ctx.createOscillator();
+          const gain3 = ctx.createGain();
+          osc3.type = 'sine';
+          osc3.frequency.setValueAtTime(880, now + 0.65); // A5
+          osc3.frequency.exponentialRampToValueAtTime(1318.51, now + 0.95); // E6
+          gain3.gain.setValueAtTime(0.35, now + 0.65);
+          gain3.gain.exponentialRampToValueAtTime(0.01, now + 1.1);
+          osc3.connect(gain3);
+          gain3.connect(ctx.destination);
+          osc3.start(now + 0.65);
+          osc3.stop(now + 1.1);
+
+          // Mobile device vibration pattern
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
+            navigator.vibrate([250, 150, 250, 150, 400]);
+          }
+        } catch (e) {
+          console.warn('Ringtone playback error', e);
         }
-        const now = ctx.currentTime;
+      };
 
-        // Tone 1: High energetic chime
-        const osc1 = ctx.createOscillator();
-        const gain1 = ctx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(784, now); // G5
-        osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.18); // C6
-        gain1.gain.setValueAtTime(0.35, now);
-        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.35);
-
-        // Tone 2: Harmonious ascending pulse
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(1046.5, now + 0.2); // C6
-        osc2.frequency.exponentialRampToValueAtTime(1318.51, now + 0.45); // E6
-        gain2.gain.setValueAtTime(0.3, now + 0.2);
-        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + 0.2);
-        osc2.stop(now + 0.55);
-
-        // Tone 3: Urgent telephone dual-strike
-        const osc3 = ctx.createOscillator();
-        const gain3 = ctx.createGain();
-        osc3.type = 'sine';
-        osc3.frequency.setValueAtTime(880, now + 0.65); // A5
-        osc3.frequency.exponentialRampToValueAtTime(1318.51, now + 0.95); // E6
-        gain3.gain.setValueAtTime(0.35, now + 0.65);
-        gain3.gain.exponentialRampToValueAtTime(0.01, now + 1.1);
-        osc3.connect(gain3);
-        gain3.connect(ctx.destination);
-        osc3.start(now + 0.65);
-        osc3.stop(now + 1.1);
-
-        // Mobile device vibration pattern
-        if ('vibrate' in navigator && typeof navigator.vibrate === 'function') {
-          navigator.vibrate([250, 150, 250, 150, 400]);
-        }
-      } catch (e) {
-        console.warn('Ringtone playback error', e);
-      }
-    };
-
-    playBurst();
-    ringtoneTimerRef.current = setInterval(playBurst, 1800);
+      playBurst();
+      ringtoneTimerRef.current = setInterval(playBurst, 1800);
+    } catch (outerErr) {
+      console.warn('startRingtone setup error', outerErr);
+    }
   };
 
   const [completedBookingEarned, setCompletedBookingEarned] = useState<{ id: string; amountPaise: number; code: string } | null>(null);
@@ -962,9 +970,10 @@ export const CompanionDashboard: React.FC = () => {
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   // Bookings breakdown
-  const pendingRequests = bookings.filter(b => b.status === 'PENDING' && !b.companionAccepted && b.cancellationReason !== 'COMPANION_BUSY');
-  const upcomingBookings = bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS');
-  const pastBookings = bookings.filter(b => b.status === 'COMPLETED' || b.status === 'CANCELLED');
+  const safeBookings = Array.isArray(bookings) ? bookings : [];
+  const pendingRequests = safeBookings.filter(b => b && b.status === 'PENDING' && !b.companionAccepted && b.cancellationReason !== 'COMPANION_BUSY');
+  const upcomingBookings = safeBookings.filter(b => b && (b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS'));
+  const pastBookings = safeBookings.filter(b => b && (b.status === 'COMPLETED' || b.status === 'CANCELLED'));
 
   if (loading && !statusData) {
     return (
@@ -972,6 +981,17 @@ export const CompanionDashboard: React.FC = () => {
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-xs text-slate-400 font-medium">Opening Companion Workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-400 font-medium">Verifying Session...</p>
         </div>
       </div>
     );
@@ -1301,7 +1321,8 @@ export const CompanionDashboard: React.FC = () => {
   // All 3 gates satisfied → render full Companion Dashboard below.
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 py-6 px-4 sm:px-6 lg:px-8">
+    <ErrorBoundary fallbackTitle="Companion Dashboard">
+      <div className="min-h-screen bg-slate-950 text-slate-100 py-6 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Top Header Card */}
@@ -1434,7 +1455,7 @@ export const CompanionDashboard: React.FC = () => {
                 Account Suspended by Administration
               </h4>
               <p className="text-xs text-rose-200 font-medium">
-                Reason: {user.suspendedReason || 'Terms of service violation'}.
+                Reason: {user?.suspendedReason || 'Terms of service violation'}.
               </p>
               <p className="text-[11px] text-slate-300">
                 Companion profile visibility, booking coordination, and messaging are temporarily restricted. Please contact customer support for appeal.
@@ -1475,7 +1496,7 @@ export const CompanionDashboard: React.FC = () => {
                   KYC Verification Action Required
                 </span>
                 <span className="text-xs text-amber-300 block font-medium">
-                  Reason: {user.kycRejectionReason || 'Document photo blur or unreadable. Please re-upload clear photos.'}
+                  Reason: {user?.kycRejectionReason || 'Document photo blur or unreadable. Please re-upload clear photos.'}
                 </span>
                 <span className="text-[11px] text-slate-300 block">
                   Please fix the issue and submit clear documents to activate your companion host profile.
@@ -1895,9 +1916,9 @@ export const CompanionDashboard: React.FC = () => {
                   <LocationAutocomplete
                     value={companionLocationInput}
                     onChange={(val) => setCompanionLocationInput(val)}
-                    onSelectLocation={(item) => {
-                      setCompanionLocationInput(item.address || item.city);
-                      setCompanionCity(item.city || '');
+                    onSelectLocation={(item: any) => {
+                      setCompanionLocationInput(item.fullAddress || item.address || item.cityValue || item.city || item.label || '');
+                      setCompanionCity(item.cityValue || item.city || '');
                       setCompanionState(item.state || '');
                       if (item.lat !== undefined && item.lng !== undefined) {
                         setCompanionCoords({ lat: item.lat, lng: item.lng });
@@ -1925,7 +1946,7 @@ export const CompanionDashboard: React.FC = () => {
                     {t.profilePhotosHelp}
                   </p>
                 </div>
-                {userPhotos.length < 6 && (
+                {(Array.isArray(userPhotos) ? userPhotos : []).length < 6 && (
                   <label className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-pink-300 border border-slate-700 font-semibold text-xs cursor-pointer flex items-center gap-1.5 transition-colors">
                     <Upload className="w-3.5 h-3.5" />
                     <span>{t.profileUploadBtn}</span>
@@ -1941,7 +1962,7 @@ export const CompanionDashboard: React.FC = () => {
 
               {/* Photos Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                {userPhotos.map((photo, idx) => {
+                {(Array.isArray(userPhotos) ? userPhotos : []).map((photo, idx) => {
                   const isMain = photo === activeProfilePhoto || (!activeProfilePhoto && idx === 0);
                   return (
                     <div 
@@ -2505,7 +2526,7 @@ export const CompanionDashboard: React.FC = () => {
 
                     <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
                       <span>Venue: <strong className="text-slate-200">{b.meetingLocation}</strong></span>
-                      <span className="text-emerald-400 font-bold">Your Share: ₹{(b.companionNetSharePaise / 100).toFixed(2)}</span>
+                      <span className="text-emerald-400 font-bold">Your Share: ₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}</span>
                     </div>
 
                     <div className="flex items-center gap-3 pt-1">
@@ -2575,7 +2596,7 @@ export const CompanionDashboard: React.FC = () => {
                         </a>
                       )}
                     </div>
-                    <span className="text-emerald-400 font-bold">Your Share: ₹{(b.companionNetSharePaise / 100).toFixed(2)}</span>
+                    <span className="text-emerald-400 font-bold">Your Share: ₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}</span>
                   </div>
 
                   {b.status === 'CONFIRMED' && (
@@ -2780,7 +2801,7 @@ export const CompanionDashboard: React.FC = () => {
                     <span className="text-slate-400">Client: {b.clientName} · {b.date}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-emerald-400 font-bold block">Earned: ₹{(b.companionNetSharePaise / 100).toFixed(2)}</span>
+                    <span className="text-emerald-400 font-bold block">Earned: ₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}</span>
                     <span className="text-[10px] text-slate-500">Status: {b.settlementStatus}</span>
                   </div>
                 </div>
@@ -2862,14 +2883,14 @@ export const CompanionDashboard: React.FC = () => {
             <p className="text-slate-400">
               Each session's net earning is held securely under a 48-hour UTC lock to guarantee dispute-free settlement for both clients and companions.
             </p>
-            {bookings.filter(b => b.status === 'COMPLETED').map(b => (
+            {(Array.isArray(bookings) ? bookings : []).filter(b => b && b.status === 'COMPLETED').map(b => (
               <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
                 <div>
                   <span className="font-bold text-slate-200 block">{b.bookingCode} · {b.serviceName}</span>
                   <span className="text-slate-500 text-[11px]">Unlocks at: {b.settlementUnlockUtc ? new Date(b.settlementUnlockUtc).toUTCString() : 'Pending'}</span>
                 </div>
                 <div className="text-right">
-                  <span className="font-bold text-amber-400">₹{(b.companionNetSharePaise / 100).toFixed(2)}</span>
+                  <span className="font-bold text-amber-400">₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}</span>
                   <span className="text-[10px] text-slate-500 block">{b.settlementStatus}</span>
                 </div>
               </div>
@@ -2930,11 +2951,11 @@ export const CompanionDashboard: React.FC = () => {
               </button>
             </div>
 
-            {notifications.length === 0 ? (
+            {(Array.isArray(notifications) ? notifications : []).length === 0 ? (
               <div className="p-8 text-center text-slate-500">No new alerts.</div>
             ) : (
               <div className="space-y-2.5">
-                {notifications.map(n => {
+                {(Array.isArray(notifications) ? notifications : []).map(n => {
                   const isKycReject = 
                     n.type === 'KYC_REJECTED' || 
                     n.data?.type === 'KYC_REJECTED' || 
@@ -3274,12 +3295,12 @@ export const CompanionDashboard: React.FC = () => {
 
             {/* Messages Body */}
             <div className="p-4 flex-1 overflow-y-auto space-y-3">
-              {chatMessages.length === 0 ? (
+              {(Array.isArray(chatMessages) ? chatMessages : []).length === 0 ? (
                 <div className="text-center py-10 text-xs text-slate-500">
                   No messages yet. Send a greeting to coordinate your meeting!
                 </div>
               ) : (
-                chatMessages.map(m => (
+                (Array.isArray(chatMessages) ? chatMessages : []).map(m => (
                   <div
                     key={m.id}
                     className={`flex flex-col ${m.senderId === user?.id ? 'items-end' : 'items-start'}`}
@@ -3478,7 +3499,7 @@ export const CompanionDashboard: React.FC = () => {
               <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
                 <span className="text-slate-300 font-bold">Your Net Earnings (85%):</span>
                 <span className="text-emerald-400 font-extrabold text-sm">
-                  ₹{(incomingBookingRequest.companionNetSharePaise / 100).toFixed(2)}
+                  ₹{(((Number(incomingBookingRequest.companionNetSharePaise) || Math.round((Number(incomingBookingRequest.bookingAmountPaise || incomingBookingRequest.amountPaise || incomingBookingRequest.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -3506,6 +3527,7 @@ export const CompanionDashboard: React.FC = () => {
         </div>
       )}
 
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 };

@@ -18,6 +18,7 @@ import { RoleSelectionModal } from './pages/RoleSelectionModal';
 import { AdminPortal } from './admin/AdminPortal';
 import { ServiceItem } from './constants/services';
 import { CompanionListing } from './components/CompanionListing';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const pageToPath = (page: string): string => {
   switch (page) {
@@ -226,9 +227,17 @@ const MainAppContent: React.FC = () => {
       case 'terms':
         return <TermsPage />;
       case 'client-dashboard':
-        return <ClientDashboard />;
+        return (
+          <ErrorBoundary fallbackTitle="Client Dashboard">
+            <ClientDashboard />
+          </ErrorBoundary>
+        );
       case 'companion-dashboard':
-        return <CompanionDashboard />;
+        return (
+          <ErrorBoundary fallbackTitle="Companion Dashboard">
+            <CompanionDashboard />
+          </ErrorBoundary>
+        );
       case 'home':
       default:
         return (
@@ -284,13 +293,15 @@ const MainAppContent: React.FC = () => {
 
 export function App() {
   return (
-    <LanguageProvider>
-      <AuthProvider>
-        <AdminAuthProvider>
-          <MainAppContent />
-        </AdminAuthProvider>
-      </AuthProvider>
-    </LanguageProvider>
+    <ErrorBoundary fallbackTitle="PairUpToday Application">
+      <LanguageProvider>
+        <AuthProvider>
+          <AdminAuthProvider>
+            <MainAppContent />
+          </AdminAuthProvider>
+        </AuthProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   );
 }
 
