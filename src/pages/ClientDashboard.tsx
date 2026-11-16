@@ -6,6 +6,7 @@ import { openRazorpayCheckout } from '../utils/razorpay';
 import { PAIRUP_SERVICES, ServiceItem } from '../constants/services';
 import { compressImageFile, compressBase64 } from '../utils/image';
 import LocationAutocomplete from '../components/LocationAutocomplete';
+import { ClientLiveTrackingView } from '../components/ClientLiveTrackingView';
 import { 
   Search, MapPin, Filter, Star, Clock, Calendar, ShieldCheck, 
   AlertCircle, MessageSquare, PhoneCall, CheckCircle, Navigation, 
@@ -35,6 +36,7 @@ export const ClientDashboard: React.FC = () => {
     | 'nearby' 
     | 'suggested' 
     | 'search-filters' 
+    | 'tracking'
     | 'upcoming' 
     | 'history' 
     | 'chat' 
@@ -44,6 +46,7 @@ export const ClientDashboard: React.FC = () => {
     | 'settings';
 
   const [activeTab, setActiveTab] = useState<ClientTab>('overview');
+  const [trackedBooking, setTrackedBooking] = useState<any | null>(null);
 
   // Tab scroll ref for desktop Left/Right arrow navigation
   const tabsNavRef = useRef<HTMLDivElement>(null);
@@ -715,7 +718,7 @@ export const ClientDashboard: React.FC = () => {
         throw new Error(verification.error || 'Payment was not confirmed by the backend.');
       }
 
-      setBookingSuccessMsg(`Booking ${verification.booking?.bookingCode || booking.bookingCode} confirmed! Opening chat with ${selectedCompanion?.name}...`);
+      setBookingSuccessMsg(`Booking ${verification.booking?.bookingCode || booking.bookingCode} confirmed! Opening Live Companion Arrival Tracking...`);
       fetchMyBookings();
 
       const activeBookingObj = {
@@ -723,14 +726,23 @@ export const ClientDashboard: React.FC = () => {
         bookingCode: verification.booking?.bookingCode || booking.bookingCode,
         companionId: selectedCompanion?.id || booking.companionId,
         companionName: selectedCompanion?.name || 'Companion',
+        companionPhoto: selectedCompanion?.profilePhoto || selectedCompanion?.photo || '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
         clientName: user.profileName || user.legalName || 'Client',
-        serviceName: booking.serviceName || 'Social Companionship'
+        serviceName: booking.serviceName || selectedCompanion?.serviceName || 'Social Companionship',
+        meetingLocation: booking.meetingLocation,
+        date: booking.date,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        durationHours: booking.durationHours,
+        startOtp: verification.booking?.startOtp,
+        status: 'CONFIRMED'
       };
 
       setTimeout(() => {
         handleCloseBookingModal();
+        setTrackedBooking(activeBookingObj);
         setActiveChatBooking(activeBookingObj);
-        setActiveTab('chat');
+        setActiveTab('tracking');
       }, 1500);
     } catch (err: any) {
       setBookingError(err.message || 'Payment processing error.');
@@ -997,6 +1009,27 @@ export const ClientDashboard: React.FC = () => {
             >
               <Sliders className="w-3.5 h-3.5" />
               <span>Search & Filters</span>
+            </button>
+
+            {/* TAB: LIVE COMPANION ARRIVAL TRACKING */}
+            <button
+              onClick={() => setActiveTab('tracking')}
+              className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'tracking'
+                  ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white font-extrabold shadow-md shadow-pink-500/20'
+                  : trackedBooking || upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS')
+                  ? 'bg-pink-500/15 border border-pink-500/40 text-pink-300 font-bold hover:bg-pink-500/25'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Live Tracking</span>
+              {(trackedBooking || upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS')) && (
+                <span className="relative flex h-2 w-2 ml-0.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                </span>
+              )}
             </button>
 
             <button
@@ -1762,6 +1795,31 @@ export const ClientDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* TAB: LIVE COMPANION ARRIVAL TRACKING */}
+        {activeTab === 'tracking' && (
+          <ClientLiveTrackingView
+            booking={
+              trackedBooking ||
+              upcomingBookings.find(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS') ||
+              upcomingBookings[0] ||
+              myBookings[0] || {
+                id: 'active_session',
+                companionName: 'Companion Host',
+                serviceName: 'Social Companion',
+                meetingLocation: 'Central Public Cafe',
+                date: 'Today',
+                startTime: '14:00',
+                endTime: '16:00',
+                durationHours: 2,
+                status: 'CONFIRMED'
+              }
+            }
+            user={user}
+            onOpenReportModal={openReportModal}
+            onBackToOverview={() => setActiveTab('overview')}
+          />
+        )}
+
         {/* TAB 9: UPCOMING BOOKINGS */}
         {activeTab === 'upcoming' && (
           <div className="space-y-4">
@@ -1781,8 +1839,18 @@ export const ClientDashboard: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-bold">{b.status}</span>
                       <button
+                        onClick={() => {
+                          setTrackedBooking(b);
+                          setActiveTab('tracking');
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold hover:from-pink-600 hover:to-rose-600 flex items-center gap-1 shadow-sm cursor-pointer"
+                      >
+                        <Navigation className="w-3 h-3" />
+                        <span>Track Arrival</span>
+                      </button>
+                      <button
                         onClick={() => setActiveChatBooking(b)}
-                        className="px-3 py-1 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700"
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer"
                       >
                         Chat
                       </button>

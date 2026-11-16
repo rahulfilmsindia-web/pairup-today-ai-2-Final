@@ -1119,6 +1119,39 @@ export const CompanionDashboard: React.FC = () => {
     };
   }, [user?.id]);
 
+  // Live GPS broadcaster for active bookings (enables Rapido-style client live tracking)
+  useEffect(() => {
+    const activeBooking = bookings.find(b => ['CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status));
+    if (!activeBooking || !user || typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    const broadcastGps = () => {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            apiFetch('/api/location/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                accuracy: pos.coords.accuracy || 10,
+                bookingId: activeBooking.id
+              })
+            }).catch(() => {});
+          },
+          (err) => {
+            console.warn('Geolocation broadcast notice:', err.message);
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
+        );
+      } catch {}
+    };
+
+    broadcastGps();
+    const locInterval = setInterval(broadcastGps, 10000);
+    return () => clearInterval(locInterval);
+  }, [bookings, user?.id]);
+
   // Handle chat messages polling
   useEffect(() => {
     if (!activeChatBooking) return;
@@ -1142,19 +1175,36 @@ export const CompanionDashboard: React.FC = () => {
     e.preventDefault();
     if (!activeChatBooking || !newChatText.trim() || !user) return;
 
+    const messageText = newChatText.trim();
+    const tempId = `temp_${Date.now()}`;
+    const optimisticMsg = {
+      id: tempId,
+      bookingId: activeChatBooking.id,
+      senderId: user.id,
+      senderName: user.name || 'Companion',
+      senderRole: 'COMPANION',
+      message: messageText,
+      timestamp: new Date().toISOString()
+    };
+
+    // Optimistically show message immediately in chat
+    setChatMessages(prev => [...prev, optimisticMsg]);
+    setNewChatText('');
+
     try {
       const res = await apiFetch(`/api/chat/${activeChatBooking.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           senderId: user.id,
-          message: newChatText.trim()
+          message: messageText
         })
       });
       if (res.ok) {
         const data = await res.json();
-        setChatMessages(prev => [...prev, data.message]);
-        setNewChatText('');
+        if (data.message) {
+          setChatMessages(prev => prev.map(m => m.id === tempId ? data.message : m));
+        }
       }
     } catch (err) {
       console.error('Failed to post message', err);
@@ -3169,34 +3219,104 @@ export const CompanionDashboard: React.FC = () => {
             ) : (
               upcomingBookings.map(b => (
                 <div key={b.id} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-slate-100 text-sm block">{b.serviceName} ({b.bookingCode})</span>
-                      <span className="text-slate-400">Meeting with {b.clientName}</span>
-                    </div>
-                    <span className="px-2.5 py-1 rounded bg-sky-500/20 text-sky-300 font-bold">{b.status}</span>
-                  </div>
-
-                  {/* CLIENT-SPECIFIED VENUE & GOOGLE MAP DIRECTIONS */}
-                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Client's Booked Meeting Venue</span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <MapPin className="w-4 h-4 text-pink-500 shrink-0" />
-                        <span className="text-sm font-bold text-slate-100">{b.meetingLocation || 'Specified Meeting Venue'}</span>
+                  {/* CLIENT PROFILE & BOOKING HEADER */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div className="flex items-center gap-3.5">
+                      <img
+                        src={b.clientPhoto || '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png'}
+                        alt={b.clientName || 'Client'}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-pink-500 shadow-md shrink-0"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-slate-100 text-sm">{b.clientName || 'Client'}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold text-[10px] border border-pink-500/30">
+                            {b.serviceName}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 block font-mono">
+                          Booking ID: {b.bookingCode || b.id?.slice(0, 8)}
+                        </span>
                       </div>
                     </div>
-                    {b.meetingLocation && (
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30 text-xs font-semibold shrink-0 transition-colors"
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                      <span className="px-3 py-1 rounded-full bg-sky-500/20 text-sky-300 font-extrabold text-xs border border-sky-500/30">
+                        {b.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* SCHEDULE TIME, DURATION & CLIENT DETAILS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-pink-400 shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Schedule Slot</span>
+                        <span className="font-bold text-slate-200">{b.date} • {b.startTime} - {b.endTime}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Duration</span>
+                        <span className="font-bold text-slate-200">{b.durationHours || 1} Hour(s) Session</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Your Net Earnings (85%)</span>
+                        <span className="font-bold text-emerald-400">
+                          ₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.bookingAmountPaise || b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {b.notes && (
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-300 italic">
+                      <span className="font-semibold text-slate-400 not-italic block text-[10px] uppercase mb-0.5">Client Note:</span>
+                      "{b.notes}"
+                    </div>
+                  )}
+
+                  {/* ACTION TABS: GET BOOKING LOCATION & CHAT WITH CLIENT */}
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-950 to-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Booked Meeting Venue</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <MapPin className="w-4 h-4 text-pink-500 shrink-0" />
+                        <span className="text-xs font-bold text-slate-100 truncate">{b.meetingLocation || 'Specified Meeting Venue'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {b.meetingLocation && (
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+                        >
+                          <Navigation className="w-3.5 h-3.5" />
+                          <span>Get Booking Location</span>
+                        </a>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveChatBooking(b);
+                          setActiveTab('chat');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white text-xs font-bold shadow-lg shadow-pink-500/20 transition-all cursor-pointer"
                       >
-                        <Navigation className="w-3.5 h-3.5" />
-                        <span>Open Map Directions</span>
-                      </a>
-                    )}
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Chat with Client</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* 0. ARRIVAL TRIGGER (If still in CONFIRMED status) */}
