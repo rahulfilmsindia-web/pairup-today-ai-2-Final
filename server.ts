@@ -1547,6 +1547,8 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     /^GET \/api\/admin\/support\/messages\/[^/]+\/stream$/.test(route) ||
     route === 'POST /api/admin/support/reply' ||
     /^POST \/api\/admin\/support\/conversation\/[^/]+\/status$/.test(route) ||
+    /^POST \/api\/admin\/staff\/[^/]+\/role$/.test(route) ||
+    /^DELETE \/api\/admin\/staff\/[^/]+$/.test(route) ||
     /^GET \/api\/admin\/kyc\/[^/]+\/documents$/.test(route) ||
     /^POST \/api\/admin\/kyc\/[^/]+\/action$/.test(route);
 }
@@ -5115,6 +5117,37 @@ app.post('/api/admin/staff/create', requireAdminRoles('SUPER_ADMIN'), async (req
   } catch (error) {
     console.error('Failed to create admin staff.', error);
     return res.status(503).json({ error: 'Staff account creation is temporarily unavailable.' });
+  }
+});
+
+app.post('/api/admin/staff/:staffId/role', requireAdminRoles('SUPER_ADMIN'), async (req: Request, res: Response) => {
+  const { staffId } = req.params;
+  const { role } = req.body;
+  const allowedRoles = ['KYC_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'AUDITOR'];
+  if (!allowedRoles.includes(role)) {
+    return res.status(400).json({ error: 'Valid authorized role (KYC_ADMIN, FINANCE_ADMIN, SUPPORT_ADMIN, AUDITOR) is required.' });
+  }
+  try {
+    const updated = await databaseAdapter.updateAdminUserRole(staffId, role);
+    return res.json({ success: true, staff: updated });
+  } catch (error: any) {
+    console.error('Failed to update staff role.', error);
+    return res.status(500).json({ error: error.message || 'Staff role update failed.' });
+  }
+});
+
+app.delete('/api/admin/staff/:staffId', requireAdminRoles('SUPER_ADMIN'), async (req: Request, res: Response) => {
+  const { staffId } = req.params;
+  const admin = (req as AuthenticatedRequest).adminUser;
+  if (admin.id === staffId) {
+    return res.status(400).json({ error: 'Cannot delete your own super admin account.' });
+  }
+  try {
+    await databaseAdapter.deleteAdminUser(staffId);
+    return res.json({ success: true, message: 'Staff access revoked successfully.' });
+  } catch (error: any) {
+    console.error('Failed to delete staff member.', error);
+    return res.status(500).json({ error: error.message || 'Staff deletion failed.' });
   }
 });
 

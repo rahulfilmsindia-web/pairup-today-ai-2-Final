@@ -248,6 +248,8 @@ export interface DatabaseAdapter {
   updateAdminPasswordHash(id: string, passwordHash: string): Promise<void>;
   createAdminUser(admin: any): Promise<any>;
   listAdminUsers(): Promise<any[]>;
+  updateAdminUserRole(id: string, role: string): Promise<any>;
+  deleteAdminUser(id: string): Promise<void>;
 
   // Audit Logs
   createAuditLog(log: any): Promise<void>;
@@ -961,6 +963,21 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
   async listAdminUsers(): Promise<any[]> {
     const db = this.getDB();
     return Object.values(db.adminUsers);
+  }
+
+  async updateAdminUserRole(id: string, role: string): Promise<any> {
+    const db = this.getDB();
+    const staff = db.adminUsers[id];
+    if (!staff) throw new Error('Admin user not found');
+    staff.role = role;
+    this.saveDB(db);
+    return staff;
+  }
+
+  async deleteAdminUser(id: string): Promise<void> {
+    const db = this.getDB();
+    delete db.adminUsers[id];
+    this.saveDB(db);
   }
 
   async createAuditLog(log: any): Promise<void> {
@@ -2460,6 +2477,17 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     const { data, error } = await db.adminUsers().select('*');
     if (error) throw error;
     return (data || []).map((admin: any) => this.mapAdminUser(admin));
+  }
+
+  async updateAdminUserRole(id: string, role: string): Promise<any> {
+    const { data, error } = await db.adminUsers().update({ role }).eq('id', id).select().single();
+    if (error) throw error;
+    return this.mapAdminUser(data);
+  }
+
+  async deleteAdminUser(id: string): Promise<void> {
+    const { error } = await db.adminUsers().delete().eq('id', id);
+    if (error) throw error;
   }
 
   async createAuditLog(log: any): Promise<void> {

@@ -7,8 +7,99 @@ import {
   Users, DollarSign, FileCheck, Shield, Eye, EyeOff, 
   Search, RefreshCw, Send, Check, X, LogOut, ChevronRight,
   UserCheck, CreditCard, Calendar, Clock, Sliders, Settings,
-  CheckCircle2, AlertTriangle, FileText, Landmark
+  CheckCircle2, AlertTriangle, FileText, Landmark, Trash2
 } from 'lucide-react';
+
+// 17 Admin Modules
+export type AdminModule =
+  | 'overview'
+  | 'reports'
+  | 'clients'
+  | 'companions'
+  | 'client-kyc'
+  | 'companion-kyc'
+  | 'pending-approvals'
+  | 'approved-rejected'
+  | 'memberships'
+  | 'bookings'
+  | 'payments'
+  | 'finance'
+  | 'manual-payout'
+  | 'support'
+  | 'audit'
+  | 'staff'
+  | 'security';
+
+// Strict Role-Based Module Access Control (RBAC - Least Privilege)
+export const ROLE_ALLOWED_MODULES: Record<AdminRole, AdminModule[]> = {
+  SUPER_ADMIN: [
+    'overview',
+    'reports',
+    'clients',
+    'companions',
+    'client-kyc',
+    'companion-kyc',
+    'pending-approvals',
+    'approved-rejected',
+    'memberships',
+    'bookings',
+    'payments',
+    'finance',
+    'manual-payout',
+    'audit',
+    'staff',
+    'security'
+  ],
+  KYC_ADMIN: [
+    'pending-approvals',
+    'client-kyc',
+    'companion-kyc',
+    'approved-rejected'
+  ],
+  FINANCE_ADMIN: [
+    'finance',
+    'manual-payout',
+    'payments',
+    'memberships',
+    'bookings'
+  ],
+  SUPPORT_ADMIN: [
+    'reports',
+    'clients',
+    'companions',
+    'bookings'
+  ],
+  AUDITOR: [
+    'audit',
+    'overview',
+    'payments',
+    'memberships',
+    'bookings',
+    'reports'
+  ]
+};
+
+export const getDefaultModuleForRole = (role?: AdminRole): AdminModule => {
+  switch (role) {
+    case 'KYC_ADMIN':
+      return 'pending-approvals';
+    case 'FINANCE_ADMIN':
+      return 'finance';
+    case 'SUPPORT_ADMIN':
+      return 'reports';
+    case 'AUDITOR':
+      return 'audit';
+    case 'SUPER_ADMIN':
+    default:
+      return 'overview';
+  }
+};
+
+export const isModuleAllowedForRole = (role: AdminRole | undefined, module: AdminModule): boolean => {
+  if (!role) return false;
+  const allowed = ROLE_ALLOWED_MODULES[role];
+  return allowed ? allowed.includes(module) : false;
+};
 
 export const AdminPortal: React.FC = () => {
   const {
@@ -30,27 +121,17 @@ export const AdminPortal: React.FC = () => {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // 17 Admin Modules (Reports & Safety added)
-  type AdminModule =
-    | 'overview'
-    | 'reports'
-    | 'clients'
-    | 'companions'
-    | 'client-kyc'
-    | 'companion-kyc'
-    | 'pending-approvals'
-    | 'approved-rejected'
-    | 'memberships'
-    | 'bookings'
-    | 'payments'
-    | 'finance'
-    | 'manual-payout'
-    | 'support'
-    | 'audit'
-    | 'staff'
-    | 'security';
+  const [currentSection, setCurrentSection] = useState<AdminModule>(() => {
+    return admin ? getDefaultModuleForRole(admin.role) : 'overview';
+  });
 
-  const [currentSection, setCurrentSection] = useState<AdminModule>('overview');
+  useEffect(() => {
+    if (admin) {
+      if (!isModuleAllowedForRole(admin.role, currentSection)) {
+        setCurrentSection(getDefaultModuleForRole(admin.role));
+      }
+    }
+  }, [admin?.role]);
 
   // Overview stats
   const [stats, setStats] = useState<any | null>(null);
@@ -145,23 +226,37 @@ export const AdminPortal: React.FC = () => {
         }
       };
 
+      const role = admin?.role;
+      const canOverview = role === 'SUPER_ADMIN' || role === 'AUDITOR';
+      const canKyc = role === 'SUPER_ADMIN' || role === 'KYC_ADMIN';
+      const canFinance = role === 'SUPER_ADMIN' || role === 'FINANCE_ADMIN';
+      const canMemberships = role === 'SUPER_ADMIN' || role === 'FINANCE_ADMIN' || role === 'AUDITOR';
+      const canPayments = role === 'SUPER_ADMIN' || role === 'FINANCE_ADMIN' || role === 'AUDITOR';
+      const canBookings = role === 'SUPER_ADMIN' || role === 'FINANCE_ADMIN' || role === 'SUPPORT_ADMIN' || role === 'AUDITOR';
+      const canClients = role === 'SUPER_ADMIN' || role === 'SUPPORT_ADMIN';
+      const canCompanions = role === 'SUPER_ADMIN' || role === 'SUPPORT_ADMIN';
+      const canReports = role === 'SUPER_ADMIN' || role === 'SUPPORT_ADMIN' || role === 'AUDITOR';
+      const canStaff = role === 'SUPER_ADMIN';
+      const canAudit = role === 'SUPER_ADMIN' || role === 'AUDITOR';
+      const canSupport = role === 'SUPER_ADMIN' || role === 'SUPPORT_ADMIN';
+
       const [
         overviewData, clientsKycData, compsKycData, finData, staffData, logsData,
         clientsData, compsData, memsData, bksData, paysData, supportData, reportsData
       ] = await Promise.all([
-        fetchJson('/api/admin/overview'),
-        fetchJson('/api/admin/kyc/list?userType=CLIENT'),
-        fetchJson('/api/admin/kyc/list?userType=COMPANION'),
-        fetchJson('/api/admin/finance/settlements'),
-        fetchJson('/api/admin/staff'),
-        fetchJson('/api/admin/audit-logs'),
-        fetchJson('/api/admin/clients'),
-        fetchJson('/api/admin/companions'),
-        fetchJson('/api/admin/memberships'),
-        fetchJson('/api/admin/bookings'),
-        fetchJson('/api/admin/payments'),
-        fetchJson('/api/admin/support/conversations'),
-        fetchJson('/api/admin/reports')
+        canOverview ? fetchJson('/api/admin/overview') : Promise.resolve(null),
+        canKyc ? fetchJson('/api/admin/kyc/list?userType=CLIENT') : Promise.resolve(null),
+        canKyc ? fetchJson('/api/admin/kyc/list?userType=COMPANION') : Promise.resolve(null),
+        canFinance ? fetchJson('/api/admin/finance/settlements') : Promise.resolve(null),
+        canStaff ? fetchJson('/api/admin/staff') : Promise.resolve(null),
+        canAudit ? fetchJson('/api/admin/audit-logs') : Promise.resolve(null),
+        canClients ? fetchJson('/api/admin/clients') : Promise.resolve(null),
+        canCompanions ? fetchJson('/api/admin/companions') : Promise.resolve(null),
+        canMemberships ? fetchJson('/api/admin/memberships') : Promise.resolve(null),
+        canBookings ? fetchJson('/api/admin/bookings') : Promise.resolve(null),
+        canPayments ? fetchJson('/api/admin/payments') : Promise.resolve(null),
+        canSupport ? fetchJson('/api/admin/support/conversations') : Promise.resolve(null),
+        canReports ? fetchJson('/api/admin/reports') : Promise.resolve(null)
       ]);
 
       if (overviewData) setStats(overviewData);
@@ -508,6 +603,49 @@ export const AdminPortal: React.FC = () => {
     }
   };
 
+  // Staff role modification (Super Admin only)
+  const handleUpdateStaffRole = async (staffId: string, role: AdminRole) => {
+    if (admin?.role !== 'SUPER_ADMIN') return;
+    try {
+      const res = await apiFetch(`/api/admin/staff/${staffId}/role`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ role })
+      });
+      if (res.ok) {
+        loadAdminData();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to update staff role');
+      }
+    } catch (err) {
+      console.error('Error updating staff role', err);
+    }
+  };
+
+  // Staff deletion / access revocation (Super Admin only)
+  const handleDeleteStaff = async (staffId: string, staffName: string) => {
+    if (admin?.role !== 'SUPER_ADMIN') return;
+    if (!window.confirm(`Are you sure you want to revoke access and delete staff account for ${staffName}?`)) return;
+    try {
+      const res = await apiFetch(`/api/admin/staff/${staffId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        loadAdminData();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to delete staff member');
+      }
+    } catch (err) {
+      console.error('Error deleting staff member', err);
+    }
+  };
+
   // UN-AUTHENTICATED ADMIN LOGIN FORM WITH 2-STEP APITXT MFA
   if (!isAdminAuthenticated || !admin) {
     return (
@@ -667,211 +805,280 @@ export const AdminPortal: React.FC = () => {
 
       {/* Mobile Module Selector for smartphones & mobile devices */}
       <div className="md:hidden bg-slate-900 border-b border-slate-800 p-3">
-        <label className="block text-[11px] font-semibold text-slate-400 mb-1">Select Admin Module:</label>
+        <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+          Select Admin Module ({admin.role}):
+        </label>
         <select
           value={currentSection}
           onChange={e => setCurrentSection(e.target.value as AdminModule)}
           className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-400"
         >
-          <option value="overview">Overview</option>
-          <option value="reports">Incident Reports & Safety ({reportsList.filter(r => r.status === 'PENDING_REVIEW').length} pending)</option>
-          <option value="clients">Client Management ({clientsList.length})</option>
-          <option value="companions">Companion Management ({companionsList.length})</option>
-          <option value="client-kyc">Client Documents / KYC ({clientKycs.length})</option>
-          <option value="companion-kyc">Companion Documents / KYC ({companionKycs.length})</option>
-          <option value="pending-approvals">Pending Approvals ({pendingApprovals.length})</option>
-          <option value="approved-rejected">Approved / Rejected Records ({decidedRecords.length})</option>
-          <option value="memberships">Membership Records ({membershipsList.length})</option>
-          <option value="bookings">Booking Management ({bookingsList.length})</option>
-          <option value="payments">Payment Records ({paymentsList.length})</option>
-          <option value="finance">Finance & Settlement</option>
-          <option value="manual-payout">Manual Payout</option>
-          <option value="audit">Audit Logs</option>
-          {admin.role === 'SUPER_ADMIN' && <option value="staff">Staff Management (Super Admin)</option>}
-          <option value="security">Security Settings</option>
+          {isModuleAllowedForRole(admin.role, 'overview') && (
+            <option value="overview">Overview</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'reports') && (
+            <option value="reports">Incident Reports & Safety ({reportsList.filter(r => r.status === 'PENDING_REVIEW').length} pending)</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'clients') && (
+            <option value="clients">Client Management ({clientsList.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'companions') && (
+            <option value="companions">Companion Management ({companionsList.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'pending-approvals') && (
+            <option value="pending-approvals">Pending Approvals ({pendingApprovals.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'client-kyc') && (
+            <option value="client-kyc">Client Documents / KYC ({clientKycs.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'companion-kyc') && (
+            <option value="companion-kyc">Companion Documents / KYC ({companionKycs.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'approved-rejected') && (
+            <option value="approved-rejected">Approved / Rejected Records ({decidedRecords.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'finance') && (
+            <option value="finance">Finance & Settlement</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'manual-payout') && (
+            <option value="manual-payout">Manual Payout</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'payments') && (
+            <option value="payments">Payment Records ({paymentsList.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'memberships') && (
+            <option value="memberships">Membership Records ({membershipsList.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'bookings') && (
+            <option value="bookings">Booking Management ({bookingsList.length})</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'audit') && (
+            <option value="audit">Audit Logs</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'staff') && (
+            <option value="staff">Staff Management (Super Admin)</option>
+          )}
+          {isModuleAllowedForRole(admin.role, 'security') && (
+            <option value="security">Security Settings</option>
+          )}
         </select>
       </div>
 
       {/* Main Admin Body */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         
-        {/* Sidebar Nav: All 15 Explicit Modules per Section 11 (Desktop) */}
+        {/* Sidebar Nav: Role-Based Least Privilege (Desktop) */}
         <aside className="hidden md:block w-64 bg-slate-900/60 border-r border-slate-800 p-4 space-y-1 text-xs font-semibold overflow-y-auto shrink-0">
-          <button
-            onClick={() => setCurrentSection('overview')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
-              currentSection === 'overview' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Overview</span>
-          </button>
+          <div className="pb-3 mb-2 border-b border-slate-800/80 px-2 flex items-center justify-between">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Authorized Modules</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-300 border border-amber-400/20 font-bold">
+              {admin.role}
+            </span>
+          </div>
 
-          <button
-            onClick={() => setCurrentSection('reports')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'reports' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <AlertTriangle className="w-4 h-4 text-rose-400" />
-              <span>Incident Reports & Safety</span>
-            </div>
-            {reportsList.filter(r => r.status === 'PENDING_REVIEW').length > 0 && (
-              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
-                {reportsList.filter(r => r.status === 'PENDING_REVIEW').length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setCurrentSection('clients')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'clients' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <UserCheck className="w-4 h-4" />
-              <span>Client Management</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{clientsList.length}</span>
-          </button>
-
-          <button
-            onClick={() => setCurrentSection('companions')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'companions' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
+          {isModuleAllowedForRole(admin.role, 'overview') && (
+            <button
+              onClick={() => setCurrentSection('overview')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
+                currentSection === 'overview' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
               <Users className="w-4 h-4" />
-              <span>Companion Management</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{companionsList.length}</span>
-          </button>
+              <span>Overview</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('client-kyc')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'client-kyc' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <FileCheck className="w-4 h-4" />
-              <span>Client Documents / KYC</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{clientKycs.length}</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'reports') && (
+            <button
+              onClick={() => setCurrentSection('reports')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'reports' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                <span>Incident Reports & Safety</span>
+              </div>
+              {reportsList.filter(r => r.status === 'PENDING_REVIEW').length > 0 && (
+                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
+                  {reportsList.filter(r => r.status === 'PENDING_REVIEW').length}
+                </span>
+              )}
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('companion-kyc')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'companion-kyc' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <FileCheck className="w-4 h-4" />
-              <span>Companion Documents / KYC</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{companionKycs.length}</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'clients') && (
+            <button
+              onClick={() => setCurrentSection('clients')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'clients' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <UserCheck className="w-4 h-4" />
+                <span>Client Management</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{clientsList.length}</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('pending-approvals')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'pending-approvals' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Clock className="w-4 h-4 text-amber-400" />
-              <span>Pending Approvals</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300">{pendingApprovals.length}</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'companions') && (
+            <button
+              onClick={() => setCurrentSection('companions')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'companions' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Users className="w-4 h-4" />
+                <span>Companion Management</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{companionsList.length}</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('approved-rejected')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'approved-rejected' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <CheckCircle className="w-4 h-4 text-emerald-400" />
-              <span>Approved/Rejected Records</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{decidedRecords.length}</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'pending-approvals') && (
+            <button
+              onClick={() => setCurrentSection('pending-approvals')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'pending-approvals' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-4 h-4 text-amber-400" />
+                <span>Pending Approvals</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300">{pendingApprovals.length}</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('memberships')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'memberships' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <CreditCard className="w-4 h-4" />
-              <span>Membership Records</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{membershipsList.length}</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'client-kyc') && (
+            <button
+              onClick={() => setCurrentSection('client-kyc')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'client-kyc' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FileCheck className="w-4 h-4" />
+                <span>Client Documents / KYC</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{clientKycs.length}</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('bookings')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'bookings' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Calendar className="w-4 h-4" />
-              <span>Booking Management</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{bookingsList.length}</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'companion-kyc') && (
+            <button
+              onClick={() => setCurrentSection('companion-kyc')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'companion-kyc' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FileCheck className="w-4 h-4" />
+                <span>Companion Documents / KYC</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{companionKycs.length}</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('payments')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
-              currentSection === 'payments' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <DollarSign className="w-4 h-4" />
-              <span>Payment Records</span>
-            </div>
-            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{paymentsList.length}</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'approved-rejected') && (
+            <button
+              onClick={() => setCurrentSection('approved-rejected')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'approved-rejected' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <span>Approved/Rejected Records</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{decidedRecords.length}</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('finance')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
-              currentSection === 'finance' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <Landmark className="w-4 h-4" />
-            <span>Finance & Settlement</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'finance') && (
+            <button
+              onClick={() => setCurrentSection('finance')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
+                currentSection === 'finance' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <Landmark className="w-4 h-4" />
+              <span>Finance & Settlement</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('manual-payout')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
-              currentSection === 'manual-payout' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <DollarSign className="w-4 h-4 text-emerald-400" />
-            <span>Manual Payout</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'manual-payout') && (
+            <button
+              onClick={() => setCurrentSection('manual-payout')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
+                currentSection === 'manual-payout' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <span>Manual Payout</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentSection('audit')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
-              currentSection === 'audit' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>Audit Logs</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'payments') && (
+            <button
+              onClick={() => setCurrentSection('payments')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'payments' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <DollarSign className="w-4 h-4" />
+                <span>Payment Records</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{paymentsList.length}</span>
+            </button>
+          )}
 
-          {admin.role === 'SUPER_ADMIN' && (
+          {isModuleAllowedForRole(admin.role, 'memberships') && (
+            <button
+              onClick={() => setCurrentSection('memberships')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'memberships' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <CreditCard className="w-4 h-4" />
+                <span>Membership Records</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{membershipsList.length}</span>
+            </button>
+          )}
+
+          {isModuleAllowedForRole(admin.role, 'bookings') && (
+            <button
+              onClick={() => setCurrentSection('bookings')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'bookings' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-4 h-4" />
+                <span>Booking Management</span>
+              </div>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{bookingsList.length}</span>
+            </button>
+          )}
+
+          {isModuleAllowedForRole(admin.role, 'audit') && (
+            <button
+              onClick={() => setCurrentSection('audit')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
+                currentSection === 'audit' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Audit Logs</span>
+            </button>
+          )}
+
+          {isModuleAllowedForRole(admin.role, 'staff') && (
             <button
               onClick={() => setCurrentSection('staff')}
               className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
@@ -883,20 +1090,39 @@ export const AdminPortal: React.FC = () => {
             </button>
           )}
 
-          <button
-            onClick={() => setCurrentSection('security')}
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
-              currentSection === 'security' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>Security Settings</span>
-          </button>
+          {isModuleAllowedForRole(admin.role, 'security') && (
+            <button
+              onClick={() => setCurrentSection('security')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center gap-2.5 ${
+                currentSection === 'security' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>Security Settings</span>
+            </button>
+          )}
         </aside>
 
         {/* Content Area */}
         <main className="flex-1 p-6 space-y-6 overflow-y-auto">
-          
+          {!isModuleAllowedForRole(admin.role, currentSection) ? (
+            <div className="p-8 rounded-2xl bg-slate-900 border border-rose-500/30 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-slate-100">Access Restricted by Role</h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Your account is assigned the <strong className="text-amber-400 font-mono">{admin.role}</strong> role. You only have authorized access to modules assigned to your role per least-privilege security policy.
+              </p>
+              <button
+                onClick={() => setCurrentSection(getDefaultModuleForRole(admin.role))}
+                className="px-4 py-2 bg-amber-400 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-500 transition-colors"
+              >
+                Go to Authorized Workspace
+              </button>
+            </div>
+          ) : (
+            <>
           {/* 1. OVERVIEW */}
           {currentSection === 'overview' && (
             <div className="space-y-6">
@@ -1805,7 +2031,8 @@ export const AdminPortal: React.FC = () => {
                       <th className="p-3">Staff Member</th>
                       <th className="p-3">Email</th>
                       <th className="p-3">Phone</th>
-                      <th className="p-3">Role</th>
+                      <th className="p-3">Assigned Role</th>
+                      <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
@@ -1814,7 +2041,34 @@ export const AdminPortal: React.FC = () => {
                         <td className="p-3 font-bold text-slate-200">{s.name}</td>
                         <td className="p-3 font-mono">{s.email}</td>
                         <td className="p-3 font-mono text-slate-400">{s.phone}</td>
-                        <td className="p-3 font-semibold text-amber-300">{s.role}</td>
+                        <td className="p-3">
+                          {s.role === 'SUPER_ADMIN' ? (
+                            <span className="font-bold text-rose-400 font-mono">SUPER_ADMIN</span>
+                          ) : (
+                            <select
+                              value={s.role}
+                              onChange={e => handleUpdateStaffRole(s.id, e.target.value as AdminRole)}
+                              className="px-2.5 py-1 bg-slate-950 border border-slate-700 rounded-lg text-amber-300 font-semibold text-xs focus:outline-none focus:border-amber-400"
+                            >
+                              <option value="KYC_ADMIN">KYC_ADMIN (KYC Only)</option>
+                              <option value="FINANCE_ADMIN">FINANCE_ADMIN (Finance Only)</option>
+                              <option value="SUPPORT_ADMIN">SUPPORT_ADMIN (Support Only)</option>
+                              <option value="AUDITOR">AUDITOR (Read-Only Audit)</option>
+                            </select>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          {s.role !== 'SUPER_ADMIN' && (
+                            <button
+                              onClick={() => handleDeleteStaff(s.id, s.name)}
+                              className="px-2.5 py-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors text-xs inline-flex items-center gap-1 border border-transparent hover:border-rose-500/30"
+                              title="Revoke staff access"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Revoke</span>
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1846,7 +2100,8 @@ export const AdminPortal: React.FC = () => {
               </div>
             </div>
           )}
-
+          </>
+        )}
         </main>
       </div>
 
