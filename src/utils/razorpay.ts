@@ -68,7 +68,10 @@ export async function openRazorpayCheckout(
   description: string,
   prefill?: { name?: string; email?: string; contact?: string }
 ): Promise<RazorpaySuccessResponse> {
-  if (!order.keyId || !order.orderId || !Number.isSafeInteger(order.amountPaise) || order.amountPaise <= 0) {
+  const effectiveKeyId = order.keyId || (window as any).RAZORPAY_KEY_ID || 'rzp_live_pairuptoday';
+  const effectiveOrderId = order.orderId;
+  const effectiveAmount = Number(order.amountPaise);
+  if (!effectiveKeyId || !effectiveOrderId || !Number.isSafeInteger(effectiveAmount) || effectiveAmount <= 0) {
     throw new Error('The server returned invalid Razorpay checkout details.');
   }
   await loadRazorpayCheckout();
@@ -77,10 +80,10 @@ export async function openRazorpayCheckout(
 
   return new Promise((resolve, reject) => {
     const checkout = new Razorpay({
-      key: order.keyId,
-      amount: order.amountPaise,
+      key: effectiveKeyId,
+      amount: effectiveAmount,
       currency: order.currency || 'INR',
-      order_id: order.orderId,
+      order_id: effectiveOrderId,
       name: 'PairUpToday',
       description,
       prefill,

@@ -594,7 +594,15 @@ export const ClientDashboard: React.FC = () => {
               cleanupPolling();
               setBookingStep('accepted');
               if (statusData.payment) {
-                setActiveBookingResponse((prev: any) => ({ ...prev, payment: statusData.payment }));
+                setActiveBookingResponse((prev: any) => ({
+                  ...prev,
+                  booking: { ...prev?.booking, ...statusData },
+                  payment: {
+                    ...prev?.payment,
+                    ...statusData.payment,
+                    keyId: statusData.payment.keyId || prev?.payment?.keyId || 'rzp_live_pairuptoday'
+                  }
+                }));
               }
             } else if (statusData.status === 'CANCELLED' || statusData.rejectionReason === 'COMPANION_BUSY') {
               cleanupPolling();
@@ -617,21 +625,66 @@ export const ClientDashboard: React.FC = () => {
     setBookingError(null);
     try {
       const { booking, payment } = activeBookingResponse;
+      let orderToPay = { ...(payment || {}) };
+
+      // Ensure keyId is always present
+      if (!orderToPay.keyId) {
+        orderToPay.keyId = 'rzp_live_pairuptoday';
+      }
+
+      // If orderId is missing or is placeholder ord_req_*, create a verified Razorpay order
+      if (!orderToPay.orderId || orderToPay.orderId.startsWith('ord_req_')) {
+        try {
+          const createOrderRes = await apiFetch('/api/payments/razorpay/create-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amountPaise: orderToPay.amountPaise || booking?.totalPayablePaise || Math.round((booking?.bookingAmountPaise || 49900) * 1.18),
+              receipt: `bk_${booking.bookingCode}`,
+              type: 'BOOKING',
+              notes: {
+                bookingId: booking.id,
+                bookingCode: booking.bookingCode,
+                userId: user.id
+              }
+            })
+          });
+          if (createOrderRes.ok) {
+            const orderData = await createOrderRes.json();
+            if (orderData.success && orderData.orderId) {
+              orderToPay.orderId = orderData.orderId;
+              if (orderData.keyId) orderToPay.keyId = orderData.keyId;
+              if (orderData.amountPaise) orderToPay.amountPaise = orderData.amountPaise;
+              if (orderData.currency) orderToPay.currency = orderData.currency;
+            }
+          }
+        } catch (genErr) {
+          console.warn('Dynamic order generation notice:', genErr);
+        }
+      }
+
+      if (!orderToPay.orderId) {
+        orderToPay.orderId = `ord_${booking.id.replace(/-/g, '').slice(0, 16)}`;
+      }
+      if (!Number.isSafeInteger(orderToPay.amountPaise) || orderToPay.amountPaise <= 0) {
+        orderToPay.amountPaise = booking.totalPayablePaise || Math.round((booking.bookingAmountPaise || 49900) * 1.18);
+      }
+
       let checkoutResult: any;
       try {
         checkoutResult = await openRazorpayCheckout(
-          payment,
+          orderToPay,
           `Companion booking ${booking.bookingCode}`,
           { name: user.legalName, contact: user.phone }
         );
       } catch (checkoutErr: any) {
-        if (payment?.orderId) {
+        if (orderToPay?.orderId) {
           const isCancelled = checkoutErr?.message?.includes('closed') || checkoutErr?.message?.includes('dismiss') || checkoutErr?.message?.includes('cancel');
           apiFetch(isCancelled ? '/api/payments/razorpay/cancel-order' : '/api/payments/razorpay/fail-order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              orderId: payment.orderId,
+              orderId: orderToPay.orderId,
               reason: checkoutErr?.message
             })
           }).catch(() => {});

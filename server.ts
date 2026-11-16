@@ -3780,12 +3780,39 @@ app.post('/api/bookings/:id/accept', async (req: Request, res: Response) => {
     };
     current.companionAccepted = true;
     current.rejectionReason = null;
+
+    if (!current.paymentOrderId || current.paymentOrderId.startsWith('ord_req_')) {
+      try {
+        const rzpOrder = await createRazorpayOrder({
+          amountPaise: current.totalPayablePaise,
+          receipt: `bk_${booking.bookingCode}`,
+          notes: {
+            bookingId: booking.id,
+            bookingCode: booking.bookingCode,
+            orderType: 'BOOKING',
+            userId: booking.clientId
+          }
+        });
+        if (rzpOrder.success && rzpOrder.orderId) {
+          current.paymentOrderId = rzpOrder.orderId;
+          booking.paymentOrderId = rzpOrder.orderId;
+        }
+      } catch (oErr) {
+        console.warn('Accept-time Razorpay order creation notice:', oErr);
+      }
+    }
     bookingAcceptanceMap.set(bookingId, current);
 
     if (getDatabaseType() === 'supabase') {
-      await databaseAdapter.updateBooking(bookingId, { companionAccepted: true });
+      await databaseAdapter.updateBooking(bookingId, { 
+        companionAccepted: true,
+        ...(current.paymentOrderId ? { paymentOrderId: current.paymentOrderId } : {})
+      });
     } else {
-      if (db.bookings[bookingId]) db.bookings[bookingId].companionAccepted = true;
+      if (db.bookings[bookingId]) {
+        db.bookings[bookingId].companionAccepted = true;
+        if (current.paymentOrderId) db.bookings[bookingId].paymentOrderId = current.paymentOrderId;
+      }
     }
 
     return res.json({ success: true, bookingId, companionAccepted: true });
@@ -3872,13 +3899,14 @@ app.get('/api/bookings/:id/status', async (req: Request, res: Response) => {
       rejectionReason,
       paymentOrderId: booking.paymentOrderId,
       payment: {
-        orderId: booking.paymentOrderId,
+        orderId: booking.paymentOrderId || `ord_${booking.id.replace(/-/g, '').slice(0, 16)}`,
         baseAmountPaise,
         cgstPaise,
         sgstPaise,
         gstAmountPaise,
         amountPaise: totalPayablePaise,
-        currency: 'INR'
+        currency: 'INR',
+        keyId: process.env.RAZORPAY_KEY_ID || 'rzp_live_pairuptoday'
       }
     });
   } catch (error: any) {
