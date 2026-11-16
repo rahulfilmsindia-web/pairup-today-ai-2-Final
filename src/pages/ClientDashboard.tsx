@@ -94,6 +94,63 @@ export const ClientDashboard: React.FC = () => {
   const [bookingInProgress, setBookingInProgress] = useState(false);
   const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [companionSchedule, setCompanionSchedule] = useState<any | null>(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [timeConflictError, setTimeConflictError] = useState<string | null>(null);
+
+  // Fetch companion schedule when modal opens or bookingDate changes
+  useEffect(() => {
+    if (!selectedCompanion?.id || !bookingDate) {
+      setCompanionSchedule(null);
+      setTimeConflictError(null);
+      return;
+    }
+
+    let isMounted = true;
+    setScheduleLoading(true);
+    apiFetch(`/api/companion/${selectedCompanion.id}/schedule?date=${bookingDate}`)
+      .then(res => res.json())
+      .then(data => {
+        if (isMounted) {
+          setCompanionSchedule(data);
+          setScheduleLoading(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setScheduleLoading(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [selectedCompanion?.id, bookingDate]);
+
+  // Validate time slot conflict with 1-hour buffer
+  useEffect(() => {
+    if (!companionSchedule?.blockedWindows || !bookingTime || !bookingDurationHours) {
+      setTimeConflictError(null);
+      return;
+    }
+
+    const [h, m] = bookingTime.split(':').map(Number);
+    const startM = h * 60 + m;
+    const endM = startM + bookingDurationHours * 60;
+
+    for (const b of companionSchedule.blockedWindows) {
+      const [bh1, bm1] = b.from.split(':').map(Number);
+      const [bh2, bm2] = b.to.split(':').map(Number);
+      const bStartM = bh1 * 60 + bm1;
+      const bEndM = bh2 * 60 + bm2;
+
+      // Overlap condition: start < bEnd && end > bStart
+      if (startM < bEndM && endM > bStartM) {
+        setTimeConflictError(
+          `This companion has a confirmed meeting (${b.bookingTimes?.join(', ') || 'Session'}) requiring a 1-hour travel buffer before and after (unavailable from ${b.fromFormatted} to ${b.toFormatted}). ${companionSchedule.summary || ''}`
+        );
+        return;
+      }
+    }
+
+    setTimeConflictError(null);
+  }, [companionSchedule, bookingTime, bookingDurationHours]);
 
   const handleCloseBookingModal = () => {
     // If client cancels or closes during waiting_acceptance, accepted (before checkout) or pending, notify server to immediately dismiss companion alert
@@ -555,6 +612,11 @@ export const ClientDashboard: React.FC = () => {
 
     if (user.kycStatus !== 'APPROVED') {
       setBookingError('Identity Verification Required: Please wait for admin KYC approval before booking.');
+      return;
+    }
+
+    if (timeConflictError) {
+      setBookingError(timeConflictError);
       return;
     }
 
@@ -2558,6 +2620,25 @@ export const ClientDashboard: React.FC = () => {
                     />
                   </div>
 
+                  {/* Companion Real-Time Schedule & 1-Hour Buffer Window Banner */}
+                  {companionSchedule && (
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-sky-950/60 to-slate-900 border border-sky-500/30 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sky-300 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                          <span>Companion Schedule on {bookingDate}:</span>
+                        </span>
+                        {scheduleLoading && <span className="text-[10px] text-slate-400 animate-pulse">updating...</span>}
+                      </div>
+                      <p className="text-slate-200 font-semibold text-[11px] leading-relaxed">
+                        {companionSchedule.summary || 'Available all day (07:00 AM - 12:00 AM)'}
+                      </p>
+                      <p className="text-[10px] text-sky-400/80">
+                        * Note: A 1-hour travel and rest buffer is strictly reserved before and after every meeting.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-300 font-semibold mb-1">
@@ -2567,7 +2648,7 @@ export const ClientDashboard: React.FC = () => {
                         type="time"
                         value={bookingTime}
                         onChange={e => setBookingTime(e.target.value)}
-                        className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                        className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl text-slate-100 focus:outline-none ${timeConflictError ? 'border-rose-500 text-rose-200' : 'border-slate-700 focus:border-amber-400'}`}
                         required
                       />
                     </div>
@@ -2589,6 +2670,22 @@ export const ClientDashboard: React.FC = () => {
                       </select>
                     </div>
                   </div>
+
+                  {/* 1-Hour Buffer Time Conflict Alert */}
+                  {timeConflictError && (
+                    <div className="p-3.5 rounded-xl bg-rose-950/70 border border-rose-500/50 text-xs text-rose-200 space-y-1.5 shadow-lg shadow-rose-950/50 animate-fade-in">
+                      <div className="font-extrabold flex items-center gap-1.5 text-rose-300">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>Selected Time Slot Unavailable (1-Hour Travel Buffer Rule)</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">
+                        {timeConflictError}
+                      </p>
+                      <p className="text-[10px] text-rose-400 font-medium">
+                        Please select an available time slot before or after this window to proceed.
+                      </p>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">
@@ -2643,11 +2740,17 @@ export const ClientDashboard: React.FC = () => {
 
                   <button
                     type="submit"
-                    disabled={bookingInProgress || user?.isSuspended}
+                    disabled={bookingInProgress || user?.isSuspended || Boolean(timeConflictError)}
                     className="w-full py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-sm shadow-xl shadow-pink-500/20 transition-all hover:scale-[1.01] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <CalendarCheck className="w-4 h-4" />
-                    <span>{user?.isSuspended ? 'Account Suspended - Booking Disabled' : (bookingInProgress ? 'Sending Request...' : 'Send Booking Request')}</span>
+                    <span>
+                      {user?.isSuspended
+                        ? 'Account Suspended - Booking Disabled'
+                        : timeConflictError
+                        ? 'Time Conflict - Pick an Available Slot'
+                        : (bookingInProgress ? 'Sending Request...' : 'Send Booking Request')}
+                    </span>
                   </button>
 
                   <p className="text-[10px] text-center text-slate-500">

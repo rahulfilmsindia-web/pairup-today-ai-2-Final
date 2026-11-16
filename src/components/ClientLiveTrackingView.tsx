@@ -25,13 +25,56 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [bookingStatus, setBookingStatus] = useState<string>(booking.status || 'CONFIRMED');
   const [startOtp, setStartOtp] = useState<string>(booking.startOtp || '******');
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // Clock tick every second for real-time countdown
+  useEffect(() => {
+    const clock = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(clock);
+  }, []);
+
+  // Determine companion gender for walking avatar
+  const companionGender = (booking?.companionGender || booking?.companion?.gender || booking?.gender || '').toUpperCase();
+  const isMale = companionGender === 'MALE' || (
+    !companionGender && booking?.companionName &&
+    /\b(Rahul|Amit|Rohit|Rohan|Vikram|Aditya|Suresh|Rajesh|Kunal|Abhishek|Rakesh|Deepak|Arjun|Dev|Subhash|Sanjay|Ajay|Anirban|Sourav|Arun|Vijay)\b/i.test(booking.companionName)
+  );
+  const isFemale = !isMale;
+
+  // 30-Minute Privacy Lock Calculation:
+  // Companion's live GPS location only activates 30 mins before the scheduled start time
+  const scheduledStartMs = React.useMemo(() => {
+    if (!booking?.date || !booking?.startTime) return Date.now();
+    const parsed = new Date(`${booking.date}T${booking.startTime}:00`).getTime();
+    return Number.isNaN(parsed) ? Date.now() : parsed;
+  }, [booking?.date, booking?.startTime]);
+
+  const thirtyMinsBeforeMs = scheduledStartMs - (30 * 60 * 1000);
+  const isLocationUnlocked = currentTime >= thirtyMinsBeforeMs || ['COMPANION_ARRIVED', 'IN_PROGRESS'].includes(bookingStatus);
+  const timeUntilUnlockMs = Math.max(0, thirtyMinsBeforeMs - currentTime);
+
+  const formatRemainingUnlock = () => {
+    const totalSecs = Math.floor(timeUntilUnlockMs / 1000);
+    const hours = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      const remH = hours % 24;
+      return `${days}d ${remH}h ${mins}m`;
+    }
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+    return `${mins}m ${secs}s`;
+  };
 
   // Poll companion's live GPS coordinates & booking status
   useEffect(() => {
     if (!booking?.id) return;
 
     const fetchLiveLocation = async () => {
+      // Respect companion privacy until 30 minutes before booking start
+      if (!isLocationUnlocked) return;
       try {
         const res = await apiFetch(`/api/location/${booking.companionId}?bookingId=${booking.id}`);
         if (res.ok) {
@@ -243,13 +286,17 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
             <div className="absolute top-6 left-6 right-6 z-10 flex items-center justify-between pointer-events-none">
               <div className="pointer-events-auto px-3.5 py-2 rounded-2xl bg-slate-900/90 border border-slate-700 backdrop-blur-md shadow-lg flex items-center gap-2.5">
                 <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isLocationUnlocked ? 'bg-emerald-400' : 'bg-pink-400'} opacity-75`}></span>
+                  <span className={`relative inline-flex rounded-full h-3 w-3 ${isLocationUnlocked ? 'bg-emerald-500' : 'bg-pink-500'}`}></span>
                 </span>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">Estimated Arrival</span>
-                  <span className="text-sm font-extrabold text-emerald-400 leading-tight">
-                    {bookingStatus === 'COMPANION_ARRIVED' ? 'Arrived at your spot!' : `~${etaMinutes} mins (${distanceKm} km away)`}
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">
+                    {isLocationUnlocked ? 'Estimated Arrival' : 'Privacy Protection'}
+                  </span>
+                  <span className={`text-xs sm:text-sm font-extrabold ${isLocationUnlocked ? 'text-emerald-400' : 'text-pink-400'} leading-tight`}>
+                    {!isLocationUnlocked
+                      ? `Unlocks 30m prior (${formatRemainingUnlock()})`
+                      : (bookingStatus === 'COMPANION_ARRIVED' ? 'Arrived at your spot!' : `~${etaMinutes} mins (${distanceKm} km away)`)}
                   </span>
                 </div>
               </div>
@@ -270,8 +317,8 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
               <svg className="w-full h-full" viewBox="0 0 440 300" preserveAspectRatio="xMidYMid slice">
                 <defs>
                   <linearGradient id="routeGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#ec4899" />
-                    <stop offset="50%" stopColor="#f43f5e" />
+                    <stop offset="0%" stopColor={isMale ? '#0284c7' : '#ec4899'} />
+                    <stop offset="50%" stopColor={isMale ? '#38bdf8' : '#f43f5e'} />
                     <stop offset="100%" stopColor="#10b981" />
                   </linearGradient>
                   <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
@@ -317,26 +364,80 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
                   <text x="0" y="-23" textAnchor="middle" fill="#ffffff" fontSize="9" fontWeight="bold">📍 Your Spot</text>
                 </g>
 
-                {/* Animated Walking Companion Avatar (Walking figure progressing along route) */}
-                <g transform={`translate(${walkerX}, ${walkerY})`}>
-                  {/* GPS Accuracy Radar Wave */}
-                  <circle r="22" fill="#ec4899" fillOpacity="0.25" className="animate-pulse" />
-                  <circle r="14" fill="#0f172a" stroke="#ec4899" strokeWidth="2" />
+                {/* Animated Walking Companion Avatar — Only rendered when within 30 mins to protect privacy */}
+                {isLocationUnlocked && (
+                  <g transform={`translate(${walkerX}, ${walkerY})`}>
+                    {/* GPS Accuracy Radar Wave (Male = Sky/Cyan, Female = Pink/Rose) */}
+                    <circle
+                      r="22"
+                      fill={isMale ? '#0284c7' : '#ec4899'}
+                      fillOpacity="0.25"
+                      className="animate-pulse"
+                    />
+                    <circle
+                      r="14"
+                      fill="#0f172a"
+                      stroke={isMale ? '#38bdf8' : '#ec4899'}
+                      strokeWidth="2"
+                    />
 
-                  {/* Walking Human Character Emoji / Icon */}
-                  <text x="0" y="5" textAnchor="middle" fontSize="16" className="select-none animate-bounce">
-                    🚶
-                  </text>
-
-                  {/* Companion ETA Tag above head */}
-                  <g transform="translate(0, -22)">
-                    <rect x="-42" y="-12" width="84" height="17" rx="5" fill="#ec4899" />
-                    <text x="0" y="0" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
-                      {booking.companionName?.split(' ')[0] || 'Companion'} (~{etaMinutes}m)
+                    {/* Gender-specific Walking Avatar: 🚶‍♂️ Male or 🚶‍♀️ Female */}
+                    <text x="0" y="6" textAnchor="middle" fontSize="18" className="select-none animate-bounce">
+                      {isMale ? '🚶‍♂️' : '🚶‍♀️'}
                     </text>
+
+                    {/* Companion ETA Tag above head */}
+                    <g transform="translate(0, -22)">
+                      <rect
+                        x="-44"
+                        y="-12"
+                        width="88"
+                        height="17"
+                        rx="5"
+                        fill={isMale ? '#0284c7' : '#ec4899'}
+                      />
+                      <text x="0" y="0" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
+                        {isMale ? '👨' : '👩'} {booking.companionName?.split(' ')[0] || 'Companion'} (~{etaMinutes}m)
+                      </text>
+                    </g>
                   </g>
-                </g>
+                )}
               </svg>
+
+              {/* Privacy Protection Frosted Overlay (Active until 30 minutes before meeting) */}
+              {!isLocationUnlocked && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+                  <div className="max-w-xs w-full p-4 rounded-2xl bg-slate-900/95 border border-pink-500/40 text-center space-y-2.5 shadow-2xl animate-fade-in">
+                    <div className="w-10 h-10 mx-auto rounded-full bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-pink-400">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-slate-100 flex items-center justify-center gap-1">
+                        <span>🛡️ Privacy Protected Location</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-300 mt-1 leading-snug">
+                        To respect personal privacy, live walking GPS tracking unlocks <strong>30 minutes before your scheduled meeting</strong>.
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-[10px] space-y-1">
+                      <div className="flex justify-between text-slate-400">
+                        <span>Scheduled Meeting:</span>
+                        <span className="font-semibold text-slate-200">{booking.date} • {booking.startTime}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-400">
+                        <span>Live Tracking Opens:</span>
+                        <span className="font-bold text-pink-400">
+                          {new Date(thirtyMinsBeforeMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/20 border border-pink-500/30 text-[11px] font-mono font-bold text-pink-300">
+                      <Clock className="w-3 h-3 text-pink-400 animate-pulse" />
+                      <span>Live Map in: {formatRemainingUnlock()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Bottom Street Landmark Indicator */}
               <div className="absolute bottom-3 left-4 right-4 z-10 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-800 backdrop-blur-md flex items-center justify-between text-xs text-slate-300">
@@ -344,7 +445,9 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
                   <MapPin className="w-3.5 h-3.5 text-pink-400 shrink-0" />
                   <span>Venue: <strong>{booking.meetingLocation || 'Central Public Cafe'}</strong></span>
                 </span>
-                <span className="text-[10px] text-emerald-400 font-bold shrink-0">GPS Connected</span>
+                <span className={`text-[10px] font-bold shrink-0 ${isLocationUnlocked ? 'text-emerald-400' : 'text-pink-400'}`}>
+                  {isLocationUnlocked ? 'GPS Connected' : 'Privacy Locked'}
+                </span>
               </div>
             </div>
 

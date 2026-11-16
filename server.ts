@@ -3713,6 +3713,165 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
 });
 
 // -------------------------------------------------------------
+// COMPANION SCHEDULING ENGINE & 1-HOUR BUFFER SYSTEM
+// -------------------------------------------------------------
+function timeToMinutes(timeStr: string): number {
+  if (!timeStr || !/^\d{1,2}:\d{2}$/.test(timeStr)) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function minutesToTime(mins: number): string {
+  const normalized = Math.max(0, Math.min(1439, mins));
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatTimeAmPm(timeStr: string): string {
+  if (!timeStr) return '';
+  const mins = timeToMinutes(timeStr);
+  const h24 = Math.floor(mins / 60);
+  const m = mins % 60;
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 || 12;
+  return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+async function getCompanionActiveBookingsForDate(companionId: string, dateStr: string): Promise<any[]> {
+  let list: any[] = [];
+  try {
+    list = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.listBookings({ companionId })
+      : Object.values(db.bookings || {});
+  } catch {
+    list = Object.values(db.bookings || {});
+  }
+
+  return list.filter((b: any) => {
+    if (b.companionId !== companionId) return false;
+    if (b.date !== dateStr) return false;
+    if (b.status === 'CANCELLED') return false;
+    // Active if confirmed, arrived, in-progress, or accepted
+    const isConfirmed = ['CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status);
+    const isAccepted = b.companionAccepted === true || bookingAcceptanceMap.get(b.id)?.companionAccepted === true;
+    return isConfirmed || isAccepted;
+  });
+}
+
+function computeCompanionSchedule(companionId: string, dateStr: string, activeBookings: any[]) {
+  // Operational day: 07:00 AM (420 mins) to 12:00 AM Midnight (1440 mins)
+  const DAY_START = 7 * 60; // 07:00 AM
+  const DAY_END = 24 * 60;  // 12:00 AM
+
+  const rawBlocked: Array<{ start: number; end: number; bookingTime: string; id: string }> = [];
+
+  for (const b of activeBookings) {
+    const sMin = timeToMinutes(b.startTime);
+    const eMin = timeToMinutes(b.endTime);
+    // Block 1 hour before start, 1 hour after end for travel and rest
+    const startBlocked = Math.max(0, sMin - 60);
+    const endBlocked = Math.min(1439, eMin + 60);
+    rawBlocked.push({
+      start: startBlocked,
+      end: endBlocked,
+      bookingTime: `${formatTimeAmPm(b.startTime)} - ${formatTimeAmPm(b.endTime)}`,
+      id: b.id
+    });
+  }
+
+  rawBlocked.sort((a, b) => a.start - b.start);
+
+  const mergedBlocked: Array<{ start: number; end: number; bookingTimes: string[] }> = [];
+  for (const cur of rawBlocked) {
+    if (!mergedBlocked.length) {
+      mergedBlocked.push({ start: cur.start, end: cur.end, bookingTimes: [cur.bookingTime] });
+    } else {
+      const prev = mergedBlocked[mergedBlocked.length - 1];
+      if (cur.start <= prev.end) {
+        prev.end = Math.max(prev.end, cur.end);
+        prev.bookingTimes.push(cur.bookingTime);
+      } else {
+        mergedBlocked.push({ start: cur.start, end: cur.end, bookingTimes: [cur.bookingTime] });
+      }
+    }
+  }
+
+  const blockedWindows = mergedBlocked.map(b => ({
+    from: minutesToTime(b.start),
+    to: minutesToTime(b.end),
+    fromFormatted: formatTimeAmPm(minutesToTime(b.start)),
+    toFormatted: formatTimeAmPm(minutesToTime(b.end)),
+    bookingTimes: b.bookingTimes,
+    reason: 'Confirmed Session + 1 hr Travel Buffer'
+  }));
+
+  const availableWindows: Array<{ from: string; to: string; label: string }> = [];
+  let pointer = DAY_START;
+
+  for (const b of mergedBlocked) {
+    if (b.start > pointer) {
+      const fTime = minutesToTime(pointer);
+      const tTime = minutesToTime(b.start);
+      availableWindows.push({
+        from: fTime,
+        to: tTime,
+        label: `${formatTimeAmPm(fTime)} - ${formatTimeAmPm(tTime)}`
+      });
+    }
+    pointer = Math.max(pointer, b.end);
+  }
+
+  if (pointer < DAY_END) {
+    const fTime = minutesToTime(pointer);
+    const tTime = minutesToTime(Math.min(1439, DAY_END));
+    availableWindows.push({
+      from: fTime,
+      to: tTime,
+      label: `${formatTimeAmPm(fTime)} - ${formatTimeAmPm(tTime)}`
+    });
+  }
+
+  let summary = '';
+  if (activeBookings.length === 0) {
+    summary = 'Available 07:00 AM - 12:00 AM (Full Day)';
+  } else if (availableWindows.length === 0) {
+    summary = `Fully booked for ${dateStr}`;
+  } else {
+    summary = `Available ${availableWindows.map(w => w.label).join(' and ')}`;
+  }
+
+  return {
+    date: dateStr,
+    hasBookings: activeBookings.length > 0,
+    blockedWindows,
+    availableWindows,
+    summary
+  };
+}
+
+// Public/Client endpoint to check companion availability schedule for a date
+app.get('/api/companion/:companionId/schedule', async (req: Request, res: Response) => {
+  const { companionId } = req.params;
+  const dateStr = typeof req.query?.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);
+  try {
+    const activeBookings = await getCompanionActiveBookingsForDate(companionId, dateStr);
+    const schedule = computeCompanionSchedule(companionId, dateStr, activeBookings);
+    return res.json({ success: true, ...schedule });
+  } catch (err) {
+    console.warn('Schedule computation notice:', err);
+    return res.json({
+      success: true,
+      date: dateStr,
+      hasBookings: false,
+      blockedWindows: [],
+      availableWindows: [{ from: '07:00', to: '23:59', label: '07:00 AM - 12:00 AM' }],
+      summary: 'Available 07:00 AM - 12:00 AM'
+    });
+  }
+});
+
+// -------------------------------------------------------------
 // BOOKING ENGINE & 15% / 85% LEDGER SPLIT
 // -------------------------------------------------------------
 app.post('/api/bookings/create', async (req: Request, res: Response) => {
@@ -3756,12 +3915,38 @@ app.post('/api/bookings/create', async (req: Request, res: Response) => {
     const hourlyPaise = profile?.rates?.hourlyPaise || 49900;
     const calculatedBasePaise = hourlyPaise * durationHours;
 
+    // Strict 1-Hour Buffer & Overlap Conflict Enforcement:
+    const existingActiveBookings = await getCompanionActiveBookingsForDate(companionId, date);
+    for (const eb of existingActiveBookings) {
+      const ebStartMin = timeToMinutes(eb.startTime);
+      const ebEndMin = timeToMinutes(eb.endTime);
+      // Blocked window is [ebStartMin - 60, ebEndMin + 60]
+      const blockedStart = Math.max(0, ebStartMin - 60);
+      const blockedEnd = Math.min(1439, ebEndMin + 60);
+
+      if (startMinuteOfDay < blockedEnd && endMinuteOfDay > blockedStart) {
+        const schedule = computeCompanionSchedule(companionId, date, existingActiveBookings);
+        return res.status(409).json({
+          error: `This companion is already booked on ${date} (${eb.startTime} - ${eb.endTime}). A 1-hour travel buffer before and after is required (unavailable ${formatTimeAmPm(minutesToTime(blockedStart))} to ${formatTimeAmPm(minutesToTime(blockedEnd))}). ${schedule.summary}.`,
+          conflict: true,
+          blockedWindow: {
+            from: minutesToTime(blockedStart),
+            to: minutesToTime(blockedEnd),
+            bookingTime: `${eb.startTime} - ${eb.endTime}`
+          },
+          availableWindows: schedule.availableWindows,
+          summary: schedule.summary
+        });
+      }
+    }
+
     const bookingCode = `PUT-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
     const booking = await databaseAdapter.reserveBookingPayment({
       id: crypto.randomUUID(),
       bookingCode,
       clientId: authUser.id,
       companionId,
+      companionGender: companion.gender || profile?.gender || 'FEMALE',
       serviceId,
       serviceName: service.name,
       date,
@@ -3894,6 +4079,25 @@ app.post('/api/bookings/:id/accept', async (req: Request, res: Response) => {
         canceledByClient: true,
         bookingId
       });
+    }
+
+    // Check if companion already has another confirmed booking with < 1 hr travel buffer
+    const existingActiveBookings = await getCompanionActiveBookingsForDate(authUser.id, booking.date);
+    for (const eb of existingActiveBookings) {
+      if (eb.id === bookingId) continue;
+      const ebStartMin = timeToMinutes(eb.startTime);
+      const ebEndMin = timeToMinutes(eb.endTime);
+      const blockedStart = Math.max(0, ebStartMin - 60);
+      const blockedEnd = Math.min(1439, ebEndMin + 60);
+      const thisStartMin = timeToMinutes(booking.startTime);
+      const thisEndMin = timeToMinutes(booking.endTime);
+      if (thisStartMin < blockedEnd && thisEndMin > blockedStart) {
+        return res.status(409).json({
+          success: false,
+          error: `You already have an active session from ${eb.startTime} to ${eb.endTime} on ${booking.date}. A 1-hour travel buffer before and after is required.`,
+          conflict: true
+        });
+      }
     }
     const baseAmt = Number(booking.bookingAmountPaise || booking.amountPaise || 49900);
     const cgst = Math.round(baseAmt * 0.09);
@@ -6291,6 +6495,32 @@ app.get('/api/location/:userId', async (req: Request, res: Response) => {
   if (typeof bookingId !== 'string') return res.status(400).json({ error: 'bookingId is required.' });
 
   try {
+    let booking: any = null;
+    try {
+      booking = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getBooking(bookingId)
+        : (db.bookings ? db.bookings[bookingId] : null);
+    } catch {
+      booking = db.bookings ? db.bookings[bookingId] : null;
+    }
+
+    // Privacy Protection Rule:
+    // If client is tracking companion, only allow within 30 minutes of scheduled start (or if arrived/in-progress)
+    if (booking && requestingUserId === booking.clientId && userId === booking.companionId) {
+      if (!['COMPANION_ARRIVED', 'IN_PROGRESS'].includes(booking.status)) {
+        const slotStartMs = new Date(`${booking.date}T${booking.startTime}:00`).getTime();
+        const thirtyMinsBefore = slotStartMs - (30 * 60 * 1000);
+        if (Date.now() < thirtyMinsBefore) {
+          return res.status(403).json({
+            error: 'Companion live location is protected. Tracking unlocks 30 minutes before your scheduled meeting.',
+            privacyProtected: true,
+            unlocksAt: new Date(thirtyMinsBefore).toISOString(),
+            scheduledStartTime: new Date(slotStartMs).toISOString()
+          });
+        }
+      }
+    }
+
     // 1. Check in-memory real-time cache
     const memLoc = inMemoryLiveLocations.get(`${bookingId}_${userId}`) || inMemoryLiveLocations.get(userId);
     if (memLoc) {
