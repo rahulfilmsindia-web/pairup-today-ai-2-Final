@@ -62,25 +62,26 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
 // Safe system notification helper that never throws "Illegal constructor" on Android/Mobile Chrome
 const triggerSystemNotification = (title: string, options?: any) => {
   try {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
+    if (typeof window === 'undefined') return;
+    if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') return;
 
     const notifOptions = {
       icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
       badge: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
-      tag: options?.tag || `booking-${Date.now()}`,
+      tag: options?.tag || 'incoming-booking-call',
       renotify: true,
       requireInteraction: true,
       silent: false,
-      vibrate: [500, 200, 500, 200, 500, 200, 500],
+      category: 'call',
+      vibrate: [800, 300, 800, 300, 800],
       actions: [
-        { action: 'open', title: '👀 View Booking' },
-        { action: 'decline', title: '❌ Decline' }
+        { action: 'open', title: '📞 ANSWER / VIEW' },
+        { action: 'decline', title: '❌ DECLINE' }
       ],
       ...(options || {})
     };
 
-    if ('serviceWorker' in navigator) {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       const showViaSw = (reg: ServiceWorkerRegistration) => {
         if (reg && typeof reg.showNotification === 'function') {
           reg.showNotification(title, notifOptions).catch(() => {});
@@ -96,13 +97,6 @@ const triggerSystemNotification = (title: string, options?: any) => {
         navigator.serviceWorker.ready.then(showViaSw).catch(() => {});
       });
       return;
-    }
-
-    const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (!isMobile) {
-      try {
-        new Notification(title, notifOptions);
-      } catch {}
     }
   } catch (err) {
     console.warn('System notification suppressed:', err);
@@ -313,6 +307,30 @@ export const CompanionDashboard: React.FC = () => {
   const [incomingBookingRequest, setIncomingBookingRequest] = useState<any | null>(null);
   const audioContextRef = useRef<any>(null);
   const ringtoneTimerRef = useRef<any>(null);
+  const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Floating Picture-in-Picture (PiP) Overlay Window refs & state
+  const pipCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pipVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [isPipActive, setIsPipActive] = useState<boolean>(false);
+  const pipRenderTimerRef = useRef<any>(null);
+
+  // Close any outstanding system notifications in shade
+  const closeAllActiveBookingNotifications = () => {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg && typeof reg.getNotifications === 'function') {
+          reg.getNotifications().then(list => {
+            list.forEach(n => {
+              if (n.tag && (n.tag.includes('booking') || n.tag === 'incoming-booking-call')) {
+                n.close();
+              }
+            });
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  };
 
   const stopRingtone = () => {
     try {
@@ -323,6 +341,39 @@ export const CompanionDashboard: React.FC = () => {
       if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
         navigator.vibrate(0);
       }
+      if (backgroundAudioRef.current) {
+        try {
+          if (!isAvailabilityPaused) {
+            // Restore silent audio keepalive so background process remains active
+            backgroundAudioRef.current.src = '/assets/silent.wav';
+            backgroundAudioRef.current.loop = true;
+            backgroundAudioRef.current.volume = 0.01;
+            const p = backgroundAudioRef.current.play();
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+          } else {
+            backgroundAudioRef.current.pause();
+          }
+        } catch {}
+      }
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        try {
+          if (!isAvailabilityPaused) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+              title: 'PairUpToday Companion Online',
+              artist: 'Ready for Instant Booking Alerts',
+              album: 'PairUpToday Host Portal',
+              artwork: [
+                { src: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png', sizes: '192x192', type: 'image/png' }
+              ]
+            });
+            navigator.mediaSession.playbackState = 'playing';
+          } else {
+            navigator.mediaSession.metadata = null;
+            navigator.mediaSession.playbackState = 'none';
+          }
+        } catch {}
+      }
+      closeAllActiveBookingNotifications();
     } catch (e) {
       console.warn('stopRingtone error', e);
     }
@@ -331,6 +382,45 @@ export const CompanionDashboard: React.FC = () => {
   const startRingtone = () => {
     try {
       stopRingtone();
+
+      // 1. Play loud looping ringtone via HTML5 Audio element.
+      // Since this element has active media permissions/session, it rings LOUDLY in background even when user is using WhatsApp/Facebook/Instagram or on a phone call!
+      if (!backgroundAudioRef.current && typeof window !== 'undefined') {
+        const audio = new Audio('/assets/ringtone.wav');
+        audio.loop = true;
+        backgroundAudioRef.current = audio;
+      }
+      if (backgroundAudioRef.current) {
+        try {
+          backgroundAudioRef.current.src = '/assets/ringtone.wav';
+          backgroundAudioRef.current.loop = true;
+          backgroundAudioRef.current.volume = 1.0;
+          const p = backgroundAudioRef.current.play();
+          if (p && typeof p.catch === 'function') {
+            p.catch((err) => {
+              console.warn('Background audio ringtone play rejected', err);
+            });
+          }
+        } catch (audioErr) {
+          console.warn('Background audio ringtone error', audioErr);
+        }
+      }
+
+      // Update MediaSession so Android notification center shows active call-style ringing banner
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: '🚨 INCOMING BOOKING CALL!',
+            artist: 'PairUpToday Companion Alert',
+            album: 'Loud Ringing • Tap to Open & Accept',
+            artwork: [
+              { src: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png', sizes: '192x192', type: 'image/png' }
+            ]
+          });
+          navigator.mediaSession.playbackState = 'playing';
+        } catch {}
+      }
+
       const playBurst = () => {
         try {
           if (typeof window === 'undefined') return;
@@ -384,7 +474,7 @@ export const CompanionDashboard: React.FC = () => {
 
           // Mobile device vibration pattern
           if (typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
-            navigator.vibrate([250, 150, 250, 150, 400]);
+            navigator.vibrate([600, 250, 600, 250, 600]);
           }
         } catch (e) {
           console.warn('Ringtone playback error', e);
@@ -398,6 +488,126 @@ export const CompanionDashboard: React.FC = () => {
     }
   };
 
+  // Picture-in-Picture Floating Window Renderer
+  const drawPipFrame = useCallback(() => {
+    const canvas = pipCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+
+    if (incomingBookingRequest) {
+      const isRed = Math.floor(Date.now() / 400) % 2 === 0;
+      ctx.fillStyle = isRed ? '#dc2626' : '#7c2d12';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(3, 3, w - 6, h - 6);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🚨 NEW BOOKING REQUEST!', w / 2, 40);
+
+      const price = Math.round(incomingBookingRequest.totalAmount || 1000);
+      const srv = incomingBookingRequest.serviceName || 'Session';
+      ctx.fillStyle = '#fef08a';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(`₹${price} • ${srv}`, w / 2, 80);
+
+      const client = incomingBookingRequest.clientName || 'Client';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText(`Client: ${client}`, w / 2, 116);
+
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      if (typeof (ctx as any).roundRect === 'function') {
+        (ctx as any).roundRect(30, 136, w - 60, 42, 10);
+      } else {
+        ctx.rect(30, 136, w - 60, 42);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('👉 TAP TO OPEN & ACCEPT', w / 2, 163);
+    } else {
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = !isAvailabilityPaused ? '#10b981' : '#64748b';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, w - 4, h - 4);
+
+      ctx.fillStyle = !isAvailabilityPaused ? '#10b981' : '#64748b';
+      ctx.beginPath();
+      ctx.arc(36, 42, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(!isAvailabilityPaused ? 'PairUp Live: ONLINE' : 'PairUp: OFFLINE', 58, 48);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '15px sans-serif';
+      ctx.fillText(!isAvailabilityPaused ? 'Waiting for bookings...' : 'Offline (Paused)', 58, 80);
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '14px sans-serif';
+      ctx.fillText('Floating Overlay Active across Apps', 30, 128);
+
+      ctx.fillStyle = '#ec4899';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('PairUpToday Host Portal', 30, 160);
+    }
+  }, [incomingBookingRequest, isAvailabilityPaused]);
+
+  const togglePipOverlay = async () => {
+    try {
+      startBackgroundKeepalive();
+      if (typeof document !== 'undefined' && document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPipActive(false);
+        return;
+      }
+      if (!pipVideoRef.current || !pipCanvasRef.current) return;
+
+      drawPipFrame();
+
+      if (!pipVideoRef.current.srcObject) {
+        const stream = (pipCanvasRef.current as any).captureStream ? (pipCanvasRef.current as any).captureStream(15) : null;
+        if (stream) {
+          pipVideoRef.current.srcObject = stream;
+        }
+      }
+
+      await pipVideoRef.current.play().catch(() => {});
+      if (typeof pipVideoRef.current.requestPictureInPicture === 'function') {
+        await pipVideoRef.current.requestPictureInPicture();
+        setIsPipActive(true);
+        setActionMsg('📺 Floating Overlay enabled! This window will stay visible over Facebook, WhatsApp, and phone calls.');
+        setTimeout(() => setActionMsg(null), 5000);
+      } else {
+        setActionMsg('Picture-in-Picture floating overlay is not supported by your current browser.');
+      }
+    } catch (err: any) {
+      console.warn('PiP toggle error:', err);
+    }
+  };
+
+  useEffect(() => {
+    drawPipFrame();
+    pipRenderTimerRef.current = setInterval(drawPipFrame, 400);
+    return () => {
+      if (pipRenderTimerRef.current) clearInterval(pipRenderTimerRef.current);
+    };
+  }, [drawPipFrame]);
+
   const [completedBookingEarned, setCompletedBookingEarned] = useState<{ id: string; amountPaise: number; code: string } | null>(null);
   const [startOtpInputs, setStartOtpInputs] = useState<Record<string, string>>({});
   const [delayMinutesInputs, setDelayMinutesInputs] = useState<Record<string, number>>({});
@@ -407,8 +617,6 @@ export const CompanionDashboard: React.FC = () => {
   const [notificationPermission, setNotificationPermission] = useState<string>(() => {
     return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted';
   });
-
-  const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const startBackgroundKeepalive = () => {
     try {
@@ -433,6 +641,7 @@ export const CompanionDashboard: React.FC = () => {
               { src: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png', sizes: '192x192', type: 'image/png' }
             ]
           });
+          navigator.mediaSession.playbackState = 'playing';
         } catch {}
       }
     } catch (e) {
@@ -447,6 +656,7 @@ export const CompanionDashboard: React.FC = () => {
       }
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
       }
     } catch {}
   };
@@ -749,9 +959,23 @@ export const CompanionDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    let alertPulseTimer: any = null;
     if (incomingBookingRequest) {
-      stopBackgroundKeepalive();
       startRingtone();
+      // Send persistent heads-up notification pulse every 3.5s so it stays displayed over Facebook, WhatsApp, or phone calls
+      const triggerCallAlert = () => {
+        triggerSystemNotification(`🚨 URGENT BOOKING: ₹${Math.round(incomingBookingRequest.totalAmount || 1000)} - ${incomingBookingRequest.serviceName || 'Session'}`, {
+          body: `From ${incomingBookingRequest.clientName || 'A Client'}. Tap to open PairUp and accept now!`,
+          icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
+          tag: 'incoming-booking-call',
+          category: 'call',
+          renotify: true,
+          requireInteraction: true,
+          data: { bookingId: incomingBookingRequest.id, url: '/companion-dashboard' }
+        });
+      };
+      triggerCallAlert();
+      alertPulseTimer = setInterval(triggerCallAlert, 3500);
     } else {
       stopRingtone();
       if (!isAvailabilityPaused) {
@@ -759,6 +983,7 @@ export const CompanionDashboard: React.FC = () => {
       }
     }
     return () => {
+      if (alertPulseTimer) clearInterval(alertPulseTimer);
       stopRingtone();
     };
   }, [incomingBookingRequest?.id, isAvailabilityPaused]);
@@ -1634,7 +1859,7 @@ export const CompanionDashboard: React.FC = () => {
             </button>
 
             {/* GO LIVE (ONLINE / OFFLINE) TOGGLE SWITCH RIGHT NEXT TO NOTIFICATION */}
-            <div className="flex items-center pl-1 sm:pl-2 border-l border-slate-800 ml-1">
+            <div className="flex items-center pl-1 sm:pl-2 border-l border-slate-800 ml-1 gap-1.5">
               <button
                 type="button"
                 onClick={handleToggleAvailabilityPause}
@@ -1670,9 +1895,34 @@ export const CompanionDashboard: React.FC = () => {
                   <div className="w-3.5 h-3.5 rounded-full bg-white shadow-sm" />
                 </div>
               </button>
+
+              {/* Floating Picture-in-Picture Overlay Button */}
+              <button
+                type="button"
+                onClick={togglePipOverlay}
+                title={isPipActive ? 'Floating Overlay ACTIVE on top of other apps - Tap to close' : 'Enable Floating Overlay (stays on top of WhatsApp, Facebook, Instagram & phone calls)'}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
+                  isPipActive
+                    ? 'bg-purple-500/25 border-purple-500/60 text-purple-200 ring-1 ring-purple-500/40 shadow-purple-950/40'
+                    : 'bg-slate-800/90 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <span className="text-sm">📺</span>
+                <span className="hidden md:inline">{isPipActive ? 'Overlay ON' : 'Floating PiP'}</span>
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Hidden elements for Background Picture-in-Picture Floating Overlay */}
+        <canvas ref={pipCanvasRef} width={400} height={225} style={{ display: 'none' }} />
+        <video
+          ref={pipVideoRef}
+          playsInline
+          muted
+          autoPlay
+          style={{ position: 'fixed', bottom: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+        />
 
         {/* Persistent Account Suspension Alert */}
         {user?.isSuspended && (

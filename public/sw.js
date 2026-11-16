@@ -49,13 +49,16 @@ self.addEventListener('push', (event) => {
       icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
       badge: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
       tag: payload.tag || 'booking-alert',
+      category: 'call',
+      priority: 2,
       renotify: true,
       requireInteraction: true,
-      vibrate: [500, 250, 500, 250, 500, 250, 500],
+      silent: false,
+      vibrate: [800, 300, 800, 300, 800],
       data: payload.data || { url: '/companion-dashboard' },
       actions: [
-        { action: 'open', title: '👀 View Request' },
-        { action: 'decline', title: '❌ Decline' }
+        { action: 'open', title: '📞 ANSWER / VIEW' },
+        { action: 'decline', title: '❌ DECLINE' }
       ]
     };
     event.waitUntil(self.registration.showNotification(title, options));
