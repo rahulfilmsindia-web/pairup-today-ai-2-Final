@@ -408,7 +408,51 @@ export const CompanionDashboard: React.FC = () => {
     return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted';
   });
 
+  const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const startBackgroundKeepalive = () => {
+    try {
+      if (typeof window === 'undefined') return;
+      if (!backgroundAudioRef.current) {
+        const audio = new Audio('/assets/silent.wav');
+        audio.loop = true;
+        audio.volume = 0.01;
+        backgroundAudioRef.current = audio;
+      }
+      const p = backgroundAudioRef.current.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {});
+      }
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: 'PairUpToday Companion Online',
+            artist: 'Ready for Instant Booking Alerts',
+            album: 'PairUpToday Host Portal',
+            artwork: [
+              { src: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png', sizes: '192x192', type: 'image/png' }
+            ]
+          });
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Background keepalive error', e);
+    }
+  };
+
+  const stopBackgroundKeepalive = () => {
+    try {
+      if (backgroundAudioRef.current) {
+        backgroundAudioRef.current.pause();
+      }
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = null;
+      }
+    } catch {}
+  };
+
   const handleRequestNotificationPermission = async () => {
+    startBackgroundKeepalive();
     if (typeof window !== 'undefined' && 'Notification' in window) {
       try {
         const p = await Notification.requestPermission();
@@ -577,7 +621,11 @@ export const CompanionDashboard: React.FC = () => {
         setStatusData(data);
         if (data.profile) {
           setSelectedServices(data.profile.services || [1, 2]);
-          setIsAvailabilityPaused(Boolean(data.profile.isPaused));
+          const isPaused = Boolean(data.profile.isPaused);
+          setIsAvailabilityPaused(isPaused);
+          if (!isPaused && data.isLive) {
+            startBackgroundKeepalive();
+          }
           if (data.profile.rates) {
             setHourlyRate(data.profile.rates.hourlyPaise / 100);
             setHalfDayRate(data.profile.rates.halfDayPaise / 100);
@@ -702,14 +750,18 @@ export const CompanionDashboard: React.FC = () => {
 
   useEffect(() => {
     if (incomingBookingRequest) {
+      stopBackgroundKeepalive();
       startRingtone();
     } else {
       stopRingtone();
+      if (!isAvailabilityPaused) {
+        startBackgroundKeepalive();
+      }
     }
     return () => {
       stopRingtone();
     };
-  }, [incomingBookingRequest?.id]);
+  }, [incomingBookingRequest?.id, isAvailabilityPaused]);
 
   const fetchNotifications = async () => {
     if (!user) return;
@@ -812,11 +864,23 @@ export const CompanionDashboard: React.FC = () => {
       navigator.serviceWorker.addEventListener('message', handleSwMessage);
     }
 
+    // Re-check bookings immediately whenever user returns to the tab or screen wakes up
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchBookings();
+        fetchNotifications();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
     return () => {
       clearInterval(interval);
       if (eventSource) {
         eventSource.close();
       }
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
       }
@@ -1019,8 +1083,13 @@ export const CompanionDashboard: React.FC = () => {
       if (res.ok) {
         setIsAvailabilityPaused(nextPaused);
         await fetchCompanionStatus();
-        if (!nextPaused && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission().catch(() => {});
+        if (!nextPaused) {
+          startBackgroundKeepalive();
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted') {
+            Notification.requestPermission().then(p => setNotificationPermission(p)).catch(() => {});
+          }
+        } else {
+          stopBackgroundKeepalive();
         }
         setActionMsg(
           nextPaused
