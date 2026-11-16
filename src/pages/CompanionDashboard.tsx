@@ -59,6 +59,36 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
   );
 };
 
+// Safe system notification helper that never throws "Illegal constructor" on Android/Mobile Chrome
+const triggerSystemNotification = (title: string, options?: NotificationOptions) => {
+  try {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(title, options).catch(() => {});
+        }).catch(() => {});
+      } else {
+        try {
+          new Notification(title, options);
+        } catch {
+          // On Android / mobile browsers, new Notification() is forbidden and throws "Illegal constructor".
+          // Handled gracefully here so React never crashes.
+        }
+      }
+    } else if (Notification.permission === 'default') {
+      try {
+        const p = Notification.requestPermission();
+        if (p && typeof (p as any).catch === 'function') {
+          (p as any).catch(() => {});
+        }
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('System notification suppressed:', err);
+  }
+};
+
 export const CompanionDashboard: React.FC = () => {
   const { user, activeRole, selectActiveRole, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard } = useAuth();
   const { t } = useLanguage();
@@ -571,14 +601,10 @@ export const CompanionDashboard: React.FC = () => {
         if (pendingRequest) {
           setIncomingBookingRequest((prev: any) => {
             if (!prev || prev.id !== pendingRequest.id) {
-              if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('🚨 New Booking Request Received!', {
-                  body: `${pendingRequest.clientName || 'A Client'} requested a ${pendingRequest.serviceName} session on ${pendingRequest.date} at ${pendingRequest.startTime}. Tap to review!`,
-                  icon: '/favicon.ico'
-                });
-              } else if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission();
-              }
+              triggerSystemNotification('🚨 New Booking Request Received!', {
+                body: `${pendingRequest.clientName || 'A Client'} requested a ${pendingRequest.serviceName} session on ${pendingRequest.date} at ${pendingRequest.startTime}. Tap to review!`,
+                icon: '/favicon.ico'
+              });
             }
             return pendingRequest;
           });
