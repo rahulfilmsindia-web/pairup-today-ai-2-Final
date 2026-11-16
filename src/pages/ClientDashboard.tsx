@@ -16,8 +16,14 @@ import {
 } from 'lucide-react';
 
 export const ClientDashboard: React.FC = () => {
-  const { user, token, logout, bookingContext, setBookingContext, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard, refreshUserData } = useAuth();
+  const { user, token, activeRole, selectActiveRole, logout, bookingContext, setBookingContext, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard, refreshUserData } = useAuth();
   const { t } = useLanguage();
+
+  useEffect(() => {
+    if (user && activeRole !== 'CLIENT') {
+      selectActiveRole('CLIENT').catch(() => {});
+    }
+  }, [user?.id, activeRole]);
 
   // 16 Complete Visible Navigation Tabs per Section 7
   type ClientTab = 

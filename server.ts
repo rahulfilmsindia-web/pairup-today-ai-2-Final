@@ -1400,27 +1400,42 @@ function getBearerToken(req: Request): string {
 }
 
 function hasApplicationRole(user: any, role: 'CLIENT' | 'COMPANION'): boolean {
-  return user?.role === role || (user?.role === 'DUAL' && user?.activeRole === role);
+  if (!user) return false;
+  if (user.role === 'DUAL' || user.role === 'ADMIN') return true;
+  return user.role === role || user.activeRole === role;
 }
 
 function apiRequiresRole(req: Request): 'CLIENT' | 'COMPANION' | null {
   const route = `${req.method} ${req.originalUrl.split('?')[0]}`;
   if (route === 'POST /api/bookings/create') return 'CLIENT';
-  if (route === 'POST /api/companion/membership/subscribe') return 'COMPANION';
-  if (/^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete)$/.test(route)) return 'COMPANION';
+
+  // Membership onboarding, companion status checks, rates & bank verification
+  // are open to any authenticated user (client upgrading to companion or dual)
   if (
-    route.startsWith('POST /api/companion/') ||
-    route.startsWith('POST /api/companion/availability/') ||
-    route.startsWith('GET /api/companion/status/')
-  ) return 'COMPANION';
+    route === 'POST /api/companion/membership/subscribe' ||
+    route.startsWith('GET /api/companion/status/') ||
+    route === 'POST /api/companion/services-rates' ||
+    route === 'POST /api/companion/bank/verify'
+  ) {
+    return null;
+  }
+
+  // Razorpay membership checkout & verification are allowed for all users onboarding
   if (route === 'POST /api/payments/razorpay/create-order') {
-    return req.body?.type === 'MEMBERSHIP' || req.body?.plan || req.body?.membershipPlan || req.body?.notes?.membershipPlan
-      ? 'COMPANION'
-      : 'CLIENT';
+    const isMembership = req.body?.type === 'MEMBERSHIP' || req.body?.plan || req.body?.membershipPlan || req.body?.notes?.membershipPlan;
+    return isMembership ? null : 'CLIENT';
   }
   if (route === 'POST /api/payments/razorpay/verify-payment') {
-    return req.body?.membershipPlan ? 'COMPANION' : 'CLIENT';
+    return req.body?.membershipPlan ? null : 'CLIENT';
   }
+
+  // Companion operational actions (booking arrival, otp verification, availability updates)
+  if (/^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete)$/.test(route)) return 'COMPANION';
+  if (
+    route.startsWith('POST /api/companion/availability/') ||
+    route.startsWith('POST /api/companion/')
+  ) return 'COMPANION';
+
   return null;
 }
 

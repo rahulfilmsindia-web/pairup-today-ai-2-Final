@@ -16,8 +16,14 @@ import {
 } from 'lucide-react';
 
 export const CompanionDashboard: React.FC = () => {
-  const { user, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard } = useAuth();
+  const { user, activeRole, selectActiveRole, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard } = useAuth();
   const { t } = useLanguage();
+
+  useEffect(() => {
+    if (user && activeRole !== 'COMPANION') {
+      selectActiveRole('COMPANION').catch(() => {});
+    }
+  }, [user?.id, activeRole]);
 
   // Complete Visible Navigation Tabs per Section 8
   type CompanionTab =
@@ -520,6 +526,9 @@ export const CompanionDashboard: React.FC = () => {
     if (!user) return;
     setSubscribingPlan(plan);
     try {
+      if (activeRole !== 'COMPANION') {
+        await selectActiveRole('COMPANION').catch(() => {});
+      }
       const res = await apiFetch('/api/companion/membership/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -568,7 +577,8 @@ export const CompanionDashboard: React.FC = () => {
       setActiveTab('bank');
     } catch (err) {
       console.error('Error subscribing', err);
-      alert(err instanceof Error ? err.message : 'Membership checkout failed.');
+      setActionMsg(err instanceof Error ? err.message : 'Membership checkout failed.');
+      setTimeout(() => setActionMsg(null), 5000);
     } finally {
       setSubscribingPlan(null);
     }

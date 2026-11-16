@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
   const { language, setLanguage, t } = useLanguage();
-  const { isAuthenticated, activeRole, openAuthModal, logout } = useAuth();
+  const { isAuthenticated, activeRole, openAuthModal, logout, selectActiveRole } = useAuth();
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -24,6 +24,13 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
   const handleNavClick = (page: string) => {
     setCurrentPage(page);
     setMobileMenuOpen(false);
+  };
+
+  const handleRoleSwitch = async () => {
+    const nextRole: 'CLIENT' | 'COMPANION' = activeRole === 'COMPANION' ? 'CLIENT' : 'COMPANION';
+    const targetPage = nextRole === 'COMPANION' ? 'companion-dashboard' : 'client-dashboard';
+    await selectActiveRole(nextRole);
+    handleNavClick(targetPage);
   };
 
   const handleBack = () => {
@@ -180,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
               </button>
 
               <button
-                onClick={() => handleNavClick(activeRole === 'COMPANION' ? 'client-dashboard' : 'companion-dashboard')}
+                onClick={handleRoleSwitch}
                 title={activeRole === 'COMPANION' ? t.navSwitchToClient : t.navSwitchToCompanion}
                 className="px-2.5 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
               >
@@ -332,7 +339,7 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  handleNavClick(activeRole === 'COMPANION' ? 'client-dashboard' : 'companion-dashboard');
+                  handleRoleSwitch();
                 }}
                 className="w-full py-2.5 rounded-xl border border-slate-700 text-amber-300 font-semibold text-xs min-h-[40px] hover:bg-slate-800"
               >
