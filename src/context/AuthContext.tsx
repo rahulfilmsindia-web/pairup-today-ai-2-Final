@@ -27,6 +27,11 @@ interface AuthContextType {
     bio?: string;
     profilePhoto?: string;
     photos?: string[];
+    city?: string;
+    state?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
   }) => Promise<{ success: boolean; error?: string; user?: User }>;
   bookingContext: BookingContextData | null;
   setBookingContext: (ctx: BookingContextData | null) => void;
@@ -333,6 +338,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     bio?: string;
     profilePhoto?: string;
     photos?: string[];
+    city?: string;
+    state?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
   }) => {
     try {
       const res = await apiFetch('/api/user/profile', {

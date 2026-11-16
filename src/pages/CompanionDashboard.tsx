@@ -12,8 +12,9 @@ import {
   MessageSquare, Navigation, AlertTriangle, PhoneCall, RefreshCw, X,
   User, Calendar, DollarSign, Bell, Settings, LifeBuoy, LogOut,
   Pause, Power, Shield, FileText, CheckSquare, Star, ArrowLeft,
-  Upload, Lock, Trash2, Camera, ShieldAlert
+  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin
 } from 'lucide-react';
+import LocationAutocomplete from '../components/LocationAutocomplete';
 
 export const CompanionDashboard: React.FC = () => {
   const { user, activeRole, selectActiveRole, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard } = useAuth();
@@ -236,6 +237,12 @@ export const CompanionDashboard: React.FC = () => {
     return [];
   });
   const [activeProfilePhoto, setActiveProfilePhoto] = useState<string>(user?.profilePhoto || '');
+  const [companionLocationInput, setCompanionLocationInput] = useState(user?.city || user?.address || '');
+  const [companionCity, setCompanionCity] = useState(user?.city || '');
+  const [companionState, setCompanionState] = useState(user?.state || '');
+  const [companionCoords, setCompanionCoords] = useState<{ lat?: number; lng?: number } | null>(
+    user?.latitude && user?.longitude ? { lat: user.latitude, lng: user.longitude } : null
+  );
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
   const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
@@ -244,13 +251,19 @@ export const CompanionDashboard: React.FC = () => {
     if (user) {
       setProfileNameInput(user.profileName || user.legalName || '');
       setBioInput(user.bio || '');
+      setCompanionLocationInput(user.city || user.address || '');
+      setCompanionCity(user.city || '');
+      setCompanionState(user.state || '');
+      if (user.latitude && user.longitude) {
+        setCompanionCoords({ lat: user.latitude, lng: user.longitude });
+      }
       const photos = Array.isArray(user.photos) && user.photos.length > 0 
         ? user.photos 
         : (user.profilePhoto ? [user.profilePhoto] : []);
       setUserPhotos(photos);
       setActiveProfilePhoto(user.profilePhoto || photos[0] || '');
     }
-  }, [user?.profileName, user?.profilePhoto, JSON.stringify(user?.photos || []), user?.bio]);
+  }, [user?.profileName, user?.profilePhoto, JSON.stringify(user?.photos || []), user?.bio, user?.city, user?.address, user?.latitude, user?.longitude]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -335,7 +348,12 @@ export const CompanionDashboard: React.FC = () => {
         profileName: profileNameInput.trim(),
         bio: bioInput.trim(),
         profilePhoto: compressedMain,
-        photos: compressedPhotos
+        photos: compressedPhotos,
+        city: companionCity || companionLocationInput.trim(),
+        state: companionState,
+        address: companionLocationInput.trim(),
+        latitude: companionCoords?.lat,
+        longitude: companionCoords?.lng
       });
       if (result.success) {
         setProfileSuccessMsg(t.profileSuccessMsg || 'Profile updated successfully!');
@@ -1668,6 +1686,30 @@ export const CompanionDashboard: React.FC = () => {
                   />
                   <p className="text-[11px] text-slate-500 mt-1">
                     {t.bioPlaceholder}
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800">
+                  <label className="text-slate-200 block mb-1.5 font-bold text-xs flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-pink-400" />
+                    <span>Your Operational City / Area Location</span>
+                  </label>
+                  <LocationAutocomplete
+                    value={companionLocationInput}
+                    onChange={(val) => setCompanionLocationInput(val)}
+                    onSelectLocation={(item) => {
+                      setCompanionLocationInput(item.address || item.city);
+                      setCompanionCity(item.city || '');
+                      setCompanionState(item.state || '');
+                      if (item.lat !== undefined && item.lng !== undefined) {
+                        setCompanionCoords({ lat: item.lat, lng: item.lng });
+                      }
+                    }}
+                    placeholder="Search and select your city or area (e.g. Golf Garden, Kolkata)..."
+                    accentColor="pink"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Nearby clients searching in this area will see your profile sorted by closest distance.
                   </p>
                 </div>
               </div>

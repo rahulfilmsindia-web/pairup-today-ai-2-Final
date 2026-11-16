@@ -2302,7 +2302,7 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { profileName, bio, profilePhoto, photos } = req.body;
+    const { profileName, bio, profilePhoto, photos, city, state, address, latitude, longitude } = req.body;
 
     let user: any;
     if (getDatabaseType() === 'supabase') {
@@ -2331,6 +2331,22 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
       user.bio = bio.trim();
     }
 
+    if (city !== undefined) {
+      user.city = typeof city === 'string' ? city.trim().slice(0, 100) : user.city;
+    }
+    if (state !== undefined) {
+      user.state = typeof state === 'string' ? state.trim().slice(0, 100) : user.state;
+    }
+    if (address !== undefined) {
+      user.address = typeof address === 'string' ? address.trim().slice(0, 255) : user.address;
+    }
+    if (latitude !== undefined && Number.isFinite(Number(latitude))) {
+      user.latitude = Number(latitude);
+    }
+    if (longitude !== undefined && Number.isFinite(Number(longitude))) {
+      user.longitude = Number(longitude);
+    }
+
     if (profilePhoto !== undefined) {
       if (typeof profilePhoto === 'string' && profilePhoto.trim()) {
         user.profilePhoto = profilePhoto.trim();
@@ -2355,6 +2371,11 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
       }
       if (user.profileName) db.users[authUser.id].profileName = user.profileName;
       if (user.bio !== undefined) db.users[authUser.id].bio = user.bio;
+      if (user.city !== undefined) db.users[authUser.id].city = user.city;
+      if (user.state !== undefined) db.users[authUser.id].state = user.state;
+      if (user.address !== undefined) db.users[authUser.id].address = user.address;
+      if (user.latitude !== undefined) db.users[authUser.id].latitude = user.latitude;
+      if (user.longitude !== undefined) db.users[authUser.id].longitude = user.longitude;
       if (user.profilePhoto) db.users[authUser.id].profilePhoto = user.profilePhoto;
       if (user.photos) db.users[authUser.id].photos = user.photos;
       if (process.env.NODE_ENV !== 'production' && getDatabaseType() !== 'supabase') {
@@ -2366,9 +2387,13 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
       }
     }
 
-    // If companion has a profile record, sync bio
+    // If companion has a profile record, sync bio, address, coordinates
     if (db.companionProfiles && db.companionProfiles[authUser.id]) {
       if (user.bio !== undefined) db.companionProfiles[authUser.id].bio = user.bio;
+      if (user.address !== undefined || user.city !== undefined) db.companionProfiles[authUser.id].address = user.address || user.city;
+      if (user.state !== undefined) db.companionProfiles[authUser.id].state = user.state;
+      if (user.latitude !== undefined) db.companionProfiles[authUser.id].latitude = user.latitude;
+      if (user.longitude !== undefined) db.companionProfiles[authUser.id].longitude = user.longitude;
     }
 
     try {
@@ -2377,11 +2402,19 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
           profileName: user.profileName,
           bio: user.bio,
           profilePhoto: user.profilePhoto,
-          photos: user.photos
+          photos: user.photos,
+          ...(user.city !== undefined ? { city: user.city } : {}),
+          ...(user.state !== undefined ? { state: user.state } : {})
         });
         if (updated) {
           user = { ...user, ...updated };
         }
+        await databaseAdapter.updateCompanionProfile(authUser.id, {
+          ...(user.address !== undefined || user.city !== undefined ? { address: user.address || user.city } : {}),
+          ...(user.state !== undefined ? { state: user.state } : {}),
+          ...(user.latitude !== undefined ? { latitude: user.latitude } : {}),
+          ...(user.longitude !== undefined ? { longitude: user.longitude } : {})
+        }).catch(() => null);
       }
     } catch (err) {
       console.warn('Supabase updateUser non-fatal warning', err);
@@ -3292,7 +3325,7 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
   if (getDatabaseType() === 'supabase') {
     try {
       const [profiles, users] = await Promise.all([
-        databaseAdapter.listCompanionProfiles({ isLive: true, limit: 100 }),
+        databaseAdapter.listCompanionProfiles({ limit: 100 }),
         databaseAdapter.listUsers()
       ]);
       const usersById = new Map(users.map((user: any) => [user.id, user]));
@@ -3302,19 +3335,43 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
         usersById.has(profile.userId)
       );
       const checkedProfiles = await Promise.all(candidates.map(async (profile: any) => {
-        const [companionKyc, membership, bankVerification] = await Promise.all([
+        const userRecord = usersById.get(profile.userId);
+        const [companionKyc, clientKyc, membership, bankVerification] = await Promise.all([
           databaseAdapter.getUserKycSubmission(profile.userId, 'COMPANION'),
+          databaseAdapter.getUserKycSubmission(profile.userId, 'CLIENT').catch(() => null),
           databaseAdapter.getActiveMembership(profile.userId),
           databaseAdapter.getBankVerification(profile.userId)
         ]);
-        if (companionKyc?.status !== 'APPROVED' || !membership || bankVerification?.verificationStatus !== 'VERIFIED') return null;
+        const effectiveKyc = companionKyc || (clientKyc?.status === 'APPROVED' ? clientKyc : null);
+        const kycApproved = Boolean(effectiveKyc?.status === 'APPROVED' || userRecord?.kycStatus === 'APPROVED' || userRecord?.kyc_status === 'APPROVED');
+        const membershipValid = Boolean(membership && (membership.isActive || (membership.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date())));
+        const bankVerified = Boolean(bankVerification?.verificationStatus === 'VERIFIED' || bankVerification?.isVerified === true || profile.bankDetails?.isVerified === true);
+
+        if (!kycApproved || !membershipValid || !bankVerified) return null;
+
+        if (!profile.isLive) {
+          databaseAdapter.updateCompanionProfile(profile.userId, { isLive: true }).catch(() => null);
+        }
+
         return [
           profile.userId,
-          { ...profile, companionKyc, membership, bankDetails: { isVerified: true } },
-          usersById.get(profile.userId)
+          {
+            ...profile,
+            isLive: true,
+            companionKyc: effectiveKyc,
+            membership: { ...membership, isActive: true },
+            bankDetails: { isVerified: true }
+          },
+          userRecord
         ] as [string, any, any];
       }));
-      profileEntries = checkedProfiles.filter((entry): entry is [string, any, any] => entry !== null);
+
+      const genuineEntries = checkedProfiles.filter((entry): entry is [string, any, any] => entry !== null);
+      const initialEntries = Object.entries(db.companionProfiles)
+        .filter(([_, p]) => Boolean(p.isInitialListing))
+        .map(([id, p]) => [id, p, db.users[id]]) as Array<[string, any, any]>;
+
+      profileEntries = [...genuineEntries, ...initialEntries];
     } catch (error) {
       console.error('Companion discovery query failed.', error);
       return res.status(503).json({ error: 'Companion discovery is temporarily unavailable.' });
@@ -3332,13 +3389,23 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
     // Gate verification:
     // If genuine: must satisfy all 3 gates (KYC approved, membership paid & valid, bank verified)
     // If initial listing: approved and display-eligible
+    const kycApproved = Boolean(
+      profile.companionKyc?.status === 'APPROVED' ||
+      user.kycStatus === 'APPROVED' ||
+      user.kyc_status === 'APPROVED'
+    );
+    const membershipValid = Boolean(
+      profile.membership?.isActive ||
+      (profile.membership?.paymentStatus === 'PAID' && new Date(profile.membership.expiryDate) > new Date())
+    );
+    const bankVerified = Boolean(
+      profile.bankDetails?.isVerified ||
+      profile.bankDetails?.verificationStatus === 'VERIFIED'
+    );
     const isLive = isInitial || Boolean(
-      profile.companionKyc?.status === 'APPROVED' &&
-      profile.membership &&
-      profile.membership.isActive &&
-      new Date(profile.membership.expiryDate) > new Date() &&
-      profile.bankDetails &&
-      profile.bankDetails.isVerified
+      kycApproved &&
+      membershipValid &&
+      bankVerified
     );
 
     if (!isLive) continue;
@@ -3455,11 +3522,10 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
   const initialOrderMap = new Map(INITIAL_COMPANIONS.map((c, i) => [c.id, i]));
   existingInitial.sort((a, b) => (initialOrderMap.get(a.id) ?? 9999) - (initialOrderMap.get(b.id) ?? 9999));
 
-  // Prioritize genuine companions first; dynamic replacement for matching cities/services
   // Genuine live registered companions take topmost priority
   genuineCompanions.sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.totalBookings || 0) - (a.totalBookings || 0));
 
-  // Newly created profiles appear BEFORE existing profiles, preserving relative order of existing profiles
+  // Genuine live companions take topmost priority, followed by initial profiles
   let combined = [...newProfiles, ...genuineCompanions, ...existingInitial];
   if (searchLocation) {
     const located = combined

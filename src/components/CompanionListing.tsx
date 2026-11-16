@@ -34,6 +34,8 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
 
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [clientCoords, setClientCoords] = useState<{ lat?: number; lng?: number } | null>(null);
+  const [detectedLocationName, setDetectedLocationName] = useState<string>('');
+  const [locatingUser, setLocatingUser] = useState<boolean>(false);
   const [selectedServiceId, setSelectedServiceId] = useState<number | 'all'>(
     initialServiceId || 'all'
   );
@@ -45,6 +47,72 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
   const [quickViewCompanion, setQuickViewCompanion] = useState<CompanionDiscoveryItem | null>(null);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
   const [bookingAlert, setBookingAlert] = useState<{ id: string; message: string } | null>(null);
+
+  // Auto-detect client location on mount to show closest nearby companions first
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      setLocatingUser(true);
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setClientCoords({ lat, lng });
+          try {
+            const res = await fetch(`/api/maps/reverse-geocode?lat=${lat}&lng=${lng}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.formatted_address) {
+                setDetectedLocationName(data.formatted_address);
+              }
+            }
+          } catch {
+            // Reverse geocode non-fatal
+          } finally {
+            setLocatingUser(false);
+          }
+        },
+        (err) => {
+          console.log('Browser geolocation prompt dismissed or unavailable:', err.message);
+          setLocatingUser(false);
+        },
+        { enableHighAccuracy: false, timeout: 7000, maximumAge: 300000 }
+      );
+    }
+  }, []);
+
+  const handleUseCurrentLocation = () => {
+    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setClientCoords({ lat, lng });
+        try {
+          const res = await fetch(`/api/maps/reverse-geocode?lat=${lat}&lng=${lng}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.formatted_address) {
+              setDetectedLocationName(data.formatted_address);
+              setSelectedCity(data.formatted_address);
+            }
+          }
+        } catch {
+          // ignore
+        } finally {
+          setLocatingUser(false);
+        }
+      },
+      (err) => {
+        setLocatingUser(false);
+        console.warn('Geolocation error:', err.message);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
 
   useEffect(() => {
     if (initialServiceId) {
@@ -224,19 +292,34 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
             
             {/* Smart Location Autocomplete Search */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-pink-400" />
-                {t.selectLocationLabel || (language === 'bn' ? 'শহর বা অবস্থান খুঁজুন' : language === 'hi' ? 'शहर या स्थान खोजें' : 'Search City or Location')}
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-pink-400" />
+                  {t.selectLocationLabel || (language === 'bn' ? 'শহর বা অবস্থান খুঁজুন' : language === 'hi' ? 'शहर या स्थान खोजें' : 'Search City or Location')}
+                </label>
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  disabled={locatingUser}
+                  className="text-[11px] font-bold text-pink-400 hover:text-pink-300 flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Navigation className="w-3 h-3 text-pink-400" />
+                  <span>{locatingUser ? (language === 'bn' ? 'শনাক্ত হচ্ছে...' : 'Locating...') : (language === 'bn' ? 'আমার বর্তমান অবস্থান' : language === 'hi' ? 'मेरा वर्तमान स्थान' : 'Use Current Location')}</span>
+                </button>
+              </div>
               <LocationAutocomplete
                 value={selectedCity}
                 onChange={(val) => {
                   setSelectedCity(val);
-                  if (!val) setClientCoords(null);
+                  if (!val) {
+                    setClientCoords(null);
+                    setDetectedLocationName('');
+                  }
                 }}
                 onSelectLocation={(item) => {
                   if (item.lat !== undefined && item.lng !== undefined) {
                     setClientCoords({ lat: item.lat, lng: item.lng });
+                    setDetectedLocationName(item.address || item.city);
                   } else {
                     setClientCoords(null);
                   }
@@ -277,6 +360,40 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
 
           </div>
         </div>
+
+        {/* Active Nearby Location Notification Banner */}
+        {clientCoords && (
+          <div className="mb-6 px-4 py-3 rounded-2xl bg-gradient-to-r from-pink-500/15 via-rose-500/10 to-slate-900 border border-pink-500/30 text-xs text-pink-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg animate-fade-in">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-pink-500/20 text-pink-400 shrink-0">
+                <Navigation className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-extrabold text-white block">
+                  {language === 'bn'
+                    ? '📍 আপনার নিকটতম দূরত্ব অনুযায়ী কম্প্যানিয়নদের সাজানো হয়েছে'
+                    : language === 'hi'
+                    ? '📍 आपकी निकटतम दूरी के अनुसार साथी दिखाए जा रहे हैं'
+                    : '📍 Companions sorted by nearest distance to your location'}
+                </span>
+                <span className="text-[11px] text-pink-300/80">
+                  {detectedLocationName || selectedCity || (language === 'bn' ? 'শনাক্ত করা অবস্থান' : 'Detected GPS Location')}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCity('');
+                setClientCoords(null);
+                setDetectedLocationName('');
+              }}
+              className="text-[11px] font-semibold text-slate-400 hover:text-white underline self-start sm:self-auto cursor-pointer"
+            >
+              {language === 'bn' ? 'সকল ভারত দেখুন' : language === 'hi' ? 'पूरा भारत देखें' : 'View All Across India'}
+            </button>
+          </div>
+        )}
 
         {/* Global Alert for Unavailable Profiles */}
         {bookingAlert && (

@@ -37,6 +37,10 @@ export interface User {
   bio?: string;
   photos?: string[];
   city?: string;
+  state?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
   isSuspended?: boolean;
   suspendedReason?: string;
   suspendedAt?: string;
