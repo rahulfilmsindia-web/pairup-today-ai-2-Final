@@ -1099,6 +1099,12 @@ export const CompanionDashboard: React.FC = () => {
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
+    // Sync with global incoming booking event for Picture-in-Picture floating overlay
+    const handleGlobalBooking = (e: any) => {
+      setIncomingBookingRequest(e.detail);
+    };
+    window.addEventListener('pairup:incoming-booking', handleGlobalBooking);
+
     return () => {
       clearInterval(interval);
       if (eventSource) {
@@ -1106,6 +1112,7 @@ export const CompanionDashboard: React.FC = () => {
       }
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('pairup:incoming-booking', handleGlobalBooking);
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
       }
@@ -3953,80 +3960,7 @@ export const CompanionDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* REAL-TIME INCOMING BOOKING REQUEST POPUP MODAL */}
-      {incomingBookingRequest && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-          <div className="relative w-full max-w-md bg-slate-900 border-2 border-pink-500 rounded-3xl shadow-2xl p-6 text-slate-100 space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
-              <div className="w-10 h-10 rounded-full bg-pink-500/20 border border-pink-500 flex items-center justify-center text-pink-400 animate-pulse">
-                <Bell className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-1.5">
-                  <span>🚨 New Booking Request!</span>
-                </h3>
-                <p className="text-xs text-pink-400 font-medium">
-                  {incomingBookingRequest.clientName || 'A Client'} is waiting for your response
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2.5">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Service:</span>
-                <span className="font-bold text-slate-100">{incomingBookingRequest.serviceName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Date & Time:</span>
-                <span className="font-semibold text-slate-200">
-                  {incomingBookingRequest.date} ({incomingBookingRequest.startTime} - {incomingBookingRequest.endTime})
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Duration:</span>
-                <span className="font-semibold text-slate-200">{incomingBookingRequest.durationHours} Hours</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Meeting Venue:</span>
-                <span className="font-semibold text-slate-200 truncate max-w-[200px]">{incomingBookingRequest.meetingLocation}</span>
-              </div>
-              {incomingBookingRequest.notes && (
-                <div className="pt-2 border-t border-slate-800/80">
-                  <span className="text-slate-400 block mb-0.5">Client Notes:</span>
-                  <span className="text-slate-300 italic">"{incomingBookingRequest.notes}"</span>
-                </div>
-              )}
-              <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
-                <span className="text-slate-300 font-bold">Your Net Earnings (85%):</span>
-                <span className="text-emerald-400 font-extrabold text-sm">
-                  ₹{(((Number(incomingBookingRequest.companionNetSharePaise) || Math.round((Number(incomingBookingRequest.bookingAmountPaise || incomingBookingRequest.amountPaise || incomingBookingRequest.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => handleRejectIncomingBooking(incomingBookingRequest.id)}
-                className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <X className="w-4 h-4 text-rose-400" />
-                <span>Decline / Busy</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleAcceptIncomingBooking(incomingBookingRequest.id)}
-                className="py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-              >
-                <Check className="w-4 h-4" />
-                <span>Accept Booking</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Incoming booking alert & modal managed globally via GlobalCompanionAlertManager */}
       </div>
     </ErrorBoundary>
   );

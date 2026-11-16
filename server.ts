@@ -13,6 +13,7 @@ import { sendToMultipleDevices } from './server/services/fcm.ts';
 import { getPlaceAutocomplete, geocodeAddress, reverseGeocode, getDistanceMatrix, calculateDistance, isGoogleMapsConfigured } from './server/services/googlemaps.ts';
 import { hashPassword, verifyPassword } from './server/services/passwords.ts';
 import { PAIRUP_SERVICES } from './src/constants/services.ts';
+import webpush from 'web-push';
 
 const KNOWN_CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   'delhi': { lat: 28.6139, lng: 77.2090 },
@@ -2944,24 +2945,101 @@ const bookingAcceptanceMap = new Map<string, {
   paymentOrderId?: string;
 }>();
 
-// Real-time Companion SSE Alert Streams for instant booking & cancel notifications
+// Web Push (VAPID) Configuration for Android/Mobile OS-level background alerts
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BJKQEyEeD663ApEU_-mZmzHUd-NFw0ZW5l35BsSxT4TFmnSV104zIJXmrhS2oxw9oGIL_Qdk4FOjk5MyS6NrIAU';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'JrMwLP6wNU01K_pvgBXt9WSYC_CZU8UEfie3Qn6GU0M';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:support@pairuptoday.com';
+
+try {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  console.log('Web Push VAPID initialized successfully.');
+} catch (vapidErr) {
+  console.warn('Web Push setVapidDetails warning:', vapidErr);
+}
+
+// In-memory push subscriptions & SSE streams
+const companionPushSubscriptions = new Map<string, any[]>();
 const companionAlertStreams = new Map<string, Set<Response>>();
 
-function pushCompanionAlert(companionId: string, event: { type: string; [key: string]: any }) {
+async function pushCompanionAlert(companionId: string, event: { type: string; [key: string]: any }) {
   if (!companionId) return;
+
+  // 1. Deliver via real-time SSE stream for connected client tabs (<50ms)
   const streams = companionAlertStreams.get(companionId);
-  if (!streams || streams.size === 0) return;
-  const payload = `data: ${JSON.stringify(event)}\n\n`;
-  streams.forEach((res) => {
-    try {
-      if (!res.writableEnded) {
-        res.write(payload);
+  if (streams && streams.size > 0) {
+    const payload = `data: ${JSON.stringify(event)}\n\n`;
+    streams.forEach((res) => {
+      try {
+        if (!res.writableEnded) {
+          res.write(payload);
+        }
+      } catch {
+        streams.delete(res);
       }
-    } catch {
-      streams.delete(res);
+    });
+  }
+
+  // 2. Deliver via W3C Web Push (FCM / Google Push Service)
+  // Wakes up Android / mobile Service Worker even when browser is minimized, screen is locked, or inside WhatsApp/Facebook/calls!
+  const subs = companionPushSubscriptions.get(companionId);
+  if (subs && subs.length > 0) {
+    const totalAmount = event.booking?.totalPayablePaise
+      ? Math.round(event.booking.totalPayablePaise / 100)
+      : (event.booking?.totalAmount || 1000);
+
+    const pushPayload = JSON.stringify({
+      title: event.type === 'NEW_BOOKING_REQUEST'
+        ? '🚨 URGENT: Incoming Booking Call!'
+        : event.type === 'BOOKING_CANCELLED'
+        ? '⚠️ Booking Canceled by Client'
+        : 'PairUpToday Companion Alert',
+      body: event.type === 'NEW_BOOKING_REQUEST'
+        ? `${event.booking?.clientName || 'A Client'} requested a ${event.booking?.serviceName || 'Session'} (₹${totalAmount}). Tap to Answer & Accept!`
+        : event.type === 'BOOKING_CANCELLED'
+        ? 'The client canceled this booking request.'
+        : 'Update on PairUpToday Host Portal',
+      tag: event.type === 'NEW_BOOKING_REQUEST' ? 'incoming-booking-call' : 'booking-alert',
+      type: event.type,
+      bookingId: event.bookingId || event.booking?.id,
+      booking: event.booking,
+      url: '/companion-dashboard'
+    });
+
+    const activeSubs: any[] = [];
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification(sub, pushPayload);
+        activeSubs.push(sub);
+      } catch (pushErr: any) {
+        // Drop dead/expired push subscriptions (404/410)
+        if (pushErr?.statusCode !== 404 && pushErr?.statusCode !== 410) {
+          activeSubs.push(sub);
+        }
+      }
     }
-  });
+    companionPushSubscriptions.set(companionId, activeSubs);
+  }
 }
+
+// Endpoint to retrieve VAPID Public Key for client Service Worker subscription
+app.get('/api/companion/push-vapid-key', (req: Request, res: Response) => {
+  return res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+// Endpoint to register client push subscription
+app.post('/api/companion/push-subscription', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+  const { subscription } = req.body || {};
+  if (!subscription || !subscription.endpoint) {
+    return res.status(400).json({ error: 'Invalid subscription object.' });
+  }
+  const list = companionPushSubscriptions.get(authUser.id) || [];
+  const filtered = list.filter((s: any) => s.endpoint !== subscription.endpoint);
+  filtered.push(subscription);
+  companionPushSubscriptions.set(authUser.id, filtered);
+  return res.json({ success: true, count: filtered.length });
+});
 
 // Verify Razorpay payment signature (server-side HMAC-SHA256)
 app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Response) => {

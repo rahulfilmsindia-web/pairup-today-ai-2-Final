@@ -38,24 +38,39 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Web Push listener
+// Web Push listener — Wakes up Service Worker even when browser is minimized, screen is locked, or inside other apps!
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   try {
     const payload = event.data.json();
-    const title = payload.title || '🚨 PairUpToday: New Booking Alert!';
+
+    // If client canceled, immediately clear active incoming call notifications
+    if (payload.type === 'BOOKING_CANCELLED') {
+      event.waitUntil(
+        self.registration.getNotifications({ tag: 'incoming-booking-call' }).then((list) => {
+          list.forEach((n) => n.close());
+        })
+      );
+      return;
+    }
+
+    const title = payload.title || '🚨 INCOMING BOOKING CALL!';
     const options = {
       body: payload.body || 'A new client booking request has arrived. Tap to view and accept.',
       icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
       badge: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
-      tag: payload.tag || 'booking-alert',
+      tag: payload.tag || 'incoming-booking-call',
       category: 'call',
       priority: 2,
       renotify: true,
       requireInteraction: true,
       silent: false,
-      vibrate: [800, 300, 800, 300, 800],
-      data: payload.data || { url: '/companion-dashboard' },
+      vibrate: [800, 300, 800, 300, 800, 300, 800],
+      data: {
+        url: payload.url || '/companion-dashboard',
+        bookingId: payload.bookingId,
+        booking: payload.booking
+      },
       actions: [
         { action: 'open', title: '📞 ANSWER / VIEW' },
         { action: 'decline', title: '❌ DECLINE' }

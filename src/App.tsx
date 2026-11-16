@@ -19,6 +19,7 @@ import { AdminPortal } from './admin/AdminPortal';
 import { ServiceItem } from './constants/services';
 import { CompanionListing } from './components/CompanionListing';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { GlobalCompanionAlertManager } from './components/GlobalCompanionAlertManager';
 
 const pageToPath = (page: string): string => {
   switch (page) {
@@ -286,6 +287,8 @@ const MainAppContent: React.FC = () => {
             }
           }}
         />
+        {/* Global Companion Alert Manager: listens & alerts across ALL pages (Home, About, etc.) */}
+        <GlobalCompanionAlertManager onNavigateToDashboard={() => navigateToPage('companion-dashboard')} />
       </div>
     </div>
   );
