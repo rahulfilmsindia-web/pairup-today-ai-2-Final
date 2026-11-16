@@ -173,14 +173,15 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
     const targetServiceId =
       selectedServiceId !== 'all' ? selectedServiceId : companion.services[0] || 1;
 
+    setBookingContext({
+      companionId: companion.id,
+      companionName: companion.name,
+      serviceId: targetServiceId,
+      hourlyRate: companion.hourlyRate,
+      companion
+    });
+
     if (!user) {
-      // Save booking context and direct client to login/registration
-      setBookingContext({
-        companionId: companion.id,
-        companionName: companion.name,
-        serviceId: targetServiceId,
-        hourlyRate: companion.hourlyRate
-      });
       openAuthModal('login');
       return;
     }

@@ -173,6 +173,7 @@ export interface BookingContextData {
   companionName?: string;
   serviceId?: number;
   hourlyRate?: number;
+  companion?: any;
 }
 
 export interface Booking {

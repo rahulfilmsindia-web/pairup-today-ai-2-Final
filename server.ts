@@ -1429,8 +1429,8 @@ function apiRequiresRole(req: Request): 'CLIENT' | 'COMPANION' | null {
     return req.body?.membershipPlan ? null : 'CLIENT';
   }
 
-  // Companion operational actions (booking arrival, otp verification, availability updates)
-  if (/^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete)$/.test(route)) return 'COMPANION';
+  // Companion operational actions (booking arrival, otp verification, availability updates, accept/reject)
+  if (/^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete|accept|reject)$/.test(route)) return 'COMPANION';
   if (
     route.startsWith('POST /api/companion/availability/') ||
     route.startsWith('POST /api/companion/')
@@ -1530,7 +1530,8 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     /^GET \/api\/chat\/[^/]+$/.test(route) ||
     /^POST \/api\/chat\/[^/]+$/.test(route) ||
     /^GET \/api\/chat\/[^/]+\/stream$/.test(route) ||
-    /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete)$/.test(route) ||
+    /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete|accept|reject)$/.test(route) ||
+    /^GET \/api\/bookings\/[^/]+\/status$/.test(route) ||
     /^GET \/api\/bookings\/my\/[^/]+$/.test(route) ||
     /^GET \/api\/companion\/status\/[^/]+$/.test(route) ||
     /^POST \/api\/location\/(update|sharing\/start|sharing\/stop)$/.test(route) ||
@@ -2924,6 +2925,18 @@ app.post('/api/payments/razorpay/create-order', async (req: Request, res: Respon
   });
 });
 
+// In-memory real-time tracking of companion booking acceptance and GST breakdown
+const bookingAcceptanceMap = new Map<string, {
+  companionAccepted: boolean;
+  rejectionReason?: string | null;
+  baseAmountPaise: number;
+  cgstPaise: number;
+  sgstPaise: number;
+  gstAmountPaise: number;
+  totalPayablePaise: number;
+  paymentOrderId?: string;
+}>();
+
 // Verify Razorpay payment signature (server-side HMAC-SHA256)
 app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Response) => {
   const { orderId, paymentId, signature, bookingId, membershipPlan } = req.body || {};
@@ -2944,21 +2957,26 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
 
   try {
     let expectedAmountPaise: number;
+    let expectedTotalPaise: number;
     if (bookingId) {
       const booking = await databaseAdapter.getBooking(bookingId);
       if (!booking) return res.status(404).json({ success: false, error: 'Booking not found.' });
       if (booking.clientId !== authUserId) return res.status(403).json({ success: false, error: 'You cannot verify payment for this booking.' });
       if (booking.paymentOrderId !== orderId) return res.status(409).json({ success: false, error: 'Payment order does not match the booking.' });
       expectedAmountPaise = booking.bookingAmountPaise;
+      const tracked = bookingAcceptanceMap.get(bookingId);
+      expectedTotalPaise = tracked?.totalPayablePaise || Math.round(expectedAmountPaise * 1.18);
     } else {
       const memberships = await databaseAdapter.listMemberships({ userId: authUserId });
       const membership = memberships.find((entry: any) => entry.paymentOrderId === orderId && entry.plan === membershipPlan);
       if (!membership) return res.status(404).json({ success: false, error: 'Pending membership order was not found for this account.' });
       expectedAmountPaise = membership.pricePaise;
+      expectedTotalPaise = membership.pricePaise;
     }
 
     const providerPayment = await fetchRazorpayPayment(paymentId);
-    if (providerPayment.order_id !== orderId || providerPayment.amount !== expectedAmountPaise ||
+    if (providerPayment.order_id !== orderId ||
+        (providerPayment.amount !== expectedAmountPaise && providerPayment.amount !== expectedTotalPaise) ||
         providerPayment.currency !== 'INR' || providerPayment.status !== 'captured') {
       return res.status(409).json({ success: false, error: 'Razorpay does not report a captured payment matching this order and amount.' });
     }
@@ -3646,24 +3664,209 @@ app.post('/api/bookings/create', async (req: Request, res: Response) => {
       meetingLocation,
       notes: typeof req.body?.notes === 'string' ? req.body.notes.slice(0, 2000) : ''
     });
+    const baseAmountPaise = Number(booking.bookingAmountPaise || booking.amountPaise || 49900);
+    // 18% GST (9% CGST + 9% SGST)
+    const cgstPaise = Math.round(baseAmountPaise * 0.09);
+    const sgstPaise = Math.round(baseAmountPaise * 0.09);
+    const gstAmountPaise = cgstPaise + sgstPaise;
+    const totalPayablePaise = baseAmountPaise + gstAmountPaise;
+
     const order = await createRazorpayOrder({
-      amountPaise: booking.bookingAmountPaise,
+      amountPaise: totalPayablePaise,
       receipt: `bk_${bookingCode}`,
-      notes: { bookingId: booking.id, bookingCode, orderType: 'BOOKING', userId: authUser.id }
+      notes: {
+        bookingId: booking.id,
+        bookingCode,
+        orderType: 'BOOKING',
+        userId: authUser.id,
+        baseAmountPaise: String(baseAmountPaise),
+        gstAmountPaise: String(gstAmountPaise),
+        totalPayablePaise: String(totalPayablePaise)
+      }
     });
     if (!order.success || !order.orderId) {
       await databaseAdapter.updateBooking(booking.id, { status: 'CANCELLED', paymentStatus: 'FAILED' });
       return res.status(503).json({ error: order.error || 'Razorpay could not create the booking payment order.' });
     }
-    await databaseAdapter.updateBooking(booking.id, { paymentOrderId: order.orderId });
+    await databaseAdapter.updateBooking(booking.id, {
+      paymentOrderId: order.orderId,
+      companionAccepted: false
+    });
+
+    bookingAcceptanceMap.set(booking.id, {
+      companionAccepted: false,
+      rejectionReason: null,
+      baseAmountPaise,
+      cgstPaise,
+      sgstPaise,
+      gstAmountPaise,
+      totalPayablePaise,
+      paymentOrderId: order.orderId
+    });
+
     return res.status(201).json({
       success: true,
-      booking: { ...booking, paymentOrderId: order.orderId, status: 'PENDING', paymentStatus: 'PENDING' },
-      payment: { orderId: order.orderId, amountPaise: order.amountPaise, currency: order.currency, keyId: order.keyId }
+      booking: {
+        ...booking,
+        paymentOrderId: order.orderId,
+        status: 'PENDING',
+        paymentStatus: 'PENDING',
+        companionAccepted: false,
+        baseAmountPaise,
+        cgstPaise,
+        sgstPaise,
+        gstAmountPaise,
+        totalPayablePaise
+      },
+      payment: {
+        orderId: order.orderId,
+        baseAmountPaise,
+        cgstPaise,
+        sgstPaise,
+        gstAmountPaise,
+        amountPaise: totalPayablePaise,
+        currency: order.currency,
+        keyId: order.keyId
+      }
     });
   } catch (error) {
     console.error('Booking reservation or order creation failed.', error);
     return res.status(503).json({ error: 'Booking checkout is temporarily unavailable.' });
+  }
+});
+
+// Companion accepts booking request
+app.post('/api/bookings/:id/accept', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const bookingId = req.params.id;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const booking = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getBooking(bookingId)
+      : db.bookings[bookingId];
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.companionId !== authUser.id) {
+      return res.status(403).json({ error: 'Only the assigned companion can accept this booking.' });
+    }
+    const baseAmt = Number(booking.bookingAmountPaise || booking.amountPaise || 49900);
+    const cgst = Math.round(baseAmt * 0.09);
+    const sgst = Math.round(baseAmt * 0.09);
+    const current = bookingAcceptanceMap.get(bookingId) || {
+      companionAccepted: false,
+      rejectionReason: null,
+      baseAmountPaise: baseAmt,
+      cgstPaise: cgst,
+      sgstPaise: sgst,
+      gstAmountPaise: cgst + sgst,
+      totalPayablePaise: baseAmt + cgst + sgst,
+      paymentOrderId: booking.paymentOrderId
+    };
+    current.companionAccepted = true;
+    current.rejectionReason = null;
+    bookingAcceptanceMap.set(bookingId, current);
+
+    if (getDatabaseType() === 'supabase') {
+      await databaseAdapter.updateBooking(bookingId, { companionAccepted: true });
+    } else {
+      if (db.bookings[bookingId]) db.bookings[bookingId].companionAccepted = true;
+    }
+
+    return res.json({ success: true, bookingId, companionAccepted: true });
+  } catch (error: any) {
+    console.error('Failed to accept booking', error);
+    return res.status(500).json({ error: error.message || 'Failed to accept booking.' });
+  }
+});
+
+// Companion rejects booking request
+app.post('/api/bookings/:id/reject', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const bookingId = req.params.id;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const booking = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getBooking(bookingId)
+      : db.bookings[bookingId];
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.companionId !== authUser.id) {
+      return res.status(403).json({ error: 'Only the assigned companion can reject this booking.' });
+    }
+    const baseAmt = Number(booking.bookingAmountPaise || booking.amountPaise || 49900);
+    const cgst = Math.round(baseAmt * 0.09);
+    const sgst = Math.round(baseAmt * 0.09);
+    const current = bookingAcceptanceMap.get(bookingId) || {
+      companionAccepted: false,
+      rejectionReason: 'COMPANION_BUSY',
+      baseAmountPaise: baseAmt,
+      cgstPaise: cgst,
+      sgstPaise: sgst,
+      gstAmountPaise: cgst + sgst,
+      totalPayablePaise: baseAmt + cgst + sgst,
+      paymentOrderId: booking.paymentOrderId
+    };
+    current.companionAccepted = false;
+    current.rejectionReason = 'COMPANION_BUSY';
+    bookingAcceptanceMap.set(bookingId, current);
+
+    if (getDatabaseType() === 'supabase') {
+      await databaseAdapter.updateBooking(bookingId, { status: 'CANCELLED', companionAccepted: false });
+    } else {
+      if (db.bookings[bookingId]) {
+        db.bookings[bookingId].status = 'CANCELLED';
+        db.bookings[bookingId].companionAccepted = false;
+      }
+    }
+
+    return res.json({ success: true, bookingId, rejected: true });
+  } catch (error: any) {
+    console.error('Failed to reject booking', error);
+    return res.status(500).json({ error: error.message || 'Failed to reject booking.' });
+  }
+});
+
+// Client & Companion real-time booking status polling
+app.get('/api/bookings/:id/status', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const bookingId = req.params.id;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const booking = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getBooking(bookingId)
+      : db.bookings[bookingId];
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.clientId !== authUser.id && booking.companionId !== authUser.id) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    const tracked = bookingAcceptanceMap.get(bookingId);
+    const companionAccepted = tracked?.companionAccepted ?? Boolean(booking.companionAccepted);
+    const rejectionReason = tracked?.rejectionReason ?? (booking.status === 'CANCELLED' ? 'COMPANION_BUSY' : null);
+    const baseAmountPaise = tracked?.baseAmountPaise || booking.bookingAmountPaise || booking.amountPaise || 49900;
+    const cgstPaise = tracked?.cgstPaise || Math.round(baseAmountPaise * 0.09);
+    const sgstPaise = tracked?.sgstPaise || Math.round(baseAmountPaise * 0.09);
+    const gstAmountPaise = tracked?.gstAmountPaise || (cgstPaise + sgstPaise);
+    const totalPayablePaise = tracked?.totalPayablePaise || (baseAmountPaise + gstAmountPaise);
+
+    return res.json({
+      bookingId: booking.id,
+      bookingCode: booking.bookingCode,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      companionAccepted,
+      rejectionReason,
+      paymentOrderId: booking.paymentOrderId,
+      payment: {
+        orderId: booking.paymentOrderId,
+        baseAmountPaise,
+        cgstPaise,
+        sgstPaise,
+        gstAmountPaise,
+        amountPaise: totalPayablePaise,
+        currency: 'INR'
+      }
+    });
+  } catch (error: any) {
+    console.error('Failed to get booking status', error);
+    return res.status(500).json({ error: error.message || 'Failed to get booking status.' });
   }
 });
 
@@ -3695,6 +3898,26 @@ app.get('/api/bookings/my/:userId', async (req: Request, res: Response) => {
         delete copy.startOtp;
         delete copy.endOtp;
       }
+
+      const tracked = bookingAcceptanceMap.get(copy.id);
+      copy.companionAccepted = tracked?.companionAccepted ?? Boolean(copy.companionAccepted);
+      copy.rejectionReason = tracked?.rejectionReason ?? (copy.status === 'CANCELLED' ? 'COMPANION_BUSY' : null);
+      const baseAmt = tracked?.baseAmountPaise || copy.bookingAmountPaise || copy.amountPaise || 49900;
+      copy.baseAmountPaise = baseAmt;
+      copy.cgstPaise = tracked?.cgstPaise || Math.round(baseAmt * 0.09);
+      copy.sgstPaise = tracked?.sgstPaise || Math.round(baseAmt * 0.09);
+      copy.gstAmountPaise = tracked?.gstAmountPaise || (copy.cgstPaise + copy.sgstPaise);
+      copy.totalPayablePaise = tracked?.totalPayablePaise || (baseAmt + copy.gstAmountPaise);
+
+      const clientUser = db.users[copy.clientId];
+      const companionUser = db.users[copy.companionId];
+      if (clientUser) {
+        copy.clientName = clientUser.profileName || clientUser.legalName || 'Client';
+      }
+      if (companionUser) {
+        copy.companionName = companionUser.profileName || companionUser.legalName || 'Companion';
+      }
+
       return copy;
     });
     return res.json({ bookings: sanitized });

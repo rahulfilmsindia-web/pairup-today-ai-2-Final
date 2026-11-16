@@ -699,7 +699,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     // Companion Listing & Profile Details
     companionListSectionTitle: "Verified Companions Across India",
     companionListSectionSubtitle: "Explore verified social companions available in your city for all 24 companionship services.",
-    quickViewAction: "Quick View",
+    quickViewAction: "View Profile", // Quick View
     bookNowAction: "Book Now",
     availableServicesLabel: "Available Services",
     profileUnavailableForBooking: "This profile is currently unavailable for booking.",
@@ -1055,7 +1055,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     // Companion Listing & Profile Details
     companionListSectionTitle: "ভারতজুড়ে যাচাইকৃত কম্প্যানিয়ন",
     companionListSectionSubtitle: "২৪টি সাহচর্য সেবার জন্য আপনার শহরের যাচাইকৃত সঙ্গী অন্বেষণ করুন।",
-    quickViewAction: "কুইক ভিউ",
+    quickViewAction: "প্রোফাইল দেখুন",
     bookNowAction: "বুকিং করুন",
     availableServicesLabel: "উপলব্ধ সেবাসমূহ",
     profileUnavailableForBooking: "এই প্রোফাইলটি বর্তমানে বুকিংয়ের জন্য উপলব্ধ নয়।",
@@ -1411,7 +1411,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     // Companion Listing & Profile Details
     companionListSectionTitle: "भारतभर में सत्यापित साथी",
     companionListSectionSubtitle: "सभी 24 साहचर्य सेवाओं के लिए अपने शहर में उपलब्ध सत्यापित साथियों की सूची देखें।",
-    quickViewAction: "क्विक व्यू",
+    quickViewAction: "प्रोफ़ाइल देखें",
     bookNowAction: "अभी बुक करें",
     availableServicesLabel: "उपलब्ध सेवाएँ",
     profileUnavailableForBooking: "यह प्रोफ़ाइल वर्तमान में बुकिंग के लिए उपलब्ध नहीं है।",

@@ -215,8 +215,34 @@ export const CompanionDashboard: React.FC = () => {
   const [bankSubmitting, setBankSubmitting] = useState(false);
   const [bankMsg, setBankMsg] = useState<string | null>(null);
 
-  // Bookings state
+  // Bookings state & incoming request alerts
   const [bookings, setBookings] = useState<any[]>([]);
+  const [incomingBookingRequest, setIncomingBookingRequest] = useState<any | null>(null);
+  const audioContextRef = useRef<any>(null);
+
+  const playNotificationSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = audioContextRef.current || new AudioCtx();
+      audioContextRef.current = ctx;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.6);
+    } catch (e) {}
+  };
+
   const [startOtpInputs, setStartOtpInputs] = useState<Record<string, string>>({});
   const [delayMinutesInputs, setDelayMinutesInputs] = useState<Record<string, number>>({});
   const [endOtpInputs, setEndOtpInputs] = useState<Record<string, string>>({});
@@ -425,10 +451,66 @@ export const CompanionDashboard: React.FC = () => {
       const res = await apiFetch(`/api/bookings/my/${user.id}`);
       if (res.ok) {
         const data = await res.json();
-        setBookings(data.bookings || []);
+        const list = data.bookings || [];
+        setBookings(list);
+
+        // Detect real-time booking requests waiting for companion acceptance
+        const pendingRequest = list.find((b: any) => 
+          b.companionId === user.id && 
+          b.status === 'PENDING' && 
+          !b.companionAccepted && 
+          b.cancellationReason !== 'COMPANION_BUSY'
+        );
+
+        if (pendingRequest) {
+          setIncomingBookingRequest((prev: any) => {
+            if (!prev || prev.id !== pendingRequest.id) {
+              playNotificationSound();
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('🚨 New Booking Request Received!', {
+                  body: `${pendingRequest.clientName || 'A Client'} requested a ${pendingRequest.serviceName} session on ${pendingRequest.date} at ${pendingRequest.startTime}. Tap to review!`,
+                  icon: '/favicon.ico'
+                });
+              } else if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+              }
+            }
+            return pendingRequest;
+          });
+        } else {
+          setIncomingBookingRequest(null);
+        }
       }
     } catch (err) {
       console.error('Failed to load bookings', err);
+    }
+  };
+
+  const handleAcceptIncomingBooking = async (bookingId: string) => {
+    try {
+      const res = await apiFetch(`/api/bookings/${bookingId}/accept`, { method: 'POST' });
+      if (res.ok) {
+        setIncomingBookingRequest(null);
+        setActionMsg('Booking Accepted! Waiting for client to complete payment.');
+        setTimeout(() => setActionMsg(null), 4000);
+        fetchBookings();
+      }
+    } catch (err: any) {
+      setActionMsg(err.message || 'Failed to accept booking.');
+    }
+  };
+
+  const handleRejectIncomingBooking = async (bookingId: string) => {
+    try {
+      const res = await apiFetch(`/api/bookings/${bookingId}/reject`, { method: 'POST' });
+      if (res.ok) {
+        setIncomingBookingRequest(null);
+        setActionMsg('Booking request declined.');
+        setTimeout(() => setActionMsg(null), 3000);
+        fetchBookings();
+      }
+    } catch (err: any) {
+      setActionMsg(err.message || 'Failed to decline booking.');
     }
   };
 
@@ -461,7 +543,7 @@ export const CompanionDashboard: React.FC = () => {
     const interval = setInterval(() => {
       fetchBookings();
       fetchNotifications();
-    }, 6000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [user?.id]);
 
@@ -765,6 +847,7 @@ export const CompanionDashboard: React.FC = () => {
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   // Bookings breakdown
+  const pendingRequests = bookings.filter(b => b.status === 'PENDING' && !b.companionAccepted && b.cancellationReason !== 'COMPANION_BUSY');
   const upcomingBookings = bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS');
   const pastBookings = bookings.filter(b => b.status === 'COMPLETED' || b.status === 'CANCELLED');
 
@@ -2287,7 +2370,54 @@ export const CompanionDashboard: React.FC = () => {
         {activeTab === 'requests' && (
           <div className="space-y-4 text-xs">
             <h3 className="text-base font-bold text-slate-100">Pending & Confirmed Booking Requests</h3>
-            {upcomingBookings.length === 0 ? (
+            
+            {/* 1. Pending Requests Waiting for Companion Decision */}
+            {pendingRequests.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Awaiting Your Response ({pendingRequests.length})</span>
+                </h4>
+                {pendingRequests.map(b => (
+                  <div key={b.id} className="p-4 rounded-2xl bg-slate-900 border-2 border-amber-500/50 space-y-3 shadow-lg shadow-amber-500/10">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-sm text-slate-100 block">{b.serviceName} ({b.bookingCode})</span>
+                        <span className="text-slate-400">Client: <strong className="text-pink-300">{b.clientName}</strong> · Date: {b.date} ({b.startTime} - {b.endTime})</span>
+                      </div>
+                      <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-bold animate-pulse">ACTION REQUIRED</span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <span>Venue: <strong className="text-slate-200">{b.meetingLocation}</strong></span>
+                      <span className="text-emerald-400 font-bold">Your Share: ₹{(b.companionNetSharePaise / 100).toFixed(2)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleRejectIncomingBooking(b.id)}
+                        className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <X className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Decline</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAcceptIncomingBooking(b.id)}
+                        className="flex-1 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-extrabold shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Accept Booking</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 2. Confirmed & Upcoming Requests */}
+            {upcomingBookings.length === 0 && pendingRequests.length === 0 ? (
               <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400">
                 No active booking requests currently waiting.
               </div>
@@ -2299,7 +2429,19 @@ export const CompanionDashboard: React.FC = () => {
                       <span className="font-bold text-sm text-slate-100 block">{b.serviceName} ({b.bookingCode})</span>
                       <span className="text-slate-400">Client: {b.clientName} · Date: {b.date} ({b.startTime} - {b.endTime})</span>
                     </div>
-                    <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-bold">{b.status}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded bg-sky-500/20 text-sky-300 font-bold">{b.status}</span>
+                      <button
+                        onClick={() => {
+                          setActiveChatBooking(b);
+                          setActiveTab('chat');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-bold flex items-center gap-1 transition-colors"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        <span>Chat</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between p-3 rounded-lg bg-slate-950 border border-slate-800">
@@ -2310,7 +2452,7 @@ export const CompanionDashboard: React.FC = () => {
                   {b.status === 'CONFIRMED' && (
                     <button
                       onClick={() => handleSlideMeetingArrived(b.id)}
-                      className="w-full py-2.5 rounded-xl bg-amber-400 text-slate-950 font-bold hover:bg-amber-500"
+                      className="w-full py-2.5 rounded-xl bg-amber-400 text-slate-950 font-bold hover:bg-amber-500 transition-colors"
                     >
                       Slide: MEETING ARRIVED (Dispatch 6-Digit Start OTP)
                     </button>
@@ -3079,6 +3221,80 @@ export const CompanionDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* REAL-TIME INCOMING BOOKING REQUEST POPUP MODAL */}
+      {incomingBookingRequest && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-md bg-slate-900 border-2 border-pink-500 rounded-3xl shadow-2xl p-6 text-slate-100 space-y-4">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
+              <div className="w-10 h-10 rounded-full bg-pink-500/20 border border-pink-500 flex items-center justify-center text-pink-400 animate-pulse">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-1.5">
+                  <span>🚨 New Booking Request!</span>
+                </h3>
+                <p className="text-xs text-pink-400 font-medium">
+                  {incomingBookingRequest.clientName || 'A Client'} is waiting for your response
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2.5">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Service:</span>
+                <span className="font-bold text-slate-100">{incomingBookingRequest.serviceName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Date & Time:</span>
+                <span className="font-semibold text-slate-200">
+                  {incomingBookingRequest.date} ({incomingBookingRequest.startTime} - {incomingBookingRequest.endTime})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Duration:</span>
+                <span className="font-semibold text-slate-200">{incomingBookingRequest.durationHours} Hours</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Meeting Venue:</span>
+                <span className="font-semibold text-slate-200 truncate max-w-[200px]">{incomingBookingRequest.meetingLocation}</span>
+              </div>
+              {incomingBookingRequest.notes && (
+                <div className="pt-2 border-t border-slate-800/80">
+                  <span className="text-slate-400 block mb-0.5">Client Notes:</span>
+                  <span className="text-slate-300 italic">"{incomingBookingRequest.notes}"</span>
+                </div>
+              )}
+              <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
+                <span className="text-slate-300 font-bold">Your Net Earnings (85%):</span>
+                <span className="text-emerald-400 font-extrabold text-sm">
+                  ₹{(incomingBookingRequest.companionNetSharePaise / 100).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleRejectIncomingBooking(incomingBookingRequest.id)}
+                className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <X className="w-4 h-4 text-rose-400" />
+                <span>Decline / Busy</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAcceptIncomingBooking(incomingBookingRequest.id)}
+                className="py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Check className="w-4 h-4" />
+                <span>Accept Booking</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -60,6 +60,23 @@ export const ClientDashboard: React.FC = () => {
   const [maxBudgetHourly, setMaxBudgetHourly] = useState<number>(3000);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
+  // Multi-step booking request & companion acceptance flow
+  type BookingStep = 'form' | 'waiting_acceptance' | 'accepted' | 'rejected';
+  const [bookingStep, setBookingStep] = useState<BookingStep>('form');
+  const [activeBookingResponse, setActiveBookingResponse] = useState<any | null>(null);
+  const pollIntervalRef = useRef<any>(null);
+
+  const cleanupPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => cleanupPolling();
+  }, []);
+
   // Booking modal state
   const [selectedCompanion, setSelectedCompanion] = useState<any | null>(null);
   const [bookingDate, setBookingDate] = useState(() => {
@@ -74,6 +91,15 @@ export const ClientDashboard: React.FC = () => {
   const [bookingInProgress, setBookingInProgress] = useState(false);
   const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
+
+  const handleCloseBookingModal = () => {
+    cleanupPolling();
+    setSelectedCompanion(null);
+    setBookingStep('form');
+    setActiveBookingResponse(null);
+    setBookingError(null);
+    setBookingSuccessMsg(null);
+  };
 
   // Quick View modal state
   const [quickViewCompanion, setQuickViewCompanion] = useState<any | null>(null);
@@ -451,10 +477,11 @@ export const ClientDashboard: React.FC = () => {
 
   // Handle restored booking context from AuthContext
   useEffect(() => {
-    if (bookingContext && companions.length > 0) {
-      const matchComp = companions.find(c => c.id === bookingContext.companionId);
+    if (bookingContext) {
+      const matchComp = companions.find(c => c.id === bookingContext.companionId) || (bookingContext as any).companion;
       if (matchComp) {
         setSelectedCompanion(matchComp);
+        setBookingStep('form');
         if (bookingContext.serviceId) {
           setSelectedServiceId(bookingContext.serviceId);
         }
@@ -546,53 +573,106 @@ export const ClientDashboard: React.FC = () => {
 
       const data = await res.json();
       if (!res.ok) {
-        setBookingError(data.error || 'Failed to confirm booking.');
-      } else {
-        let checkoutResult: any;
-        try {
-          checkoutResult = await openRazorpayCheckout(
-            data.payment,
-            `Companion booking ${data.booking.bookingCode}`,
-            { name: user.legalName, contact: user.phone }
-          );
-        } catch (checkoutErr: any) {
-          if (data?.payment?.orderId) {
-            const isCancelled = checkoutErr?.message?.includes('closed') || checkoutErr?.message?.includes('dismiss') || checkoutErr?.message?.includes('cancel');
-            apiFetch(isCancelled ? '/api/payments/razorpay/cancel-order' : '/api/payments/razorpay/fail-order', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                orderId: data.payment.orderId,
-                reason: checkoutErr?.message
-              })
-            }).catch(() => {});
-          }
-          throw checkoutErr;
-        }
-        const verifyRes = await apiFetch('/api/payments/razorpay/verify-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId: data.booking.id,
-            orderId: checkoutResult.razorpay_order_id,
-            paymentId: checkoutResult.razorpay_payment_id,
-            signature: checkoutResult.razorpay_signature
-          })
-        });
-        const verification = await verifyRes.json();
-        if (!verifyRes.ok || !verification.success) {
-          throw new Error(verification.error || 'Payment was not confirmed by the backend.');
-        }
-        setBookingSuccessMsg(`Booking ${verification.booking.bookingCode} confirmed after payment verification.`);
-        fetchMyBookings();
-        setTimeout(() => {
-          setSelectedCompanion(null);
-          setBookingSuccessMsg(null);
-          setActiveTab('upcoming');
-        }, 1800);
+        setBookingError(data.error || 'Failed to submit booking request.');
+        setBookingInProgress(false);
+        return;
       }
+
+      setActiveBookingResponse(data);
+      setBookingStep('waiting_acceptance');
+      setBookingInProgress(false);
+
+      // Start live polling for companion acceptance
+      cleanupPolling();
+      const bookingId = data.booking.id;
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const statusRes = await apiFetch(`/api/bookings/${bookingId}/status`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData.companionAccepted) {
+              cleanupPolling();
+              setBookingStep('accepted');
+              if (statusData.payment) {
+                setActiveBookingResponse((prev: any) => ({ ...prev, payment: statusData.payment }));
+              }
+            } else if (statusData.status === 'CANCELLED' || statusData.rejectionReason === 'COMPANION_BUSY') {
+              cleanupPolling();
+              setBookingStep('rejected');
+            }
+          }
+        } catch (pollErr) {
+          console.warn('Booking status polling error', pollErr);
+        }
+      }, 2000);
     } catch (err: any) {
       setBookingError(err.message || 'Network error during booking confirmation.');
+      setBookingInProgress(false);
+    }
+  };
+
+  const handleProceedToCheckout = async () => {
+    if (!activeBookingResponse || !user) return;
+    setBookingInProgress(true);
+    setBookingError(null);
+    try {
+      const { booking, payment } = activeBookingResponse;
+      let checkoutResult: any;
+      try {
+        checkoutResult = await openRazorpayCheckout(
+          payment,
+          `Companion booking ${booking.bookingCode}`,
+          { name: user.legalName, contact: user.phone }
+        );
+      } catch (checkoutErr: any) {
+        if (payment?.orderId) {
+          const isCancelled = checkoutErr?.message?.includes('closed') || checkoutErr?.message?.includes('dismiss') || checkoutErr?.message?.includes('cancel');
+          apiFetch(isCancelled ? '/api/payments/razorpay/cancel-order' : '/api/payments/razorpay/fail-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: payment.orderId,
+              reason: checkoutErr?.message
+            })
+          }).catch(() => {});
+        }
+        throw checkoutErr;
+      }
+
+      const verifyRes = await apiFetch('/api/payments/razorpay/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          orderId: checkoutResult.razorpay_order_id,
+          paymentId: checkoutResult.razorpay_payment_id,
+          signature: checkoutResult.razorpay_signature
+        })
+      });
+      const verification = await verifyRes.json();
+      if (!verifyRes.ok || !verification.success) {
+        throw new Error(verification.error || 'Payment was not confirmed by the backend.');
+      }
+
+      setBookingSuccessMsg(`Booking ${verification.booking?.bookingCode || booking.bookingCode} confirmed! Opening chat with ${selectedCompanion?.name}...`);
+      fetchMyBookings();
+
+      const activeBookingObj = {
+        id: verification.booking?.id || booking.id,
+        bookingCode: verification.booking?.bookingCode || booking.bookingCode,
+        companionId: selectedCompanion?.id || booking.companionId,
+        companionName: selectedCompanion?.name || 'Companion',
+        clientName: user.profileName || user.legalName || 'Client',
+        serviceName: booking.serviceName || 'Social Companionship'
+      };
+
+      setTimeout(() => {
+        handleCloseBookingModal();
+        setActiveChatBooking(activeBookingObj);
+        setActiveTab('chat');
+      }, 1500);
+    } catch (err: any) {
+      setBookingError(err.message || 'Payment processing error.');
     } finally {
       setBookingInProgress(false);
     }
@@ -2283,7 +2363,7 @@ export const ClientDashboard: React.FC = () => {
 
       {/* BOOKING MODAL */}
       {selectedCompanion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
           <div className="relative w-full max-w-lg my-8 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 text-slate-100">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
               <div className="flex items-center gap-3">
@@ -2297,12 +2377,12 @@ export const ClientDashboard: React.FC = () => {
                     Book Companion: {selectedCompanion.name}
                   </h3>
                   <span className="text-xs text-amber-400">
-                    ₹{(selectedCompanion.rates?.hourlyPaise / 100).toFixed(0)}/hour
+                    ₹{Math.round(((selectedCompanion.rates?.hourlyPaise ?? 49900)) / 100)}/hour
                   </span>
                 </div>
               </div>
               <button
-                onClick={() => setSelectedCompanion(null)}
+                onClick={handleCloseBookingModal}
                 className="p-1 rounded-lg text-slate-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
@@ -2323,110 +2403,266 @@ export const ClientDashboard: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  Booking Date
-                </label>
-                <input
-                  type="date"
-                  value={bookingDate}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={e => setBookingDate(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
-                  required
-                />
-              </div>
+            {/* STEP 1: BOOKING FORM */}
+            {bookingStep === 'form' && (() => {
+              const basePaise = (selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours;
+              const baseAmount = basePaise / 100;
+              const platformFee = baseAmount * 0.15;
+              const cgst = baseAmount * 0.09;
+              const sgst = baseAmount * 0.09;
+              const totalGst = cgst + sgst;
+              const totalPayable = baseAmount + totalGst;
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
-                    Start Time
-                  </label>
-                  <input
-                    type="time"
-                    value={bookingTime}
-                    onChange={e => setBookingTime(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
-                    required
-                  />
-                </div>
+              return (
+                <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      Booking Date
+                    </label>
+                    <input
+                      type="date"
+                      value={bookingDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={e => setBookingDate(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                      required
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
-                    Duration (Hours)
-                  </label>
-                  <select
-                    value={bookingDurationHours}
-                    onChange={e => setBookingDurationHours(parseInt(e.target.value, 10))}
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">
+                        Start Time
+                      </label>
+                      <input
+                        type="time"
+                        value={bookingTime}
+                        onChange={e => setBookingTime(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">
+                        Duration (Hours)
+                      </label>
+                      <select
+                        value={bookingDurationHours}
+                        onChange={e => setBookingDurationHours(parseInt(e.target.value, 10))}
+                        className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                      >
+                        <option value={1}>1 Hour</option>
+                        <option value={2}>2 Hours</option>
+                        <option value={3}>3 Hours</option>
+                        <option value={4}>4 Hours (Half-Day)</option>
+                        <option value={8}>8 Hours (Full-Day)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      Public Meeting Location
+                    </label>
+                    <LocationAutocomplete
+                      value={meetingLocation}
+                      onChange={setMeetingLocation}
+                      mode="full"
+                      accentColor="amber"
+                      placeholder="e.g. Starbucks Cafe, South City Mall, MG Road..."
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      Experience Preferences / Notes
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={bookingNotes}
+                      onChange={e => setBookingNotes(e.target.value)}
+                      placeholder="Any particular topics, places to visit, or walking routes..."
+                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  {/* Price Calculation Card (Detailed with 18% GST Breakdown) */}
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Companion Fee ({bookingDurationHours}h):</span>
+                      <span className="text-slate-200">₹{baseAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Platform Maintenance (15% included):</span>
+                      <span className="text-slate-400">₹{platformFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>CGST (9%):</span>
+                      <span className="text-slate-200">₹{cgst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>SGST (9%):</span>
+                      <span className="text-slate-200">₹{sgst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-slate-100 pt-1.5 border-t border-slate-800 text-sm">
+                      <span>Total Payable (incl. 18% GST):</span>
+                      <span className="text-amber-400">₹{totalPayable.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={bookingInProgress || user?.isSuspended}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-sm shadow-xl shadow-pink-500/20 transition-all hover:scale-[1.01] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
-                    <option value={1}>1 Hour</option>
-                    <option value={2}>2 Hours</option>
-                    <option value={3}>3 Hours</option>
-                    <option value={4}>4 Hours (Half-Day)</option>
-                    <option value={8}>8 Hours (Full-Day)</option>
-                  </select>
+                    <CalendarCheck className="w-4 h-4" />
+                    <span>{user?.isSuspended ? 'Account Suspended - Booking Disabled' : (bookingInProgress ? 'Sending Request...' : 'Send Booking Request')}</span>
+                  </button>
+
+                  <p className="text-[10px] text-center text-slate-500">
+                    Companion will receive your request immediately. Payment is only charged after companion accepts.
+                  </p>
+                </form>
+              );
+            })()}
+
+            {/* STEP 2: WAITING FOR COMPANION ACCEPTANCE */}
+            {bookingStep === 'waiting_acceptance' && (() => {
+              const basePaise = (selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours;
+              const totalPayable = (basePaise * 1.18) / 100;
+              return (
+                <div className="py-6 px-2 text-center space-y-4 animate-fade-in">
+                  <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-full bg-pink-500/20 animate-ping" />
+                    <div className="relative w-16 h-16 rounded-full bg-slate-800 border-2 border-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/30">
+                      <Clock className="w-8 h-8 text-pink-400 animate-pulse" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-base font-bold text-slate-100">
+                      Waiting for Companion Acceptance...
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
+                      Booking request sent to <strong className="text-pink-300">{selectedCompanion.name}</strong>. Please keep this screen open while the companion confirms availability.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-left text-xs space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Date & Time:</span>
+                      <span className="font-semibold text-slate-200">{bookingDate} ({bookingTime}, {bookingDurationHours} hrs)</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Meeting Venue:</span>
+                      <span className="font-semibold text-slate-200 truncate max-w-[200px]">{meetingLocation}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-800 pt-2 font-bold">
+                      <span>Total Amount:</span>
+                      <span className="text-amber-400">₹{totalPayable.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseBookingModal}
+                    className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    Cancel Request
+                  </button>
                 </div>
-              </div>
+              );
+            })()}
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  Public Meeting Location
-                </label>
-                <LocationAutocomplete
-                  value={meetingLocation}
-                  onChange={setMeetingLocation}
-                  mode="full"
-                  accentColor="amber"
-                  placeholder="e.g. Starbucks Cafe, South City Mall, MG Road..."
-                  required
-                />
-              </div>
+            {/* STEP 3: BOOKING ACCEPTED -> PROCEED TO CHECKOUT */}
+            {bookingStep === 'accepted' && (() => {
+              const basePaise = (selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours;
+              const baseAmount = basePaise / 100;
+              const cgst = baseAmount * 0.09;
+              const sgst = baseAmount * 0.09;
+              const totalGst = cgst + sgst;
+              const totalPayable = baseAmount + totalGst;
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  Experience Preferences / Notes
-                </label>
-                <textarea
-                  rows={2}
-                  value={bookingNotes}
-                  onChange={e => setBookingNotes(e.target.value)}
-                  placeholder="Any particular topics, places to visit, or walking routes..."
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
-                />
-              </div>
+              return (
+                <div className="py-6 px-2 text-center space-y-4 animate-fade-in">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                  </div>
 
-              {/* Price Calculation Card */}
-              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-                <div className="flex justify-between text-slate-400">
-                  <span>Companion Fee ({bookingDurationHours}h):</span>
-                  <span>₹{(((selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours) / 100).toFixed(2)}</span>
+                  <div>
+                    <h4 className="text-base font-bold text-emerald-300">
+                      Booking Accepted by {selectedCompanion.name}!
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                      The companion has accepted your request. Complete your payment to confirm the session and immediately open chat.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-left text-xs space-y-2">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Booking Fee ({bookingDurationHours}h):</span>
+                      <span className="text-slate-200 font-semibold">₹{baseAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>CGST (9%):</span>
+                      <span className="text-slate-200">₹{cgst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>SGST (9%):</span>
+                      <span className="text-slate-200">₹{sgst.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300 border-t border-slate-800 pt-2 font-bold text-sm">
+                      <span>Total Payable Amount:</span>
+                      <span className="text-emerald-400">₹{totalPayable.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleProceedToCheckout}
+                    disabled={bookingInProgress}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-extrabold text-sm shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    <span>{bookingInProgress ? 'Connecting to Payment Gateway...' : 'Continue to Checkout'}</span>
+                  </button>
                 </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Admin Platform Fee (15% included):</span>
-                  <span>₹{(((selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours * 0.15) / 100).toFixed(2)}</span>
+              );
+            })()}
+
+            {/* STEP 4: COMPANION BUSY / REJECTED */}
+            {bookingStep === 'rejected' && (
+              <div className="py-6 px-2 text-center space-y-4 animate-fade-in">
+                <div className="w-16 h-16 rounded-full bg-amber-500/20 border-2 border-amber-500 mx-auto flex items-center justify-center shadow-lg shadow-amber-500/30">
+                  <AlertTriangle className="w-8 h-8 text-amber-400" />
                 </div>
-                <div className="flex justify-between font-bold text-slate-100 pt-1.5 border-t border-slate-800 text-sm">
-                  <span>Total Payable:</span>
-                  <span className="text-amber-400">
-                    ₹{(((selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours) / 100).toFixed(2)}
-                  </span>
+
+                <div>
+                  <h4 className="text-base font-bold text-amber-300">
+                    This Companion is Currently Busy
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
+                    {selectedCompanion.name} is unable to take this booking right now. Don't worry, there are other verified companions available near you!
+                  </p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCloseBookingModal();
+                    setActiveTab('overview');
+                    fetchCompanions();
+                  }}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-sm shadow-xl shadow-pink-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <Compass className="w-4 h-4" />
+                  <span>Book Another Companion</span>
+                </button>
               </div>
+            )}
 
-              <button
-                type="submit"
-                disabled={bookingInProgress || user?.isSuspended}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] disabled:opacity-50"
-              >
-                {user?.isSuspended ? 'Account Suspended - Booking Disabled' : (bookingInProgress ? 'Preparing secure checkout...' : 'Continue to Razorpay Checkout')}
-              </button>
-
-              <p className="text-[10px] text-center text-slate-500">
-                100% money back guarantee if cancelled before companion arrival. Meeting verified by Start & Finish OTP.
-              </p>
-            </form>
           </div>
         </div>
       )}
