@@ -63,33 +63,38 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
 const triggerSystemNotification = (title: string, options?: any) => {
   try {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission === 'default') {
-      try {
-        const p = Notification.requestPermission();
-        if (p && typeof (p as any).catch === 'function') {
-          (p as any).catch(() => {});
-        }
-      } catch {}
-      return;
-    }
     if (Notification.permission !== 'granted') return;
 
     const notifOptions = {
       icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
       badge: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
-      tag: 'pairuptoday-booking',
+      tag: options?.tag || `booking-${Date.now()}`,
       renotify: true,
       requireInteraction: true,
-      vibrate: [500, 250, 500, 250, 500, 250, 500],
+      silent: false,
+      vibrate: [500, 200, 500, 200, 500, 200, 500],
+      actions: [
+        { action: 'open', title: '👀 View Booking' },
+        { action: 'decline', title: '❌ Decline' }
+      ],
       ...(options || {})
     };
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((reg) => {
+      const showViaSw = (reg: ServiceWorkerRegistration) => {
         if (reg && typeof reg.showNotification === 'function') {
           reg.showNotification(title, notifOptions).catch(() => {});
         }
-      }).catch(() => {});
+      };
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg) {
+          showViaSw(reg);
+        } else {
+          navigator.serviceWorker.ready.then(showViaSw).catch(() => {});
+        }
+      }).catch(() => {
+        navigator.serviceWorker.ready.then(showViaSw).catch(() => {});
+      });
       return;
     }
 
@@ -399,6 +404,24 @@ export const CompanionDashboard: React.FC = () => {
   const [endOtpInputs, setEndOtpInputs] = useState<Record<string, string>>({});
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationPermission, setNotificationPermission] = useState<string>(() => {
+    return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted';
+  });
+
+  const handleRequestNotificationPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const p = await Notification.requestPermission();
+        setNotificationPermission(p);
+        if (p === 'granted') {
+          setActionMsg('🔔 Alerts enabled! You will now receive instant overlay notifications.');
+          setTimeout(() => setActionMsg(null), 4000);
+        }
+      } catch (e) {
+        console.warn('Notification permission error', e);
+      }
+    }
+  };
 
   // Active chat state
   const [activeChatBooking, setActiveChatBooking] = useState<any | null>(null);
@@ -640,13 +663,24 @@ export const CompanionDashboard: React.FC = () => {
     stopRingtone();
     try {
       const res = await apiFetch(`/api/bookings/${bookingId}/accept`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setIncomingBookingRequest(null);
         setActionMsg('Booking Accepted! Waiting for client to complete payment.');
         setTimeout(() => setActionMsg(null), 4000);
         fetchBookings();
+      } else {
+        setIncomingBookingRequest(null);
+        if (data.canceledByClient || (data.error && /canceled by client/i.test(data.error))) {
+          setActionMsg('⚠️ Canceled by client. This booking request is no longer available.');
+        } else {
+          setActionMsg(data.error || 'Failed to accept booking.');
+        }
+        setTimeout(() => setActionMsg(null), 5000);
+        fetchBookings();
       }
     } catch (err: any) {
+      setIncomingBookingRequest(null);
       setActionMsg(err.message || 'Failed to accept booking.');
     }
   };
@@ -707,14 +741,18 @@ export const CompanionDashboard: React.FC = () => {
     // Auto-prompt notification permission when dashboard mounts so background overlay alerts work
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
       try {
-        Notification.requestPermission().catch(() => {});
+        Notification.requestPermission().then(p => setNotificationPermission(p)).catch(() => {});
       } catch {}
     }
 
-    // Connect to real-time Companion Alerts SSE Stream (<50ms delivery)
+    // Connect to real-time Companion Alerts SSE Stream (<50ms delivery) with Bearer token authentication
     let eventSource: EventSource | null = null;
     try {
-      eventSource = new EventSource('/api/companion/alerts/stream');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('pairup_token') || '' : '';
+      const sseUrl = token 
+        ? `/api/companion/alerts/stream?token=${encodeURIComponent(token)}`
+        : '/api/companion/alerts/stream';
+      eventSource = new EventSource(sseUrl);
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -735,6 +773,8 @@ export const CompanionDashboard: React.FC = () => {
               if (current && current.id === data.bookingId) return null;
               return current;
             });
+            setActionMsg('⚠️ Booking Request was Canceled by Client.');
+            setTimeout(() => setActionMsg(null), 4000);
             fetchBookings();
           } else if (data.type === 'BOOKING_ACCEPTED') {
             stopRingtone();
@@ -1642,6 +1682,26 @@ export const CompanionDashboard: React.FC = () => {
           <div className="p-3.5 rounded-xl bg-pink-500/10 border border-pink-500/30 text-xs text-pink-300 flex items-center justify-between">
             <span>{actionMsg}</span>
             <button onClick={() => setActionMsg(null)}><X className="w-4 h-4" /></button>
+          </div>
+        )}
+
+        {/* Instant Alert Permissions Banner */}
+        {notificationPermission !== 'granted' && (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-pink-500/15 border border-amber-500/40 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <Bell className="w-5 h-5 text-amber-400 shrink-0 animate-bounce" />
+              <div>
+                <span className="font-bold text-amber-300 block">Enable Instant Heads-Up Booking Alerts</span>
+                <span className="text-[11px] text-slate-300">Allow notifications to receive immediate overlay alerts & ringtone even when using WhatsApp, Facebook, or other apps.</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRequestNotificationPermission}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-xs shadow-md shrink-0 cursor-pointer active:scale-95 transition-all"
+            >
+              🔔 Enable Alerts
+            </button>
           </div>
         )}
 

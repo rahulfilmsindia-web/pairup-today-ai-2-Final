@@ -1394,9 +1394,13 @@ function saveDB(state: DBState) {
 
 function getBearerToken(req: Request): string {
   const header = req.headers.authorization;
-  return typeof header === 'string' && header.startsWith('Bearer ')
-    ? header.slice(7).trim()
-    : '';
+  if (typeof header === 'string' && header.startsWith('Bearer ')) {
+    return header.slice(7).trim();
+  }
+  if (typeof req.query?.token === 'string' && req.query.token.trim()) {
+    return req.query.token.trim();
+  }
+  return '';
 }
 
 function hasApplicationRole(user: any, role: 'CLIENT' | 'COMPANION'): boolean {
@@ -3801,6 +3805,17 @@ app.post('/api/bookings/:id/accept', async (req: Request, res: Response) => {
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
     if (booking.companionId !== authUser.id) {
       return res.status(403).json({ error: 'Only the assigned companion can accept this booking.' });
+    }
+
+    // Check if the booking was already cancelled by client
+    const currentTracked = bookingAcceptanceMap.get(bookingId);
+    if (booking.status === 'CANCELLED' || currentTracked?.rejectionReason === 'CLIENT_CANCELLED') {
+      return res.status(409).json({
+        success: false,
+        error: 'Canceled by client. This booking request is no longer available.',
+        canceledByClient: true,
+        bookingId
+      });
     }
     const baseAmt = Number(booking.bookingAmountPaise || booking.amountPaise || 49900);
     const cgst = Math.round(baseAmt * 0.09);

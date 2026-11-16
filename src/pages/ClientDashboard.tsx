@@ -93,8 +93,8 @@ export const ClientDashboard: React.FC = () => {
   const [bookingError, setBookingError] = useState<string | null>(null);
 
   const handleCloseBookingModal = () => {
-    // If client cancels or closes during waiting_acceptance or pending, notify server to immediately dismiss companion alert
-    if (activeBookingResponse?.booking?.id && (bookingStep === 'waiting_acceptance' || (bookingStep as string) === 'pending')) {
+    // If client cancels or closes during waiting_acceptance, accepted (before checkout) or pending, notify server to immediately dismiss companion alert
+    if (activeBookingResponse?.booking?.id && (bookingStep === 'waiting_acceptance' || bookingStep === 'accepted' || (bookingStep as string) === 'pending')) {
       apiFetch(`/api/bookings/${activeBookingResponse.booking.id}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
