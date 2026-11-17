@@ -3002,7 +3002,7 @@ async function pushCompanionAlert(companionId: string, event: { type: string; [k
       const profile = getDatabaseType() === 'supabase'
         ? await databaseAdapter.getCompanionProfile(companionId)
         : db.companionProfiles[companionId];
-      if (profile && (profile.isPaused || profile.isLive === false)) {
+      if (profile && profile.isPaused === true) {
         console.log(`[pushCompanionAlert] Suppressed NEW_BOOKING_REQUEST for offline companion: ${companionId}`);
         return;
       }
@@ -3998,8 +3998,12 @@ app.post('/api/bookings/create', async (req: Request, res: Response) => {
     if (!companion || !profile || profile.isInitialListing) {
       return res.status(404).json({ error: 'This Companion is unavailable for booking.' });
     }
-    if (profile.isPaused || !profile.isLive) {
+    if (profile.isPaused === true) {
       return res.status(400).json({ error: 'This companion is currently offline and not accepting new booking requests.' });
+    }
+    if (!profile.isLive && !profile.isPaused) {
+      await databaseAdapter.updateCompanionProfile(companionId, { isLive: true }).catch(() => null);
+      profile.isLive = true;
     }
 
     const hourlyPaise = profile?.rates?.hourlyPaise || 49900;

@@ -191,7 +191,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
     }
 
     // Check if companion is currently in our active online list
-    if (!companions.some(c => c.id === companion.id)) {
+    if (companions.length > 0 && !companions.some(c => String(c.id) === String(companion.id))) {
       setBookingAlert({
         id: companion.id,
         message: `${companion.name} is currently offline and not accepting new bookings.`
