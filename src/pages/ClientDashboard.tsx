@@ -475,8 +475,8 @@ export const ClientDashboard: React.FC = () => {
   };
 
   // Fetch verified LIVE companions
-  const fetchCompanions = async () => {
-    setLoadingCompanions(true);
+  const fetchCompanions = async (isBackgroundSync = false) => {
+    if (!isBackgroundSync) setLoadingCompanions(true);
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.append('query', searchQuery);
@@ -491,7 +491,7 @@ export const ClientDashboard: React.FC = () => {
     } catch (err) {
       console.error('Failed to load companions', err);
     } finally {
-      setLoadingCompanions(false);
+      if (!isBackgroundSync) setLoadingCompanions(false);
     }
   };
 
@@ -538,9 +538,10 @@ export const ClientDashboard: React.FC = () => {
     fetchNotifications();
     refreshUserData();
     const interval = setInterval(() => {
+      fetchCompanions(true);
       fetchMyBookings();
       fetchNotifications();
-    }, 7000);
+    }, 6000);
     return () => clearInterval(interval);
   }, [user?.id, selectedServiceId, selectedCity]);
 

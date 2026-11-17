@@ -13,7 +13,8 @@ import { sendToMultipleDevices } from './server/services/fcm.ts';
 import { getPlaceAutocomplete, geocodeAddress, reverseGeocode, getDistanceMatrix, calculateDistance, isGoogleMapsConfigured } from './server/services/googlemaps.ts';
 import { hashPassword, verifyPassword } from './server/services/passwords.ts';
 import { PAIRUP_SERVICES } from './src/constants/services.ts';
-import webpush from 'web-push';
+import * as webpushModule from 'web-push';
+const webpush: any = (webpushModule as any).default || webpushModule;
 
 const KNOWN_CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   'delhi': { lat: 28.6139, lng: 77.2090 },
