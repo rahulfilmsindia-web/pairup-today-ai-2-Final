@@ -12,7 +12,7 @@ import {
   MessageSquare, Navigation, AlertTriangle, PhoneCall, RefreshCw, X,
   User, Calendar, DollarSign, Bell, Settings, LifeBuoy, LogOut,
   Pause, Power, Shield, FileText, CheckSquare, Star, ArrowLeft,
-  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound
+  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound, Menu, Heart
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -134,6 +134,7 @@ export const CompanionDashboard: React.FC = () => {
     | 'settings';
 
   const [activeTab, setActiveTab] = useState<CompanionTab>('overview');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusData, setStatusData] = useState<any | null>(null);
   const hasAutoNavigatedRef = useRef(false);
@@ -1854,156 +1855,317 @@ export const CompanionDashboard: React.FC = () => {
   }
 
   // All 3 gates satisfied → render full Companion Dashboard below.
+  const companionNavTabs = [
+    { id: 'overview', label: 'Overview', icon: Sparkles },
+    { id: 'profile', label: 'My Host Profile', icon: User },
+    { id: 'kyc-status', label: 'KYC Status', icon: ShieldCheck, badge: conditions.kycApproved ? undefined : 'Pending' },
+    { id: 'services', label: '24 Services Offered', icon: CheckSquare },
+    { id: 'rates', label: 'Rate Management', icon: DollarSign },
+    { id: 'availability', label: 'Availability Calendar', icon: Calendar },
+    { id: 'membership', label: 'Membership Plan', icon: CreditCard, badge: conditions.membershipValid ? undefined : 'Renew' },
+    { id: 'bank', label: 'Bank Verification', icon: Landmark, badge: conditions.bankVerified ? undefined : 'Unverified' },
+    { id: 'requests', label: 'Booking Requests', icon: Clock, badge: pendingBookings.length || undefined },
+    { id: 'upcoming', label: 'Upcoming Sessions', icon: Navigation, badge: upcomingBookings.length || undefined },
+    { id: 'history', label: 'Booking History', icon: FileText, badge: pastBookings.length || undefined },
+    { id: 'chat', label: 'Secure Client Chat', icon: MessageSquare, badge: 2 },
+    { id: 'wallet', label: 'Earnings & Wallet', icon: Wallet },
+    { id: 'locked-earnings', label: 'Locked Escrow (48h)', icon: Lock },
+    { id: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.length || undefined },
+    { id: 'help-safety', label: 'Help & Safety', icon: Shield },
+    { id: 'settings', label: 'Account Settings', icon: Settings },
+  ];
 
   return (
     <ErrorBoundary fallbackTitle="Companion Dashboard">
-      <div className="min-h-screen bg-slate-950 text-slate-100 py-6 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Top Header Card */}
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <img
-                src={user?.profilePhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'}
-                alt={user?.legalName}
-                className="w-14 h-14 rounded-full object-cover ring-2 ring-pink-500"
-              />
-              <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full ring-2 ring-slate-900 ${isLive ? 'bg-emerald-400' : 'bg-rose-500 animate-pulse'}`} />
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-slate-100">
-                  {user?.profileName || user?.legalName || 'Companion Host'}
-                </h1>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/30 font-semibold">
-                  Companion Host
-                </span>
-                {isAvailabilityPaused && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">
-                    PAUSED
-                  </span>
-                )}
+      <div className="min-h-screen bg-[#f5f6fc] text-slate-800 flex overflow-x-hidden relative">
+        {/* ============================================================== */}
+        {/* 1. DESKTOP / TABLET DOCKED SIDEBAR (INDIGO / VIOLET GRADIENT)   */}
+        {/* ============================================================== */}
+        <aside className="w-64 xl:w-72 bg-gradient-to-b from-[#0b0826] via-[#100c31] to-[#1c1248] text-white shrink-0 min-h-screen border-r border-[#261b5c]/50 hidden lg:flex flex-col select-none relative overflow-hidden z-20">
+          {/* Brand Header */}
+          <div className="p-5 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="relative w-9 h-9 rounded-2xl bg-gradient-to-tr from-pink-500 via-rose-500 to-purple-600 p-0.5 shadow-lg shadow-pink-500/30 flex items-center justify-center shrink-0">
+                <div className="w-full h-full bg-[#120c32] rounded-[14px] flex items-center justify-center">
+                  <Heart className="w-5 h-5 text-pink-400 fill-pink-400" />
+                </div>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5 font-mono">
-                {user?.phone} · Dynamic GPS Discovery Active
-              </p>
+              <div>
+                <div className="text-base font-extrabold tracking-tight text-white flex items-center">
+                  <span>PairUp</span>
+                  <span className="text-pink-400">Today</span>
+                </div>
+                <div className="text-[9px] font-bold tracking-wider uppercase text-purple-300/80 -mt-0.5">
+                  Host Station
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* EXACT 3 ACTIVATION GATES BADGES (SECTION 8) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${
-              conditions.kycApproved
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-            }`}>
-              {conditions.kycApproved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-              <span>1. KYC: {conditions.kycApproved ? 'APPROVED' : 'PENDING'}</span>
-            </div>
+          {/* Navigation Tabs Menu */}
+          <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-thin scrollbar-thumb-purple-900/40">
+            {companionNavTabs.map((item: any) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id as CompanionTab)}
+                  className={`w-full px-3.5 py-2.5 rounded-xl transition-all flex items-center justify-between text-xs font-semibold cursor-pointer ${
+                    isActive
+                      ? 'bg-gradient-to-r from-[#5038ee] to-[#7c3aed] text-white shadow-lg shadow-purple-600/30 font-bold'
+                      : 'text-slate-300 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300/80'}`} />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      typeof item.badge === 'string'
+                        ? 'bg-amber-400 text-slate-950'
+                        : 'bg-rose-500 text-white'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
 
-            <div className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${
-              conditions.membershipValid
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-            }`}>
-              {conditions.membershipValid ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              <span>2. MEMBERSHIP: {conditions.membershipValid ? 'PAID & VALID' : 'INACTIVE'}</span>
+            <div className="pt-2 border-t border-white/10 mt-2">
+              <button
+                onClick={() => {
+                  if (window.confirm('Log out of PairUpToday Companion portal?')) {
+                    logout();
+                  }
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-3 text-xs font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-950/30 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
             </div>
+          </nav>
 
-            <div className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${
-              conditions.bankVerified
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-            }`}>
-              {conditions.bankVerified ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              <span>3. BANK: {conditions.bankVerified ? 'VERIFIED' : 'UNVERIFIED'}</span>
+          {/* Couple Silhouette Artwork with Neon Glow at Bottom */}
+          <div className="w-full pt-2 pb-2 px-3 select-none pointer-events-none relative mt-auto border-t border-white/5">
+            <div className="relative w-full h-24 flex items-end justify-center overflow-hidden">
+              <div className="absolute -bottom-3 w-36 h-20 bg-gradient-to-t from-pink-500/30 via-purple-600/20 to-transparent blur-xl rounded-full" />
+              <div className="absolute top-1 left-6 text-pink-400 opacity-90 animate-pulse">
+                <Heart className="w-3 h-3 fill-pink-500 text-pink-500" />
+              </div>
+              <div className="absolute top-0 right-8 text-rose-300 opacity-80 animate-bounce">
+                <Heart className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
+              </div>
+              <div className="absolute top-5 right-5 text-pink-300 opacity-70">
+                <Heart className="w-2 h-2 fill-pink-400 text-pink-400" />
+              </div>
+              <svg className="w-full h-full" viewBox="0 0 240 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="cmpGlowWave" x1="0" y1="0" x2="240" y2="100" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#6366f1" stopOpacity="0.8" />
+                    <stop offset="0.5" stopColor="#c026d3" stopOpacity="0.85" />
+                    <stop offset="1" stopColor="#ec4899" stopOpacity="0.9" />
+                  </linearGradient>
+                  <linearGradient id="cmpSilFill" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#09061b" />
+                    <stop offset="1" stopColor="#1a0f3d" />
+                  </linearGradient>
+                </defs>
+                <path d="M 44 100 L 44 68 C 44 65 48 61 54 59 C 58 57 63 55 66 50 C 70 45 69 36 67 32 C 66 28 63 24 59 23 C 54 22 49 25 47 28 C 44 26 39 28 38 33 C 37 38 38 43 41 47 C 42 49 43 51 42 55 C 40 60 32 64 26 69 L 26 100 Z" fill="url(#cmpSilFill)" />
+                <path d="M 110 100 L 110 69 C 105 64 97 60 95 55 C 94 51 95 49 96 47 C 99 44 100 38 99 33 C 98 27 93 24 89 27 C 87 23 83 21 77 22 C 73 23 70 27 69 31 C 67 35 66 44 70 49 C 74 54 79 56 83 58 C 88 60 92 64 92 68 L 92 100 Z" fill="url(#cmpSilFill)" />
+                <path d="M 0 82 C 55 70 100 96 150 78 C 180 68 210 72 240 82 L 240 100 L 0 100 Z" fill="url(#cmpGlowWave)" opacity="0.3" />
+                <path d="M 0 89 C 45 80 110 98 160 84 C 190 77 215 87 240 92 L 240 100 L 0 100 Z" fill="url(#cmpGlowWave)" opacity="0.6" />
+                <path d="M 0 94 C 35 89 90 100 170 91 C 200 87 220 93 240 97 L 240 100 L 0 100 Z" fill="url(#cmpGlowWave)" />
+              </svg>
             </div>
-            {/* Notification Bell — always visible in header */}
-            <button
-              onClick={() => setActiveTab('notifications')}
-              title="Notifications"
-              className={`relative p-2.5 rounded-xl border transition-all shadow ml-1 ${
-                activeTab === 'notifications'
-                  ? 'bg-pink-600 text-white border-pink-500 shadow-pink-500/20'
-                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}
-            >
-              <Bell className="w-4 h-4" />
-              {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-extrabold px-1 shadow">
-                  {notifications.length > 9 ? '9+' : notifications.length}
+          </div>
+        </aside>
+
+        {/* ============================================================== */}
+        {/* 2. MOBILE SLIDE-OVER DRAWER SIDEBAR                            */}
+        {/* ============================================================== */}
+        {isMobileSidebarOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden flex">
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setIsMobileSidebarOpen(false)}
+            />
+            <aside className="relative w-72 bg-gradient-to-b from-[#0b0826] via-[#100c31] to-[#1c1248] text-white flex flex-col z-10 shadow-2xl h-full">
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-pink-400 fill-pink-400" />
+                  <span className="font-extrabold text-white text-base">Host Station</span>
+                </div>
+                <button
+                  onClick={() => setIsMobileSidebarOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-1">
+                {companionNavTabs.map((item: any) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id as CompanionTab);
+                        setIsMobileSidebarOpen(false);
+                      }}
+                      className={`w-full px-3 py-2.5 rounded-xl transition-all flex items-center justify-between text-xs font-semibold cursor-pointer ${
+                        isActive
+                          ? 'bg-gradient-to-r from-[#5038ee] to-[#7c3aed] text-white shadow-lg shadow-purple-600/30 font-bold'
+                          : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Icon className="w-4 h-4 text-purple-300" />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.badge && (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold">
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </aside>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* 3. MAIN COMPANION DASHBOARD CONTENT AREA                       */}
+        {/* ============================================================== */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+          {/* Topbar matching professional design */}
+          <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-3 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-xs">
+            <div className="flex items-center gap-3">
+              {/* Mobile Hamburger Button */}
+              <button
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="lg:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+
+              {/* 3-Gate Verification Badges in Header */}
+              <div className="hidden sm:flex items-center gap-2">
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 border ${
+                  conditions.kycApproved 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
+                  {conditions.kycApproved ? '✓ KYC APPROVED' : '⏳ KYC PENDING'}
                 </span>
-              )}
-            </button>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 border ${
+                  conditions.membershipValid 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                }`}>
+                  {conditions.membershipValid ? '✓ MEMBERSHIP ACTIVE' : '✕ MEMBERSHIP'}
+                </span>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 border ${
+                  conditions.bankVerified 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                }`}>
+                  {conditions.bankVerified ? '✓ BANK VERIFIED' : '✕ BANK'}
+                </span>
+              </div>
+            </div>
 
-            {/* GO LIVE (ONLINE / OFFLINE) TOGGLE SWITCH RIGHT NEXT TO NOTIFICATION */}
-            <div className="flex items-center pl-1 sm:pl-2 border-l border-slate-800 ml-1 gap-1.5">
+            <div className="flex items-center gap-2.5">
+              {/* GO LIVE ONLINE/OFFLINE TOGGLE SWITCH */}
               <button
                 type="button"
                 onClick={handleToggleAvailabilityPause}
                 disabled={togglingOnline}
-                title={!isAvailabilityPaused ? 'Status: ONLINE (Live & visible to clients) — Click to go Offline' : 'Status: OFFLINE — Click to go Online'}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
+                title={!isAvailabilityPaused ? 'Status: ONLINE — Click to go Offline' : 'Status: OFFLINE — Click to go Online'}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer ${
                   !isAvailabilityPaused
-                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/25 shadow-emerald-950/40 ring-1 ring-emerald-500/30'
-                    : 'bg-slate-800/90 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 shadow-black/40'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 ring-1 ring-emerald-400/30'
+                    : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {/* Glowing status indicator dot */}
                 <span className="relative flex h-2.5 w-2.5 shrink-0">
                   {!isAvailabilityPaused && (
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   )}
-                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${!isAvailabilityPaused ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${!isAvailabilityPaused ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
                 </span>
-
-                <div className="flex flex-col text-left">
-                  <span className="text-[9px] uppercase font-bold tracking-wider leading-none text-slate-400">
-                    Go Live
-                  </span>
-                  <span className={`text-[11px] font-extrabold leading-tight ${!isAvailabilityPaused ? 'text-emerald-300' : 'text-slate-300'}`}>
-                    {!isAvailabilityPaused ? 'ONLINE' : 'OFFLINE'}
-                  </span>
-                </div>
-
-                {/* Animated pill switch */}
-                <div className={`w-8 h-4.5 rounded-full p-0.5 transition-colors ml-0.5 flex items-center ${
-                  !isAvailabilityPaused ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'
-                }`}>
-                  <div className="w-3.5 h-3.5 rounded-full bg-white shadow-sm" />
-                </div>
+                <span className="font-extrabold">{!isAvailabilityPaused ? 'LIVE' : 'OFFLINE'}</span>
               </button>
 
-              {/* Floating Picture-in-Picture Overlay Button */}
+              {/* Picture-in-Picture Floating Overlay Button */}
               <button
                 type="button"
                 onClick={togglePipOverlay}
-                title={isPipActive ? 'Floating Overlay ACTIVE on top of other apps - Tap to close' : 'Enable Floating Overlay (stays on top of WhatsApp, Facebook, Instagram & phone calls)'}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
+                title={isPipActive ? 'Floating Overlay ACTIVE' : 'Enable Floating Overlay'}
+                className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
                   isPipActive
-                    ? 'bg-purple-500/25 border-purple-500/60 text-purple-200 ring-1 ring-purple-500/40 shadow-purple-950/40'
-                    : 'bg-slate-800/90 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800'
+                    ? 'bg-purple-50 border-purple-300 text-purple-700'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <span className="text-sm">📺</span>
-                <span className="hidden md:inline">{isPipActive ? 'Overlay ON' : 'Floating PiP'}</span>
+                <span>📺</span>
+                <span>{isPipActive ? 'PiP Active' : 'Floating Overlay'}</span>
               </button>
+
+              {/* Notification Bell */}
+              <button
+                onClick={() => setActiveTab('notifications')}
+                title="Notifications"
+                className="relative p-2.5 rounded-full bg-slate-50 border border-slate-200 text-slate-600 hover:text-purple-600 hover:bg-white transition-all shadow-xs cursor-pointer"
+              >
+                <Bell className="w-4 h-4" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-extrabold px-1 shadow">
+                    {notifications.length > 9 ? '9+' : notifications.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Companion Profile Avatar Pill */}
+              <div
+                onClick={() => setActiveTab('profile')}
+                className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-xs cursor-pointer hover:border-purple-300 hover:bg-white transition-all"
+              >
+                <div className="relative">
+                  <img
+                    src={user?.profilePhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'}
+                    alt={user?.legalName}
+                    className="w-7 h-7 rounded-full object-cover ring-1 ring-purple-400"
+                  />
+                  <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full ring-1 ring-white ${isLive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                </div>
+                <span className="text-xs font-bold text-slate-800 hidden md:inline">
+                  {user?.profileName || user?.legalName || 'Companion Host'}
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400 rotate-90" />
+              </div>
             </div>
-          </div>
-        </div>
+          </header>
 
-        {/* Hidden elements for Background Picture-in-Picture Floating Overlay */}
-        <canvas ref={pipCanvasRef} width={400} height={225} style={{ display: 'none' }} />
-        <video
-          ref={pipVideoRef}
-          playsInline
-          muted
-          autoPlay
-          style={{ position: 'fixed', bottom: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
-        />
+          {/* Hidden elements for Background Picture-in-Picture Floating Overlay */}
+          <canvas ref={pipCanvasRef} width={400} height={225} style={{ display: 'none' }} />
+          <video
+            ref={pipVideoRef}
+            playsInline
+            muted
+            autoPlay
+            style={{ position: 'fixed', bottom: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+          />
 
+          {/* Scrollable Main Container */}
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        
         {/* Persistent Account Suspension Alert */}
         {user?.isSuspended && (
           <div className="p-4 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-200 flex items-start gap-3 shadow-lg shadow-rose-950/60 animate-fade-in">
@@ -2104,286 +2266,168 @@ export const CompanionDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* 18 Visible Navigation Tabs Bar with Left/Right Scroll Arrows */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2 shadow-lg">
-          <div className="relative flex items-center gap-1.5">
-            {/* Left scroll arrow */}
-            <button
-              onClick={() => scrollTabs('left')}
-              className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shrink-0 shadow"
-              title="Scroll tabs left"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            {/* Scrollable tabs */}
-            <div ref={tabsNavRef} className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-smooth text-xs font-medium">
-          <div className="flex items-center gap-1.5 min-w-max text-xs font-medium">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'overview' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Overview</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'profile' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>My Profile</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('kyc-status')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'kyc-status' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>KYC Status</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('services')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'services' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-              <span>Service Management</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('rates')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'rates' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <DollarSign className="w-3.5 h-3.5" />
-              <span>Rate Management</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('availability')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'availability' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Availability Calendar</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('membership')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'membership' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>Membership</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('bank')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'bank' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Landmark className="w-3.5 h-3.5" />
-              <span>Bank Verification</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('requests')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'requests' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Booking Requests ({upcomingBookings.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('upcoming')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'upcoming' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Play className="w-3.5 h-3.5" />
-              <span>Upcoming Sessions</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'history' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Booking History ({pastBookings.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'chat' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Secure Chat</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('wallet')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'wallet' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              <span>Secure Wallet</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('locked-earnings')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'locked-earnings' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Locked Earnings (48h UTC)</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('notifications')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'notifications' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Bell className="w-3.5 h-3.5" />
-              <span>Notifications</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('help-safety')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'help-safety' ? 'bg-rose-500 text-slate-950 font-bold shadow' : 'text-rose-300 hover:bg-rose-950/40'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Help & Safety</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
-                activeTab === 'settings' ? 'bg-pink-600 text-white font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span>Settings</span>
-            </button>
-
-            <button
-              onClick={handleToggleAvailabilityPause}
-              disabled={togglingOnline}
-              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 font-bold cursor-pointer ${
-                isAvailabilityPaused ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30' : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
-              }`}
-            >
-              {isAvailabilityPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
-              <span>{isAvailabilityPaused ? 'Go Online (Live)' : 'Go Offline'}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                if (window.confirm('Log out of PairUpToday Companion portal?')) {
-                  logout();
-                }
-              }}
-              className="px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Logout</span>
-            </button>
-            </div>{/* end min-w-max scrollable inner */}
-            </div>{/* end flex-1 scrollable container */}
-            {/* Right scroll arrow */}
-            <button
-              onClick={() => scrollTabs('right')}
-              className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shrink-0 shadow"
-              title="Scroll tabs right"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>{/* end relative flex wrapper */}
-        </div>
-
-        {/* TAB 1: OVERVIEW */}
+        {/* TAB 1: OVERVIEW (COMPANION HOST STATION) */}
         {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                <span className="text-slate-400 text-xs">Platform Status</span>
-                <div className={`text-xl font-bold mt-1 ${isLive ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {isLive ? 'LIVE & AVAILABLE' : 'ONBOARDING INCOMPLETE'}
+          <div className="space-y-6 animate-fade-in">
+            {/* Hero Welcome Banner */}
+            <div className="relative rounded-3xl bg-gradient-to-r from-[#ffeef2] via-[#fff5f6] to-[#fedfe7] border border-pink-100/90 p-5 sm:p-7 overflow-hidden shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6 w-full md:w-auto z-10">
+                <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden shrink-0 shadow-lg ring-4 ring-white/90">
+                  <img
+                    src={user?.profilePhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'}
+                    alt={user?.legalName}
+                    className="w-full h-full object-cover object-top"
+                  />
+                  <span className={`absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md ${!isAvailabilityPaused ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-200'}`}>
+                    {!isAvailabilityPaused ? '🟢 LIVE' : '⚪ OFFLINE'}
+                  </span>
                 </div>
-                <span className="text-[11px] text-slate-500 mt-1 block">3 Activation Gates Required</span>
+
+                <div className="space-y-2 text-center sm:text-left">
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-[#191040] tracking-tight">
+                    Host Station, <span className="text-[#db2777]">{user?.profileName?.split(' ')[0] || user?.legalName?.split(' ')[0] || 'Companion'}</span>!
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 max-w-md font-medium">
+                    {!isAvailabilityPaused 
+                      ? 'Your profile is currently Live and receiving client requests in your area.' 
+                      : 'Your profile is currently Offline. Switch Online to start receiving client bookings.'}
+                  </p>
+                  <div className="flex items-center gap-3 pt-2 justify-center sm:justify-start">
+                    <button
+                      onClick={handleToggleAvailabilityPause}
+                      disabled={togglingOnline}
+                      className={`px-5 py-2 rounded-full font-bold text-xs shadow-md cursor-pointer transition-transform active:scale-95 flex items-center gap-2 ${
+                        !isAvailabilityPaused
+                          ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30'
+                      }`}
+                    >
+                      {!isAvailabilityPaused ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                      <span>{!isAvailabilityPaused ? 'Pause (Go Offline)' : 'Go Online (Live)'}</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('requests')}
+                      className="px-4 py-2 rounded-full bg-[#5038ee] hover:bg-[#432cc7] text-white font-bold text-xs shadow-md shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Requests ({pendingBookings.length})</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                <span className="text-slate-400 text-xs">Locked Settlement (48h UTC)</span>
-                <div className="text-2xl font-bold text-amber-400 mt-1">
-                  ₹{((statusData?.wallet?.lockedSettlementBalancePaise || 0) / 100).toFixed(2)}
+              <div className="hidden lg:flex items-center gap-3 opacity-25 select-none pointer-events-none pr-4">
+                <Sparkles className="w-10 h-10 text-pink-500" />
+                <Heart className="w-14 h-14 text-rose-400 fill-rose-400" />
+              </div>
+            </div>
+
+            {/* 4 KPI Metric Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Settled Earnings */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between hover:border-emerald-200 transition-all">
+                <div className="space-y-1">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-slate-900">
+                    ₹{((statusData?.wallet?.totalSettledPaise || 0) / 100).toFixed(0)}
+                  </div>
+                  <div className="text-xs font-semibold text-slate-500">Settled Earnings</div>
+                  <div className="text-[11px] font-bold text-emerald-600">Disbursed to Bank</div>
                 </div>
-                <span className="text-[11px] text-slate-400 mt-1 block">Auto-unlocks after safety hold</span>
+                <svg className="w-20 h-10 text-emerald-500 overflow-visible" viewBox="0 0 80 40" fill="none">
+                  <path d="M0 35 C 20 30, 25 15, 45 25 C 60 32, 65 5, 80 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                <span className="text-slate-400 text-xs">Total Settled Earnings</span>
-                <div className="text-2xl font-bold text-emerald-400 mt-1">
-                  ₹{((statusData?.wallet?.totalSettledPaise || 0) / 100).toFixed(2)}
+              {/* 2. Locked Escrow */}
+              <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between hover:border-amber-200 transition-all">
+                <div className="space-y-1">
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1.5">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-slate-900">
+                    ₹{((statusData?.wallet?.lockedSettlementBalancePaise || 0) / 100).toFixed(0)}
+                  </div>
+                  <div className="text-xs font-semibold text-slate-500">Locked Escrow</div>
+                  <div className="text-[11px] font-bold text-amber-600">48h UTC Safety Hold</div>
                 </div>
-                <span className="text-[11px] text-slate-400 mt-1 block">Disbursed via bank transfer</span>
+                <svg className="w-20 h-10 text-amber-500 overflow-visible" viewBox="0 0 80 40" fill="none">
+                  <path d="M0 35 C 25 32, 35 18, 50 24 C 62 28, 68 10, 80 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                <span className="text-slate-400 text-xs">Completed Sessions</span>
-                <div className="text-2xl font-bold text-slate-100 mt-1">
-                  {statusData?.profile?.totalBookings || pastBookings.length}
+              {/* 3. Completed Sessions */}
+              <div 
+                onClick={() => setActiveTab('history')}
+                className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-200 transition-all group"
+              >
+                <div className="space-y-1">
+                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1.5">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-slate-900">
+                    {statusData?.profile?.totalBookings || pastBookings.length}
+                  </div>
+                  <div className="text-xs font-semibold text-slate-500">Sessions Handled</div>
+                  <div className="text-[11px] font-bold text-purple-600 flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    <span>{statusData?.profile?.rating || '5.0'} Rating</span>
+                  </div>
                 </div>
-                <span className="text-[11px] text-slate-400 mt-1 block">Rating: ★ {statusData?.profile?.rating || '5.0'}</span>
+                <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-purple-50 group-hover:text-purple-600 text-slate-400 flex items-center justify-center transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </div>
+
+              {/* 4. 3-Gate Activation */}
+              <div 
+                onClick={() => setActiveTab(!conditions.kycApproved ? 'kyc-status' : !conditions.membershipValid ? 'membership' : 'bank')}
+                className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-200 transition-all group"
+              >
+                <div className="space-y-1">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1.5">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div className="text-base font-extrabold text-slate-900">
+                    {isLive ? '3-Gates Verified' : 'Gate Incomplete'}
+                  </div>
+                  <div className="text-xs text-slate-500 font-medium">
+                    {isLive ? 'Full Host Permissions' : 'Action Required to Go Live'}
+                  </div>
+                  <div className="text-[11px] font-bold text-blue-600">KYC · Membership · Bank</div>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 text-slate-400 flex items-center justify-center transition-colors">
+                  <ChevronRight className="w-4 h-4" />
+                </div>
               </div>
             </div>
 
             {/* Missing Condition Action Cards if not live */}
             {!isLive && (
-              <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-                <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-400" />
+              <div className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-4">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
                   Action Required to Go LIVE
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className={`p-4 rounded-xl border ${conditions.kycApproved ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-slate-950 border-amber-500/30'}`}>
-                    <span className="font-bold text-slate-200 block mb-1">Gate 1: KYC Approval</span>
-                    <p className="text-slate-400 mb-3">{conditions.kycApproved ? 'Approved by Admin ✓' : 'Govt ID & selfie currently in audit.'}</p>
-                    <button onClick={() => setActiveTab('kyc-status')} className="text-pink-400 font-semibold hover:underline">View KYC Status →</button>
+                  <div className={`p-4 rounded-xl border ${conditions.kycApproved ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50/60 border-amber-200'}`}>
+                    <span className="font-bold text-slate-800 block mb-1">Gate 1: KYC Approval</span>
+                    <p className="text-slate-600 mb-3">{conditions.kycApproved ? 'Approved by Admin ✓' : 'Govt ID & selfie currently in audit.'}</p>
+                    <button onClick={() => setActiveTab('kyc-status')} className="text-purple-700 font-semibold hover:underline">View KYC Status →</button>
                   </div>
 
-                  <div className={`p-4 rounded-xl border ${conditions.membershipValid ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-slate-950 border-rose-500/30'}`}>
-                    <span className="font-bold text-slate-200 block mb-1">Gate 2: Active Membership</span>
-                    <p className="text-slate-400 mb-3">{conditions.membershipValid ? 'Membership active & valid ✓' : 'Subscribe to Starter, Pro, or Premium.'}</p>
-                    <button onClick={() => setActiveTab('membership')} className="text-pink-400 font-semibold hover:underline">Choose Membership →</button>
+                  <div className={`p-4 rounded-xl border ${conditions.membershipValid ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50/60 border-rose-200'}`}>
+                    <span className="font-bold text-slate-800 block mb-1">Gate 2: Active Membership</span>
+                    <p className="text-slate-600 mb-3">{conditions.membershipValid ? 'Membership active & valid ✓' : 'Subscribe to Starter, Pro, or Premium.'}</p>
+                    <button onClick={() => setActiveTab('membership')} className="text-purple-700 font-semibold hover:underline">Choose Membership →</button>
                   </div>
 
-                  <div className={`p-4 rounded-xl border ${conditions.bankVerified ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-slate-950 border-rose-500/30'}`}>
-                    <span className="font-bold text-slate-200 block mb-1">Gate 3: Bank Verification</span>
-                    <p className="text-slate-400 mb-3">{conditions.bankVerified ? 'Bank verified & ready for payouts ✓' : 'Submit Account No & IFSC for verification.'}</p>
-                    <button onClick={() => setActiveTab('bank')} className="text-pink-400 font-semibold hover:underline">Verify Bank Account →</button>
+                  <div className={`p-4 rounded-xl border ${conditions.bankVerified ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50/60 border-rose-200'}`}>
+                    <span className="font-bold text-slate-800 block mb-1">Gate 3: Bank Verification</span>
+                    <p className="text-slate-600 mb-3">{conditions.bankVerified ? 'Bank verified & ready for payouts ✓' : 'Submit Account No & IFSC for verification.'}</p>
+                    <button onClick={() => setActiveTab('bank')} className="text-purple-700 font-semibold hover:underline">Verify Bank Account →</button>
                   </div>
                 </div>
               </div>
@@ -3907,6 +3951,7 @@ export const CompanionDashboard: React.FC = () => {
           </div>
         )}
 
+        </div>
       </div>
 
       {/* SECURE CHAT DRAWER */}
