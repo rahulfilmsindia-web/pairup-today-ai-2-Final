@@ -16,8 +16,8 @@ interface AuthContextType {
   openKycWizard: () => void;
   closeKycWizard: () => void;
   requestOtp: (phone: string, purpose?: string) => Promise<{ success: boolean; message?: string; devCode?: string; error?: string }>;
-  registerWithOtp: (phone: string, otp: string, password: string) => Promise<{ success: boolean; isFirstTime?: boolean; error?: string }>;
-  loginWithPassword: (phone: string, password: string) => Promise<{ success: boolean; isNotRegistered?: boolean; error?: string }>;
+  registerWithOtp: (phone: string, otp: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => Promise<{ success: boolean; isFirstTime?: boolean; error?: string }>;
+  loginWithPassword: (phone: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => Promise<{ success: boolean; isNotRegistered?: boolean; error?: string }>;
   selectActiveRole: (role: 'CLIENT' | 'COMPANION') => Promise<{ success: boolean; error?: string }>;
   submitKyc: (formData: any) => Promise<{ success: boolean; mandatoryLogout?: boolean; error?: string }>;
   logout: () => void;
@@ -183,12 +183,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const registerWithOtp = async (phone: string, otp: string, password: string) => {
+  const registerWithOtp = async (phone: string, otp: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => {
     try {
       const res = await apiFetch('/api/auth/register-with-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp, password })
+        body: JSON.stringify({ phone, otp, password, role: selectedRole })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -198,10 +198,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(data.token);
       localStorage.setItem('pairup_user', JSON.stringify(data.user));
       localStorage.setItem('pairup_token', data.token);
-      if (data.user?.activeRole) {
-        setActiveRole(data.user.activeRole);
-        localStorage.setItem('pairup_active_role', data.user.activeRole);
-      }
+
+      const effectiveRole = selectedRole || data.user?.activeRole || 'CLIENT';
+      setActiveRole(effectiveRole);
+      localStorage.setItem('pairup_active_role', effectiveRole);
+
       setShowAuthModal(false);
       // First-time users are prompted to the Unified Profile & KYC Wizard
       setShowKycWizard(true);
@@ -211,7 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithPassword = async (phone: string, password: string) => {
+  const loginWithPassword = async (phone: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => {
     try {
       const res = await apiFetch('/api/auth/login', {
         method: 'POST',
@@ -231,23 +232,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(data.token);
       localStorage.setItem('pairup_user', JSON.stringify(data.user));
       localStorage.setItem('pairup_token', data.token);
-      if (data.user?.activeRole) {
-        setActiveRole(data.user.activeRole);
-        localStorage.setItem('pairup_active_role', data.user.activeRole);
+
+      // Determine active role based on explicit user choice, or user.activeRole
+      const effectiveRole = selectedRole || data.user?.activeRole || (data.user?.role === 'COMPANION' ? 'COMPANION' : 'CLIENT');
+      setActiveRole(effectiveRole);
+      localStorage.setItem('pairup_active_role', effectiveRole);
+
+      // Seamlessly sync chosen role with backend
+      if (selectedRole) {
+        apiFetch('/api/auth/select-role', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.token}` },
+          body: JSON.stringify({ userId: data.user.id, role: selectedRole })
+        }).catch(err => console.warn('Role sync warning:', err));
       }
+
       setShowAuthModal(false);
 
       // Check if user still needs KYC
       if (data.user.kycStatus === 'NOT_SUBMITTED') {
         setShowKycWizard(true);
-      } else if (data.user.role === 'COMPANION' || data.user.activeRole === 'COMPANION') {
-        // Direct companion entry: land directly on companion dashboard without role prompt
-        setActiveRole('COMPANION');
-        localStorage.setItem('pairup_active_role', 'COMPANION');
-        setShowRoleSelection(false);
-      } else {
-        // Dual or Client role selection
+      } else if (!selectedRole && data.user.role === 'DUAL') {
         setShowRoleSelection(true);
+      } else {
+        setShowRoleSelection(false);
       }
 
       return { success: true };

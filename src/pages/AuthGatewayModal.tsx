@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { ShieldCheck, Phone, Lock, KeyRound, X, AlertCircle, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Phone, Lock, KeyRound, X, AlertCircle, CheckCircle, ArrowRight, ArrowLeft, UserCheck, Sparkles } from 'lucide-react';
 
 export const AuthGatewayModal: React.FC = () => {
   const {
@@ -19,6 +19,7 @@ export const AuthGatewayModal: React.FC = () => {
   const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<'login' | 'signin' | 'forgot'>('login');
+  const [selectedRole, setSelectedRole] = useState<'CLIENT' | 'COMPANION'>('CLIENT');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
@@ -98,7 +99,7 @@ export const AuthGatewayModal: React.FC = () => {
     }
 
     setLoading(true);
-    const result = await loginWithPassword(phone, password);
+    const result = await loginWithPassword(phone, password, selectedRole);
     setLoading(false);
 
     if (!result.success) {
@@ -130,7 +131,7 @@ export const AuthGatewayModal: React.FC = () => {
     }
 
     setLoading(true);
-    const result = await registerWithOtp(phone, otp, password);
+    const result = await registerWithOtp(phone, otp, password, selectedRole);
     setLoading(false);
 
     if (!result.success) {
@@ -526,6 +527,39 @@ export const AuthGatewayModal: React.FC = () => {
                 </div>
               </div>
 
+              {/* Role Selection Option: As a Client / As a Companion */}
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  {t.loginAs}
+                </label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 border border-slate-700/80 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('CLIENT')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      selectedRole === 'CLIENT'
+                        ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 font-extrabold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>{t.asClient}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('COMPANION')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      selectedRole === 'COMPANION'
+                        ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-pink-500/20 font-extrabold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{t.asCompanion}</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Forgot Password Link */}
               <div className="flex justify-end">
                 <button
@@ -625,6 +659,39 @@ export const AuthGatewayModal: React.FC = () => {
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-pink-500"
                     required
                   />
+                </div>
+              </div>
+
+              {/* Role Selection Option for Registration */}
+              <div className="space-y-1.5 pt-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  {t.loginAs}
+                </label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 border border-slate-700/80 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('CLIENT')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      selectedRole === 'CLIENT'
+                        ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 font-extrabold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>{t.asClient}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('COMPANION')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      selectedRole === 'COMPANION'
+                        ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-pink-500/20 font-extrabold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{t.asCompanion}</span>
+                  </button>
                 </div>
               </div>
 

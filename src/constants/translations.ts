@@ -228,10 +228,37 @@ export interface TranslationDictionary {
   tabProfile: string;
   tabKycStatus: string;
   tabDiscover: string;
+  tabServices: string;
   tabBookings: string;
+  tabHistory: string;
   tabChat: string;
+  tabNotifications: string;
+  tabPayments: string;
   tabSafety: string;
+  tabSafetyAndHelp: string;
   tabSettings: string;
+  welcomeBack: string;
+  findPerfectCompanion: string;
+  exploreMatches: string;
+  totalMatches: string;
+  thisMonth: string;
+  upcomingPlans: string;
+  kycVerified: string;
+  accountVerified: string;
+  viewProfile: string;
+  bookNow: string;
+  smartFilterAll: string;
+  smartFilterOnline: string;
+  smartFilterSuggested: string;
+  viewAll: string;
+  showLess: string;
+  searchAndFilters: string;
+  discoverCompanionsPlaceholder: string;
+  loginAs: string;
+  asClient: string;
+  asCompanion: string;
+  goBack: string;
+  logoutText: string;
   findCompanionsTitle: string;
   searchPlaceholder: string;
   filterByService: string;
@@ -585,10 +612,37 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     tabProfile: "My Profile",
     tabKycStatus: "My KYC Status",
     tabDiscover: "Discover Companions",
+    tabServices: "24 Services",
     tabBookings: "My Bookings",
+    tabHistory: "Booking History",
     tabChat: "Secure Chat",
+    tabNotifications: "Notifications",
+    tabPayments: "Payments",
     tabSafety: "Safety & SOS",
+    tabSafetyAndHelp: "Help & Safety",
     tabSettings: "Settings",
+    welcomeBack: "Welcome Back",
+    findPerfectCompanion: "Let's find your perfect companion together...",
+    exploreMatches: "Explore Matches",
+    totalMatches: "Total Matches",
+    thisMonth: "this month",
+    upcomingPlans: "View your upcoming plans",
+    kycVerified: "KYC Verified",
+    accountVerified: "Your account is verified",
+    viewProfile: "View Profile",
+    bookNow: "Book Now",
+    smartFilterAll: "All",
+    smartFilterOnline: "Online",
+    smartFilterSuggested: "Suggested",
+    viewAll: "View All",
+    showLess: "Show Less",
+    searchAndFilters: "Search & Filters",
+    discoverCompanionsPlaceholder: "Discover Companions...",
+    loginAs: "Login As",
+    asClient: "As a Client",
+    asCompanion: "As a Companion",
+    goBack: "Back",
+    logoutText: "Logout",
     findCompanionsTitle: "Discover Verified Companions",
     searchPlaceholder: "Search by city, name, or interests...",
     filterByService: "Filter by Service",
@@ -941,10 +995,37 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     tabProfile: "আমার প্রোফাইল",
     tabKycStatus: "কেওয়াইসি স্ট্যাটাস",
     tabDiscover: "সঙ্গী খুঁজুন",
+    tabServices: "২৪টি সার্ভিস",
     tabBookings: "আমার বুকিং",
+    tabHistory: "বুকিং হিস্ট্রি",
     tabChat: "সুরক্ষিত চ্যাট",
+    tabNotifications: "বিজ্ঞপ্তি",
+    tabPayments: "পেমেন্ট",
     tabSafety: "নিরাপত্তা ও এসওএস",
+    tabSafetyAndHelp: "সাহায্য ও সুরক্ষা",
     tabSettings: "সেটিংস",
+    welcomeBack: "স্বাগতম",
+    findPerfectCompanion: "আসুন আপনার জন্য উপযুক্ত সঙ্গী খুঁজে নিই...",
+    exploreMatches: "ম্যাচ খুঁজুন",
+    totalMatches: "মোট ম্যাচ",
+    thisMonth: "এই মাসে",
+    upcomingPlans: "আপনার আসন্ন পরিকল্পনা দেখুন",
+    kycVerified: "কেওয়াইসি যাচাইকৃত",
+    accountVerified: "আপনার অ্যাকাউন্ট যাচাই সম্পন্ন",
+    viewProfile: "প্রোফাইল দেখুন",
+    bookNow: "বুকিং করুন",
+    smartFilterAll: "সকল",
+    smartFilterOnline: "অনলাইন",
+    smartFilterSuggested: "পরামর্শিত",
+    viewAll: "সবগুলো দেখুন",
+    showLess: "কম দেখুন",
+    searchAndFilters: "অনুসন্ধান ও ফিল্টার",
+    discoverCompanionsPlaceholder: "সঙ্গী খুঁজুন...",
+    loginAs: "কী হিসেবে লগইন করবেন",
+    asClient: "গ্রাহক হিসেবে",
+    asCompanion: "কম্প্যানিয়ন হিসেবে",
+    goBack: "ফিরে যান",
+    logoutText: "লগআউট",
     findCompanionsTitle: "যাচাইকৃত সঙ্গী খুঁজুন",
     searchPlaceholder: "শহর, নাম বা পছন্দের বিষয় দিয়ে খুঁজুন...",
     filterByService: "সার্ভিস অনুযায়ী ফিল্টার",
@@ -1297,10 +1378,37 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     tabProfile: "मेरी प्रोफ़ाइल",
     tabKycStatus: "केवाईसी स्थिति",
     tabDiscover: "साथी खोजें",
+    tabServices: "24 सेवाएँ",
     tabBookings: "मेरी बुकिंग्स",
+    tabHistory: "बुकिंग इतिहास",
     tabChat: "सुरक्षित चैट",
+    tabNotifications: "सूचनाएं",
+    tabPayments: "भुगतान",
     tabSafety: "सुरक्षा एवं एसओएस",
+    tabSafetyAndHelp: "सहायता और सुरक्षा",
     tabSettings: "सेटिंग्स",
+    welcomeBack: "वापसी पर स्वागत है",
+    findPerfectCompanion: "आइए मिलकर आपके लिए सही साथी खोजें...",
+    exploreMatches: "मैच देखें",
+    totalMatches: "कुल मैच",
+    thisMonth: "इस महीने",
+    upcomingPlans: "अपनी आगामी योजनाएं देखें",
+    kycVerified: "केवाईसी सत्यापित",
+    accountVerified: "आपका खाता सत्यापित है",
+    viewProfile: "प्रोफ़ाइल देखें",
+    bookNow: "अभी बुक करें",
+    smartFilterAll: "सभी",
+    smartFilterOnline: "ऑनलाइन",
+    smartFilterSuggested: "सुझाया गया",
+    viewAll: "सभी देखें",
+    showLess: "कम दिखाएं",
+    searchAndFilters: "खोज और फ़िल्टर",
+    discoverCompanionsPlaceholder: "साथी खोजें...",
+    loginAs: "लॉगिन करें",
+    asClient: "क्लाइंट के रूप में",
+    asCompanion: "साथी के रूप में",
+    goBack: "वापस जाएं",
+    logoutText: "लॉगआउट",
     findCompanionsTitle: "सत्यापित साथी खोजें",
     searchPlaceholder: "शहर, नाम या रुचि से खोजें...",
     filterByService: "सेवा अनुसार फ़िल्टर करें",

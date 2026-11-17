@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { apiFetch } from '../utils/api';
@@ -66,6 +66,50 @@ export const ClientDashboard: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [smartFilter, setSmartFilter] = useState<'all' | 'online' | 'suggested'>('all');
   const [showAllCompanions, setShowAllCompanions] = useState(false);
+
+  // In-app Back Navigation Handler (prevents unexpected page exits)
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const quickViewCompanionRef = useRef<any>(null);
+  const selectedCompanionRef = useRef<any>(null);
+
+  const handleDashboardBack = useCallback(() => {
+    if (quickViewCompanionRef.current) {
+      setQuickViewCompanion(null);
+      return;
+    }
+    if (selectedCompanionRef.current) {
+      setSelectedCompanion(null);
+      setBookingStep('form');
+      return;
+    }
+    if (activeTabRef.current !== 'overview') {
+      setActiveTab('overview');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleInAppEvent = (e: Event) => {
+      if (quickViewCompanionRef.current || selectedCompanionRef.current || activeTabRef.current !== 'overview') {
+        e.preventDefault();
+        handleDashboardBack();
+      }
+    };
+    window.addEventListener('pairup:inapp_back', handleInAppEvent);
+    return () => window.removeEventListener('pairup:inapp_back', handleInAppEvent);
+  }, [handleDashboardBack]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (quickViewCompanionRef.current || selectedCompanionRef.current || activeTabRef.current !== 'overview') {
+        handleDashboardBack();
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [handleDashboardBack]);
 
   // Multi-step booking request & companion acceptance flow
   type BookingStep = 'form' | 'waiting_acceptance' | 'accepted' | 'rejected';
@@ -176,6 +220,8 @@ export const ClientDashboard: React.FC = () => {
   // Quick View modal state
   const [quickViewCompanion, setQuickViewCompanion] = useState<any | null>(null);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
+  quickViewCompanionRef.current = quickViewCompanion;
+  selectedCompanionRef.current = selectedCompanion;
 
   const openQuickView = (companion: any) => {
     setQuickViewCompanion(companion);
@@ -836,19 +882,19 @@ export const ClientDashboard: React.FC = () => {
   });
 
   const clientNavTabs = [
-    { id: 'overview' as ClientTab, label: 'Overview', icon: Home },
-    { id: 'profile' as ClientTab, label: 'My Profile', icon: User },
-    { id: 'kyc-status' as ClientTab, label: 'My KYC Status', icon: ShieldCheck, badge: isKycApproved ? undefined : 'Verify' },
-    { id: 'services' as ClientTab, label: '24 Services', icon: LayoutGrid },
+    { id: 'overview' as ClientTab, label: t.tabOverview, icon: Home },
+    { id: 'profile' as ClientTab, label: t.tabProfile, icon: User },
+    { id: 'kyc-status' as ClientTab, label: t.tabKycStatus, icon: ShieldCheck, badge: isKycApproved ? undefined : 'Verify' },
+    { id: 'services' as ClientTab, label: t.tabServices, icon: LayoutGrid },
     ...(trackedBooking || upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS')
       ? [{ id: 'tracking' as ClientTab, label: 'Live Tracking', icon: Navigation, isLiveBadge: true }]
       : []),
-    { id: 'history' as ClientTab, label: 'Booking History', icon: History, badge: pastBookings.length || undefined },
-    { id: 'chat' as ClientTab, label: 'Secure Chat', icon: MessageSquare, badge: 2 },
-    { id: 'notifications' as ClientTab, label: 'Notifications', icon: Bell, badge: notifications.length || 2 },
-    { id: 'payments' as ClientTab, label: 'Payments', icon: CreditCard },
-    { id: 'help-safety' as ClientTab, label: 'Help & Safety', icon: Shield },
-    { id: 'settings' as ClientTab, label: 'Settings', icon: Settings },
+    { id: 'history' as ClientTab, label: t.tabHistory, icon: History, badge: pastBookings.length || undefined },
+    { id: 'chat' as ClientTab, label: t.tabChat, icon: MessageSquare, badge: 2 },
+    { id: 'notifications' as ClientTab, label: t.tabNotifications, icon: Bell, badge: notifications.length || 2 },
+    { id: 'payments' as ClientTab, label: t.tabPayments, icon: CreditCard },
+    { id: 'help-safety' as ClientTab, label: t.tabSafetyAndHelp, icon: Shield },
+    { id: 'settings' as ClientTab, label: t.tabSettings, icon: Settings },
   ];
 
   return (
@@ -925,7 +971,7 @@ export const ClientDashboard: React.FC = () => {
               className="w-full px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-3 text-xs font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-950/30 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
-              <span>Logout</span>
+              <span>{t.logoutText}</span>
             </button>
           </div>
         </nav>
@@ -1036,6 +1082,18 @@ export const ClientDashboard: React.FC = () => {
               <Menu className="w-5 h-5" />
             </button>
 
+            {/* In-App Back Button when not on Overview */}
+            {activeTab !== 'overview' && (
+              <button
+                onClick={handleDashboardBack}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                title={t.goBack}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">{t.goBack}</span>
+              </button>
+            )}
+
             {/* Pill Search Bar */}
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1049,7 +1107,7 @@ export const ClientDashboard: React.FC = () => {
                     fetchCompanions();
                   }
                 }}
-                placeholder="Discover Companions..."
+                placeholder={t.discoverCompanionsPlaceholder}
                 className="w-full pl-10 pr-4 py-2 rounded-full bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white transition-all shadow-xs"
               />
             </div>
@@ -1062,7 +1120,7 @@ export const ClientDashboard: React.FC = () => {
               className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-[#432bb3] hover:bg-[#372297] text-white text-xs font-semibold shadow-md shadow-indigo-600/20 cursor-pointer transition-all active:scale-95"
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>Search & Filters</span>
+              <span>{t.searchAndFilters}</span>
             </button>
 
             {/* Notification Bell with Badge */}
@@ -1161,13 +1219,13 @@ export const ClientDashboard: React.FC = () => {
           {/* ============================================================== */}
           {activeTab === 'overview' && (
             <div className="space-y-6 animate-fade-in">
-              {/* Hero Banner with Photorealistic Indian Couple Image */}
+              {/* Hero Banner with Modern Lifestyle Casual Couple Image (No Wedding Clothes) */}
               <div className="relative rounded-3xl bg-gradient-to-r from-[#ffeef2] via-[#fff5f6] to-[#fedfe7] border border-pink-100/90 p-5 sm:p-7 overflow-hidden shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6 w-full md:w-auto z-10">
-                  {/* Real Authentic Indian Couple Photograph */}
+                  {/* Modern Casual Companionship Image (Strictly Non-Wedding) */}
                   <div className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-2xl overflow-hidden shrink-0 shadow-lg ring-4 ring-white/90">
                     <img
-                      src="/assets/indian_couple_banner.jpg"
+                      src="/assets/modern_companion_banner.jpg"
                       alt="PairUpToday Companionship"
                       className="w-full h-full object-cover object-center"
                     />
@@ -1176,17 +1234,21 @@ export const ClientDashboard: React.FC = () => {
 
                   <div className="space-y-2 text-center sm:text-left">
                     <h2 className="text-2xl sm:text-3xl font-extrabold text-[#191040] tracking-tight">
-                      Welcome Back, <span className="text-[#db2777]">{user?.profileName?.split(' ')[0] || user?.legalName?.split(' ')[0] || 'Rahul'}</span>!
+                      {t.welcomeBack}, <span className="text-[#db2777]">{user?.profileName?.split(' ')[0] || user?.legalName?.split(' ')[0] || 'Rahul'}</span>!
                     </h2>
                     <p className="text-xs sm:text-sm text-slate-600 max-w-md font-medium">
-                      Let's find your perfect companion together...
+                      {t.findPerfectCompanion}
                     </p>
                     <div className="pt-2">
                       <button
-                        onClick={() => setActiveTab('discover')}
+                        onClick={() => {
+                          setShowAllCompanions(true);
+                          const el = document.getElementById('nearby-companions-section');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }}
                         className="px-6 py-2.5 rounded-full bg-[#5038ee] hover:bg-[#432cc7] text-white text-xs font-bold shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer transition-transform active:scale-95 mx-auto sm:mx-0"
                       >
-                        <span>Explore Matches</span>
+                        <span>{t.exploreMatches}</span>
                         <span>→</span>
                       </button>
                     </div>
@@ -1232,8 +1294,8 @@ export const ClientDashboard: React.FC = () => {
                       <Users className="w-5 h-5" />
                     </div>
                     <div className="text-2xl font-extrabold text-slate-900">{filteredCompanions.length || 12}</div>
-                    <div className="text-xs font-semibold text-slate-500">Total Matches</div>
-                    <div className="text-[11px] font-bold text-emerald-600">↑ +2 this month</div>
+                    <div className="text-xs font-semibold text-slate-500">{t.totalMatches}</div>
+                    <div className="text-[11px] font-bold text-emerald-600">↑ +2 {t.thisMonth}</div>
                   </div>
                   <svg className="w-20 h-10 text-purple-500 overflow-visible" viewBox="0 0 80 40" fill="none">
                     <path d="M0 35 C 20 30, 25 15, 45 25 C 60 32, 65 5, 80 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
@@ -1247,8 +1309,8 @@ export const ClientDashboard: React.FC = () => {
                       <CalendarCheck className="w-5 h-5" />
                     </div>
                     <div className="text-2xl font-extrabold text-slate-900">{myBookings.length || 3}</div>
-                    <div className="text-xs font-semibold text-slate-500">Bookings</div>
-                    <div className="text-[11px] font-bold text-emerald-600">↑ +1 this month</div>
+                    <div className="text-xs font-semibold text-slate-500">{t.tabBookings}</div>
+                    <div className="text-[11px] font-bold text-emerald-600">↑ +1 {t.thisMonth}</div>
                   </div>
                   <svg className="w-20 h-10 text-emerald-500 overflow-visible" viewBox="0 0 80 40" fill="none">
                     <path d="M0 35 C 25 32, 35 18, 50 24 C 62 28, 68 10, 80 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
@@ -1264,8 +1326,8 @@ export const ClientDashboard: React.FC = () => {
                     <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1.5">
                       <Calendar className="w-5 h-5" />
                     </div>
-                    <div className="text-base font-extrabold text-slate-900">Upcoming</div>
-                    <div className="text-xs text-slate-500 font-medium">View your upcoming plans</div>
+                    <div className="text-base font-extrabold text-slate-900">{t.upcomingBookings}</div>
+                    <div className="text-xs text-slate-500 font-medium">{t.upcomingPlans}</div>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-purple-50 group-hover:text-purple-600 text-slate-400 flex items-center justify-center transition-colors">
                     <ChevronRight className="w-4 h-4" />
@@ -1282,13 +1344,13 @@ export const ClientDashboard: React.FC = () => {
                       <ShieldCheck className="w-5 h-5" />
                     </div>
                     <div className="text-base font-extrabold text-slate-900">
-                      {isKycApproved ? 'KYC Verified' : 'KYC Pending'}
+                      {isKycApproved ? t.kycVerified : 'KYC Pending'}
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-slate-600 font-semibold pt-0.5">
                       {isKycApproved ? (
                         <>
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span>Your account is verified</span>
+                          <span>{t.accountVerified}</span>
                         </>
                       ) : (
                         <>
@@ -1305,13 +1367,13 @@ export const ClientDashboard: React.FC = () => {
               </div>
 
               {/* Nearby Companions Section with Smart Integrated Filters */}
-              <div className="space-y-4">
+              <div id="nearby-companions-section" className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
                       <MapPin className="w-4 h-4" />
                     </div>
-                    <h3 className="text-lg font-extrabold text-[#191040]">Nearby Companions</h3>
+                    <h3 className="text-lg font-extrabold text-[#191040]">{t.nearbyCompanions}</h3>
                   </div>
 
                   {/* Smart Filters (All, Online, Suggested) */}
@@ -1325,7 +1387,7 @@ export const ClientDashboard: React.FC = () => {
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
-                        All
+                        {t.smartFilterAll}
                       </button>
                       <button
                         onClick={() => setSmartFilter('online')}
@@ -1336,7 +1398,7 @@ export const ClientDashboard: React.FC = () => {
                         }`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        Online
+                        {t.smartFilterOnline}
                       </button>
                       <button
                         onClick={() => setSmartFilter('suggested')}
@@ -1347,7 +1409,7 @@ export const ClientDashboard: React.FC = () => {
                         }`}
                       >
                         <Star className="w-3 h-3 fill-amber-300 text-amber-300" />
-                        Suggested
+                        {t.smartFilterSuggested}
                       </button>
                     </div>
 
@@ -1355,7 +1417,7 @@ export const ClientDashboard: React.FC = () => {
                       onClick={() => setShowAllCompanions(!showAllCompanions)}
                       className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer pl-2"
                     >
-                      <span>{showAllCompanions ? 'Show Less' : 'View All'}</span>
+                      <span>{showAllCompanions ? t.showLess : t.viewAll}</span>
                       <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAllCompanions ? '-rotate-90' : ''}`} />
                     </button>
                   </div>
@@ -1389,7 +1451,7 @@ export const ClientDashboard: React.FC = () => {
                             {comp.isOnline !== false ? (
                               <span className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-[11px] font-bold shadow-xs flex items-center gap-1.5 text-emerald-600">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                                <span>Online</span>
+                                <span>{t.smartFilterOnline}</span>
                               </span>
                             ) : (
                               <span className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-[11px] font-bold shadow-xs flex items-center gap-1.5 text-slate-500">
@@ -1406,7 +1468,7 @@ export const ClientDashboard: React.FC = () => {
                             {comp.isOnline !== false ? (
                               <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span>Online</span>
+                                <span>{t.smartFilterOnline}</span>
                               </span>
                             ) : (
                               <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
@@ -1431,7 +1493,7 @@ export const ClientDashboard: React.FC = () => {
                           className="py-2 px-2.5 rounded-xl border border-purple-200 text-purple-700 hover:bg-purple-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          <span>View Profile</span>
+                          <span>{t.viewProfile}</span>
                         </button>
                         <button
                           onClick={() => {
@@ -1441,7 +1503,7 @@ export const ClientDashboard: React.FC = () => {
                           className="py-2 px-2.5 rounded-xl bg-gradient-to-r from-[#5038ee] to-[#7c3aed] text-white hover:from-[#432cc7] hover:to-[#6d28d9] text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-purple-600/30 transition-transform active:scale-95 cursor-pointer"
                         >
                           <CalendarCheck className="w-3.5 h-3.5" />
-                          <span>Book Now</span>
+                          <span>{t.bookNow}</span>
                         </button>
                       </div>
                     </div>

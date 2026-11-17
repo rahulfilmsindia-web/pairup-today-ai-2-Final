@@ -34,10 +34,19 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
   };
 
   const handleBack = () => {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
+    // 1. Dispatch custom event so inner dashboards can close modals or return to overview first
+    const backEvent = new CustomEvent('pairup:inapp_back', { cancelable: true });
+    const notHandled = window.dispatchEvent(backEvent);
+    if (!notHandled) {
+      return; // Handled by inner dashboard
+    }
+
+    // 2. If on an inner page, safely return to home page without closing app
+    if (currentPage !== 'home') {
       setCurrentPage('home');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (window.history.length > 1) {
+      window.history.back();
     }
   };
 

@@ -139,6 +139,33 @@ export const CompanionDashboard: React.FC = () => {
   const [statusData, setStatusData] = useState<any | null>(null);
   const hasAutoNavigatedRef = useRef(false);
 
+  // In-app Back Navigation Handler (prevents unexpected page exits)
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  useEffect(() => {
+    const handleInAppEvent = (e: Event) => {
+      if (activeTabRef.current !== 'overview') {
+        e.preventDefault();
+        setActiveTab('overview');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+    window.addEventListener('pairup:inapp_back', handleInAppEvent);
+    return () => window.removeEventListener('pairup:inapp_back', handleInAppEvent);
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (activeTabRef.current !== 'overview') {
+        setActiveTab('overview');
+        window.history.pushState({ companionTab: 'overview' }, '', window.location.pathname);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Tab scroll ref for desktop Left/Right arrow navigation
   const tabsNavRef = useRef<HTMLDivElement>(null);
   const scrollTabs = (dir: 'left' | 'right') => {
