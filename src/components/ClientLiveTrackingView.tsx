@@ -497,7 +497,7 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <h4 className="font-bold text-sm text-slate-100 truncate">{booking.companionName}</h4>
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" title="Identity Verified" />
+                  <span title="Identity Verified"><ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /></span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                   <span className="flex items-center text-amber-400 gap-0.5 font-bold">

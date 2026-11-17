@@ -4075,8 +4075,8 @@ app.post('/api/bookings/create', async (req: Request, res: Response) => {
       });
       if (order.success && order.orderId) {
         paymentOrderId = order.orderId;
-        paymentKeyId = order.keyId;
-        paymentCurrency = order.currency;
+        paymentKeyId = order.keyId || paymentKeyId;
+        paymentCurrency = order.currency || paymentCurrency;
       }
     } catch (orderErr) {
       console.warn('Razorpay order creation postponed to checkout:', orderErr);

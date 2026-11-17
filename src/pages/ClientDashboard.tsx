@@ -1790,7 +1790,7 @@ export const ClientDashboard: React.FC = () => {
               </div>
 
               <button
-                onClick={fetchCompanions}
+                onClick={() => fetchCompanions()}
                 className="py-2 px-4 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold hover:bg-amber-500 transition-colors"
               >
                 Apply Search

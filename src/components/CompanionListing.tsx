@@ -30,7 +30,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
   onBookCompanion
 }) => {
   const { t, language } = useLanguage();
-  const { user, openAuthModal, setBookingContext } = useAuth();
+  const { user, openAuthModal, bookingContext, setBookingContext } = useAuth();
 
   const [selectedCity, setSelectedCity] = useState<string>('');
   const [clientCoords, setClientCoords] = useState<{ lat?: number; lng?: number } | null>(null);
@@ -155,16 +155,13 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
       setCompanions(freshList);
 
       // If client has opened a booking context for a companion who just went offline, close modal and notify
-      setBookingContext(prev => {
-        if (prev && !freshList.some(c => c.id === prev.companionId)) {
-          setBookingAlert({
-            id: prev.companionId,
-            message: `${prev.companionName} has just gone offline and is no longer accepting new bookings.`
-          });
-          return null;
-        }
-        return prev;
-      });
+      if (bookingContext && !freshList.some(c => c.id === bookingContext.companionId)) {
+        setBookingAlert({
+          id: bookingContext.companionId,
+          message: `${bookingContext.companionName} has just gone offline and is no longer accepting new bookings.`
+        });
+        setBookingContext(null);
+      }
     } catch (err: any) {
       if (!silent) setError(err.message || 'Error loading profiles.');
     } finally {
@@ -353,7 +350,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                 onSelectLocation={(item) => {
                   if (item.lat !== undefined && item.lng !== undefined) {
                     setClientCoords({ lat: item.lat, lng: item.lng });
-                    setDetectedLocationName(item.address || item.city);
+                    setDetectedLocationName(item.fullAddress || item.label || item.cityValue || '');
                   } else {
                     setClientCoords(null);
                   }
@@ -458,7 +455,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
           <div className="py-16 text-center text-rose-400">
             <p className="font-semibold">{error}</p>
             <button
-              onClick={fetchCompanions}
+              onClick={() => fetchCompanions()}
               className="mt-4 px-4 py-2 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 text-xs font-semibold"
             >
               Retry

@@ -1188,7 +1188,7 @@ export const CompanionDashboard: React.FC = () => {
       id: tempId,
       bookingId: activeChatBooking.id,
       senderId: user.id,
-      senderName: user.name || 'Companion',
+      senderName: (user as any)?.name || (user as any)?.profileName || user.legalName || 'Companion',
       senderRole: 'COMPANION',
       message: messageText,
       timestamp: new Date().toISOString()
@@ -1508,6 +1508,7 @@ export const CompanionDashboard: React.FC = () => {
   // Bookings breakdown
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const pendingRequests = safeBookings.filter(b => b && b.status === 'PENDING' && !b.companionAccepted && b.cancellationReason !== 'COMPANION_BUSY');
+  const pendingBookings = pendingRequests;
   const upcomingBookings = safeBookings.filter(b => b && (b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS'));
   const pastBookings = safeBookings.filter(b => b && (b.status === 'COMPLETED' || b.status === 'CANCELLED'));
 
