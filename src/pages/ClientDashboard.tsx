@@ -1194,10 +1194,33 @@ export const ClientDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Decorative floating hearts on right */}
-                <div className="hidden lg:flex items-center gap-4 opacity-25 select-none pointer-events-none pr-4">
-                  <Sparkles className="w-10 h-10 text-pink-500" />
-                  <Heart className="w-14 h-14 text-rose-400 fill-rose-400" />
+                {/* Decorative Indian Heritage Palace Silhouette & Floating Hearts on Right */}
+                <div className="hidden md:block absolute right-0 bottom-0 h-full w-96 pointer-events-none select-none overflow-hidden">
+                  {/* Floating Soft Hearts */}
+                  <div className="absolute top-4 right-32 text-pink-400 opacity-80 animate-pulse">
+                    <Heart className="w-5 h-5 fill-pink-400 text-pink-400" />
+                  </div>
+                  <div className="absolute top-9 right-20 text-rose-300 opacity-90">
+                    <Heart className="w-3.5 h-3.5 fill-rose-300 text-rose-300" />
+                  </div>
+                  {/* Victorian / Indian Palace Monument Silhouette */}
+                  <svg className="absolute bottom-0 right-0 h-40 w-full text-pink-300/40" viewBox="0 0 400 160" fill="currentColor">
+                    <rect x="0" y="152" width="400" height="8" />
+                    <rect x="40" y="142" width="360" height="10" />
+                    <path d="M 290 142 L 290 95 C 290 95 290 68 325 48 C 325 40 325 35 325 28 L 327 28 L 327 18 L 328 18 L 328 12 L 329 18 L 330 18 L 330 28 L 332 28 C 332 35 332 40 332 48 C 367 68 367 95 367 95 L 367 142 Z" opacity="0.85" />
+                    <rect x="300" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
+                    <rect x="314" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
+                    <rect x="328" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
+                    <rect x="342" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
+                    <rect x="356" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
+                    <path d="M 180 142 L 180 110 C 180 100 195 90 205 80 L 205 72 L 207 72 L 207 80 C 217 90 232 100 232 110 L 232 142 Z" opacity="0.75" />
+                    <rect x="190" y="112" width="4" height="30" opacity="0.5" fill="#fff" />
+                    <rect x="204" y="112" width="4" height="30" opacity="0.5" fill="#fff" />
+                    <rect x="218" y="112" width="4" height="30" opacity="0.5" fill="#fff" />
+                    <path d="M 232 142 L 232 120 L 290 120 L 290 142 Z" opacity="0.7" />
+                    <path d="M 110 142 L 110 125 L 180 125 L 180 142 Z" opacity="0.6" />
+                    <path d="M 90 142 L 90 120 C 90 112 100 105 105 100 L 105 95 L 107 95 L 107 100 C 112 105 122 112 122 120 L 122 142 Z" opacity="0.6" />
+                  </svg>
                 </div>
               </div>
 
@@ -1239,12 +1262,11 @@ export const ClientDashboard: React.FC = () => {
                   className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-200 transition-all group"
                 >
                   <div className="space-y-1">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1.5">
+                    <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1.5">
                       <Calendar className="w-5 h-5" />
                     </div>
                     <div className="text-base font-extrabold text-slate-900">Upcoming</div>
                     <div className="text-xs text-slate-500 font-medium">View your upcoming plans</div>
-                    <div className="text-[11px] font-bold text-indigo-600">{upcomingBookings.length} Active Sessions</div>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-purple-50 group-hover:text-purple-600 text-slate-400 flex items-center justify-center transition-colors">
                     <ChevronRight className="w-4 h-4" />
@@ -1263,10 +1285,19 @@ export const ClientDashboard: React.FC = () => {
                     <div className="text-base font-extrabold text-slate-900">
                       {isKycApproved ? 'KYC Verified' : 'KYC Pending'}
                     </div>
-                    <div className="text-xs text-slate-500 font-medium">
-                      {isKycApproved ? 'Your account is verified' : 'Upload ID to activate'}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600 font-semibold pt-0.5">
+                      {isKycApproved ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>Your account is verified</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span>Upload ID to verify</span>
+                        </>
+                      )}
                     </div>
-                    <div className="text-[11px] font-bold text-blue-600">100% Free Client Membership</div>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 text-slate-400 flex items-center justify-center transition-colors">
                     <ChevronRight className="w-4 h-4" />
@@ -1310,22 +1341,40 @@ export const ClientDashboard: React.FC = () => {
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute top-2.5 right-2.5">
-                            <span className="px-2 py-0.5 rounded-full bg-white/95 backdrop-blur-sm text-[10px] font-bold shadow-xs flex items-center gap-1 text-emerald-600">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              <span>Online</span>
-                            </span>
+                            {comp.isOnline !== false ? (
+                              <span className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-[11px] font-bold shadow-xs flex items-center gap-1.5 text-emerald-600">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                <span>Online</span>
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-[11px] font-bold shadow-xs flex items-center gap-1.5 text-slate-500">
+                                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                <span>Offline</span>
+                              </span>
+                            )}
                           </div>
                         </div>
 
                         <div className="p-3.5 space-y-1">
                           <div className="text-sm font-bold text-slate-900 flex items-center justify-between">
                             <span>{comp.name}</span>
-                            <span className="text-xs font-semibold text-purple-700">
+                            {comp.isOnline !== false ? (
+                              <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                <span>Online</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                <span>Offline</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 flex items-center justify-between">
+                            <span>{comp.age ? `${comp.age}, ` : ''}{comp.address || comp.city || 'Kolkata'}</span>
+                            <span className="text-xs font-bold text-purple-700">
                               ₹{(((comp.rates?.hourlyPaise ?? 49900)) / 100).toFixed(0)}/hr
                             </span>
-                          </div>
-                          <div className="text-xs text-slate-500 flex items-center gap-1">
-                            <span>{comp.age ? `${comp.age}, ` : ''}{comp.address || comp.city || 'Kolkata'}</span>
                           </div>
                         </div>
                       </div>
