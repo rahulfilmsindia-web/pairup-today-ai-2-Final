@@ -17,7 +17,7 @@ interface AuthContextType {
   closeKycWizard: () => void;
   requestOtp: (phone: string, purpose?: string) => Promise<{ success: boolean; message?: string; devCode?: string; error?: string }>;
   registerWithOtp: (phone: string, otp: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => Promise<{ success: boolean; isFirstTime?: boolean; error?: string }>;
-  loginWithPassword: (phone: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => Promise<{ success: boolean; isNotRegistered?: boolean; error?: string }>;
+  loginWithPassword: (phone: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION', keepModalOpen?: boolean) => Promise<{ success: boolean; isNotRegistered?: boolean; error?: string; user?: any }>;
   selectActiveRole: (role: 'CLIENT' | 'COMPANION') => Promise<{ success: boolean; error?: string }>;
   submitKyc: (formData: any) => Promise<{ success: boolean; mandatoryLogout?: boolean; error?: string }>;
   logout: () => void;
@@ -212,7 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithPassword = async (phone: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => {
+  const loginWithPassword = async (phone: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION', keepModalOpen?: boolean) => {
     try {
       const res = await apiFetch('/api/auth/login', {
         method: 'POST',
@@ -247,18 +247,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }).catch(err => console.warn('Role sync warning:', err));
       }
 
-      setShowAuthModal(false);
+      if (!keepModalOpen) {
+        setShowAuthModal(false);
+      }
 
       // Check if user still needs KYC
       if (data.user.kycStatus === 'NOT_SUBMITTED') {
         setShowKycWizard(true);
-      } else if (!selectedRole && data.user.role === 'DUAL') {
+      } else if (!selectedRole && data.user.role === 'DUAL' && !keepModalOpen) {
         setShowRoleSelection(true);
       } else {
         setShowRoleSelection(false);
       }
 
-      return { success: true };
+      return { success: true, user: data.user };
     } catch (err: any) {
       return { success: false, error: err.message || 'Login failed' };
     }

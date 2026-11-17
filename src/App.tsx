@@ -393,7 +393,9 @@ const MainAppContent: React.FC = () => {
         <Footer setCurrentPage={navigateToPage} />
 
         {/* Modals & Wizards */}
-        <AuthGatewayModal />
+        <AuthGatewayModal
+          onNavigateToDashboard={targetPage => navigateToPage(targetPage)}
+        />
         <KycWizardModal />
         <RoleSelectionModal
           onSelectRoleDone={role => {

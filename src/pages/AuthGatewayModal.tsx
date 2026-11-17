@@ -3,7 +3,11 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { ShieldCheck, Phone, Lock, KeyRound, X, AlertCircle, CheckCircle, ArrowRight, ArrowLeft, UserCheck, Sparkles } from 'lucide-react';
 
-export const AuthGatewayModal: React.FC = () => {
+interface AuthGatewayModalProps {
+  onNavigateToDashboard?: (page: string) => void;
+}
+
+export const AuthGatewayModal: React.FC<AuthGatewayModalProps> = ({ onNavigateToDashboard }) => {
   const {
     showAuthModal,
     authModalTab,
@@ -12,6 +16,7 @@ export const AuthGatewayModal: React.FC = () => {
     requestOtp,
     registerWithOtp,
     loginWithPassword,
+    selectActiveRole,
     checkPhoneRegistered,
     resetPassword,
     bookingContext
@@ -19,6 +24,7 @@ export const AuthGatewayModal: React.FC = () => {
   const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<'login' | 'signin' | 'forgot'>('login');
+  const [loginStep, setLoginStep] = useState<'credentials' | 'select_role'>('credentials');
   const [selectedRole, setSelectedRole] = useState<'CLIENT' | 'COMPANION'>('CLIENT');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -40,6 +46,7 @@ export const AuthGatewayModal: React.FC = () => {
 
   useEffect(() => {
     setActiveTab(authModalTab);
+    setLoginStep('credentials');
     setErrorMsg(null);
     setSuccessMsg(null);
     setUnregisteredError(false);
@@ -99,15 +106,38 @@ export const AuthGatewayModal: React.FC = () => {
     }
 
     setLoading(true);
-    const result = await loginWithPassword(phone, password, selectedRole);
+    // Authenticate credentials while keeping modal open for immediate role selection
+    const result = await loginWithPassword(phone, password, undefined, true);
     setLoading(false);
 
-    if (!result.success) {
+    if (result.success) {
+      // Credentials verified! Smoothly transition to Role Selection
+      setLoginStep('select_role');
+    } else {
       if (result.isNotRegistered) {
         setUnregisteredError(true);
       } else {
         setErrorMsg(result.error || 'Invalid credentials. Please verify your phone and password.');
       }
+    }
+  };
+
+  const handleChooseRoleAndEnter = async (role: 'CLIENT' | 'COMPANION') => {
+    setErrorMsg(null);
+    setLoading(true);
+    const result = await selectActiveRole(role);
+    setLoading(false);
+
+    if (result.success) {
+      closeAuthModal();
+      setLoginStep('credentials');
+      if (role === 'COMPANION') {
+        onNavigateToDashboard?.('companion-dashboard');
+      } else {
+        onNavigateToDashboard?.('client-dashboard');
+      }
+    } else {
+      setErrorMsg(result.error || 'Failed to select role.');
     }
   };
 
@@ -134,7 +164,9 @@ export const AuthGatewayModal: React.FC = () => {
     const result = await registerWithOtp(phone, otp, password, selectedRole);
     setLoading(false);
 
-    if (!result.success) {
+    if (result.success) {
+      setLoginStep('select_role');
+    } else {
       setErrorMsg(result.error || 'Registration failed.');
     }
   };
@@ -255,8 +287,8 @@ export const AuthGatewayModal: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Switcher: Login vs Sign In (hide when forgot tab active) */}
-        {activeTab !== 'forgot' && (
+        {/* Tab Switcher: Login vs Sign In (hide when forgot tab active or during role selection) */}
+        {activeTab !== 'forgot' && loginStep !== 'select_role' && (
         <div className="flex border-b border-slate-800 bg-slate-950/50">
           <button
             onClick={() => {
@@ -487,106 +519,149 @@ export const AuthGatewayModal: React.FC = () => {
             </div>
           ) : activeTab === 'login' ? (
             /* ===== LOGIN TAB ===== */
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  {t.phoneLabel}
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs font-semibold">
-                    +91
+            loginStep === 'select_role' ? (
+              /* Step 2: Role Selection - As a Client / As a Companion */
+              <div className="space-y-4 animate-fade-in py-1">
+                <div className="text-center pb-2">
+                  <div className="inline-flex p-3 rounded-2xl bg-amber-400/10 text-amber-400 mb-2">
+                    <UserCheck className="w-7 h-7" />
                   </div>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    placeholder="9876543210"
-                    maxLength={10}
-                    className="w-full pl-12 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
-                    required
-                  />
+                  <h3 className="text-lg font-black text-slate-100">
+                    {t.roleSelectionTitle || "Choose Your Portal"}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                    {t.roleSelectionSubtitle || "Please select which dashboard you want to enter for this session:"}
+                  </p>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  {t.passwordLabel}
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Enter account password"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Role Selection Option: As a Client / As a Companion */}
-              <div className="space-y-1.5 pt-1">
-                <label className="block text-xs font-semibold text-slate-300">
-                  {t.loginAs}
-                </label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 border border-slate-700/80 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRole('CLIENT')}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      selectedRole === 'CLIENT'
-                        ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 font-extrabold'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <UserCheck className="w-4 h-4" />
-                    <span>{t.asClient}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRole('COMPANION')}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      selectedRole === 'COMPANION'
-                        ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-pink-500/20 font-extrabold'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>{t.asCompanion}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Forgot Password Link */}
-              <div className="flex justify-end">
+                {/* Option 1: Enter as Client Member */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveTab('forgot');
-                    setErrorMsg(null);
-                    setSuccessMsg(null);
-                    setForgotStep('phone_otp');
-                    setOtpSent(false);
-                    setDevOtpHint(null);
-                    setCountdown(0);
-                  }}
-                  className="text-xs text-amber-400 hover:text-amber-300 underline font-semibold"
+                  disabled={loading}
+                  onClick={() => handleChooseRoleAndEnter('CLIENT')}
+                  className="w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 border border-amber-400/40 hover:border-amber-400 text-left transition-all hover:scale-[1.01] active:scale-98 group flex items-center justify-between cursor-pointer shadow-lg"
                 >
-                  Forgot Password?
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-amber-400/20 border border-amber-400/40 text-amber-400 flex items-center justify-center shrink-0">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-100 group-hover:text-amber-300 transition-colors flex items-center gap-2">
+                        <span>{t.enterAsClient || "As a Client Member"}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-extrabold">100% Free</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-tight">
+                        {t.enterAsClientDesc || "Discover companions, view bookings, and manage client profile."}
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-amber-400 transition-transform group-hover:translate-x-1 shrink-0" />
                 </button>
-              </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-sky-500 hover:from-amber-600 hover:to-sky-600 text-slate-950 text-sm font-bold shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.01] active:scale-98 disabled:opacity-50"
-              >
-                {loading ? 'Authenticating...' : t.loginButton}
-              </button>
-            </form>
+                {/* Option 2: Enter as Companion Host */}
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleChooseRoleAndEnter('COMPANION')}
+                  className="w-full p-4 rounded-2xl bg-gradient-to-r from-pink-500/15 via-slate-900 to-slate-900 border border-pink-500/40 hover:border-pink-500 text-left transition-all hover:scale-[1.01] active:scale-98 group flex items-center justify-between cursor-pointer shadow-lg"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-400 flex items-center justify-center shrink-0">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-100 group-hover:text-pink-300 transition-colors flex items-center gap-2">
+                        <span>{t.enterAsCompanion || "As a Companion Host"}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 text-[10px] font-extrabold">Earn 85%</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-tight">
+                        {t.enterAsCompanionDesc || "Go Live, manage availability, receive requests, and view earnings."}
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-pink-400 transition-transform group-hover:translate-x-1 shrink-0" />
+                </button>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setLoginStep('credentials')}
+                    className="text-xs text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    ← Back to phone & password
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Step 1: Login Form (Phone + Password) */
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    {t.phoneLabel}
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs font-semibold">
+                      +91
+                    </div>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="9876543210"
+                      maxLength={10}
+                      className="w-full pl-12 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    {t.passwordLabel}
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="Enter account password"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Forgot Password Link */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('forgot');
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                      setForgotStep('phone_otp');
+                      setOtpSent(false);
+                      setDevOtpHint(null);
+                      setCountdown(0);
+                    }}
+                    className="text-xs text-amber-400 hover:text-amber-300 underline font-semibold"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-sky-500 hover:from-amber-600 hover:to-sky-600 text-slate-950 text-sm font-bold shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.01] active:scale-98 disabled:opacity-50 cursor-pointer"
+                >
+                  {loading ? 'Authenticating...' : t.loginButton}
+                </button>
+              </form>
+            )
           ) : (
             /* ===== SIGN IN (REGISTRATION) TAB ===== */
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
