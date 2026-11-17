@@ -16,7 +16,11 @@ import {
   CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users, ChevronDown
 } from 'lucide-react';
 
-export const ClientDashboard: React.FC = () => {
+interface ClientDashboardProps {
+  onNavigateToPage?: (page: string) => void;
+}
+
+export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPage }) => {
   const { user, token, activeRole, selectActiveRole, logout, bookingContext, setBookingContext, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard, refreshUserData } = useAuth();
   const { t, language, setLanguage } = useLanguage();
 
@@ -35,7 +39,7 @@ export const ClientDashboard: React.FC = () => {
     if (user && activeRole !== 'CLIENT') {
       selectActiveRole('CLIENT').catch(() => {});
     }
-  }, [user?.id, activeRole]);
+  }, [user?.id]);
 
   // 16 Complete Visible Navigation Tabs per Section 7
   type ClientTab = 

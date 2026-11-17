@@ -27,10 +27,12 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
   };
 
   const handleRoleSwitch = async () => {
-    const nextRole: 'CLIENT' | 'COMPANION' = activeRole === 'COMPANION' ? 'CLIENT' : 'COMPANION';
-    const targetPage = nextRole === 'COMPANION' ? 'companion-dashboard' : 'client-dashboard';
-    await selectActiveRole(nextRole);
-    handleNavClick(targetPage);
+    if (activeRole === 'COMPANION') {
+      handleNavClick('client-dashboard');
+    } else {
+      await selectActiveRole('COMPANION');
+      handleNavClick('companion-dashboard');
+    }
   };
 
   const handleBack = () => {

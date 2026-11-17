@@ -12,7 +12,7 @@ import {
   MessageSquare, Navigation, AlertTriangle, PhoneCall, RefreshCw, X,
   User, Calendar, DollarSign, Bell, Settings, LifeBuoy, LogOut,
   Pause, Power, Shield, FileText, CheckSquare, Star, ArrowLeft,
-  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound, Menu, Heart
+  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound, Menu, Heart, UserCheck
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -103,7 +103,11 @@ const triggerSystemNotification = (title: string, options?: any) => {
   }
 };
 
-export const CompanionDashboard: React.FC = () => {
+interface CompanionDashboardProps {
+  onNavigateToPage?: (page: string) => void;
+}
+
+export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNavigateToPage }) => {
   const { user, activeRole, selectActiveRole, refreshUserData, logout, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard } = useAuth();
   const { t, language, setLanguage } = useLanguage();
 
@@ -111,7 +115,7 @@ export const CompanionDashboard: React.FC = () => {
     if (user && activeRole !== 'COMPANION') {
       selectActiveRole('COMPANION').catch(() => {});
     }
-  }, [user?.id, activeRole]);
+  }, [user?.id]);
 
   // Complete Visible Navigation Tabs per Section 8
   type CompanionTab =
@@ -898,6 +902,8 @@ export const CompanionDashboard: React.FC = () => {
           setSelectedServices(data.profile.services || [1, 2]);
           const isPaused = Boolean(data.profile.isPaused);
           setIsAvailabilityPaused(isPaused);
+          const isLiveNow = Boolean(!isPaused && data.isLive);
+          localStorage.setItem('pairup_companion_online', isLiveNow ? 'true' : 'false');
           if (!isPaused && data.isLive) {
             startBackgroundKeepalive();
           }
@@ -1452,6 +1458,7 @@ export const CompanionDashboard: React.FC = () => {
       }
       if (res.ok) {
         setIsAvailabilityPaused(nextPaused);
+        localStorage.setItem('pairup_companion_online', !nextPaused ? 'true' : 'false');
         await fetchCompanionStatus();
         if (!nextPaused) {
           startBackgroundKeepalive();
@@ -2022,9 +2029,21 @@ export const CompanionDashboard: React.FC = () => {
               ))}
             </nav>
 
-            {/* Logout Button */}
-            <div className="pt-2 border-t border-white/10">
+            {/* Switch to Client & Logout Buttons */}
+            <div className="pt-2 border-t border-white/10 space-y-1">
               <button
+                type="button"
+                onClick={() => {
+                  onNavigateToPage ? onNavigateToPage('client-dashboard') : window.dispatchEvent(new CustomEvent('pairup:navigate', { detail: { page: 'client-dashboard' } }));
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20 transition-all cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4 text-amber-400" />
+                <span>{language === 'bn' ? 'ক্লায়েন্ট মোডে যান' : language === 'hi' ? 'क्लाइंट मोड में जाएँ' : 'Switch to Client Mode'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => {
                   if (window.confirm('Log out of PairUpToday Companion portal?')) {
                     logout();
@@ -2033,7 +2052,7 @@ export const CompanionDashboard: React.FC = () => {
                 className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20 transition-all cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <span>{language === 'bn' ? 'লগআউট' : language === 'hi' ? 'लॉगआउट' : 'Logout'}</span>
               </button>
             </div>
           </div>
@@ -2128,7 +2147,19 @@ export const CompanionDashboard: React.FC = () => {
                 </nav>
               </div>
 
-              <div className="pt-3 border-t border-white/10">
+              <div className="pt-3 border-t border-white/10 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileSidebarOpen(false);
+                    onNavigateToPage ? onNavigateToPage('client-dashboard') : window.dispatchEvent(new CustomEvent('pairup:navigate', { detail: { page: 'client-dashboard' } }));
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20"
+                >
+                  <UserCheck className="w-4 h-4 text-amber-400" />
+                  <span>{language === 'bn' ? 'ক্লায়েন্ট মোডে যান' : language === 'hi' ? 'क्लाइंट मोड में जाएँ' : 'Switch to Client Mode'}</span>
+                </button>
+
                 <button
                   onClick={() => {
                     if (window.confirm('Log out of PairUpToday Companion portal?')) {
@@ -2138,7 +2169,7 @@ export const CompanionDashboard: React.FC = () => {
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Logout</span>
+                  <span>{language === 'bn' ? 'লগআউট' : language === 'hi' ? 'लॉगआउट' : 'Logout'}</span>
                 </button>
               </div>
             </aside>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LanguageProvider } from './context/LanguageContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AdminAuthProvider } from './context/AdminAuthContext';
 import { Header } from './components/Header';
@@ -67,6 +67,7 @@ const getInitialPage = (): string => {
 
 const MainAppContent: React.FC = () => {
   const { user, activeRole, openAuthModal, selectActiveRole } = useAuth();
+  const { language, t } = useLanguage();
   
   const [currentPage, setCurrentPageState] = useState<string>(() => {
     const init = getInitialPage();
@@ -121,6 +122,24 @@ const MainAppContent: React.FC = () => {
     return false;
   };
 
+  // Check if companion is currently live and active online
+  const checkIsCompanionOnline = async (): Promise<boolean> => {
+    if (!userRef.current?.id) return false;
+    const local = localStorage.getItem('pairup_companion_online');
+    try {
+      const res = await apiFetch(`/api/companion/status/${userRef.current.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        const live = Boolean(data.isLive && !data.profile?.isPaused);
+        localStorage.setItem('pairup_companion_online', live ? 'true' : 'false');
+        return live;
+      }
+    } catch (e) {
+      console.warn('Online status verification error:', e);
+    }
+    return local === 'true';
+  };
+
   // Base navigation executor
   const executeNavigation = (targetPage: string, options?: { replace?: boolean }) => {
     if (targetPage === 'admin') {
@@ -151,7 +170,7 @@ const MainAppContent: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Centralized navigation handler with companion exit gate
+  // Centralized navigation handler with smart companion exit gate
   const navigateToPage = async (targetPage: string, options?: { replace?: boolean }) => {
     // If user is currently on companion-dashboard and trying to navigate to any other page
     if (currentPage === 'companion-dashboard' && targetPage !== 'companion-dashboard' && user) {
@@ -160,9 +179,19 @@ const MainAppContent: React.FC = () => {
         setShowActiveBookingBlockAlert(true);
         return;
       }
-      setPendingTargetPage(targetPage);
-      setShowExitConfirmModal(true);
-      return;
+
+      const isOnline = await checkIsCompanionOnline();
+      if (isOnline) {
+        // ONLY prompt confirmation if companion is currently ONLINE!
+        setPendingTargetPage(targetPage);
+        setShowExitConfirmModal(true);
+        return;
+      }
+
+      // If companion is already OFFLINE, directly switch role to CLIENT and navigate without popup!
+      if (targetPage === 'client-dashboard' || targetPage === 'home') {
+        selectActiveRole('CLIENT').catch(() => {});
+      }
     }
 
     executeNavigation(targetPage, options);
@@ -179,18 +208,20 @@ const MainAppContent: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, isPaused: true })
       });
+      localStorage.setItem('pairup_companion_online', 'false');
       // 2. Switch role to CLIENT
       await selectActiveRole('CLIENT');
       // 3. Clear modal and proceed to target page
       setShowExitConfirmModal(false);
-      const target = pendingTargetPage || 'home';
+      const target = pendingTargetPage || 'client-dashboard';
       setPendingTargetPage(null);
       executeNavigation(target);
     } catch (err) {
       console.warn('Exit switch warning:', err);
+      localStorage.setItem('pairup_companion_online', 'false');
       selectActiveRole('CLIENT').catch(() => {});
       setShowExitConfirmModal(false);
-      executeNavigation(pendingTargetPage || 'home');
+      executeNavigation(pendingTargetPage || 'client-dashboard');
     } finally {
       setIsProcessingExit(false);
     }
@@ -200,6 +231,17 @@ const MainAppContent: React.FC = () => {
     setShowExitConfirmModal(false);
     setPendingTargetPage(null);
   };
+
+  // Custom navigation event listener for in-app switches
+  useEffect(() => {
+    const handleCustomNavigate = (e: any) => {
+      if (e.detail?.page) {
+        navigateToPage(e.detail.page);
+      }
+    };
+    window.addEventListener('pairup:navigate', handleCustomNavigate);
+    return () => window.removeEventListener('pairup:navigate', handleCustomNavigate);
+  }, []);
 
   // URL routing and device/browser back button (popstate) synchronization
   useEffect(() => {
@@ -223,16 +265,26 @@ const MainAppContent: React.FC = () => {
 
       // If user is on companion-dashboard and presses browser back button to leave
       if (currentPageRef.current === 'companion-dashboard' && targetPage !== 'companion-dashboard' && userRef.current) {
-        // Hold companion on companion-dashboard URL
-        window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');
         const hasActive = await checkHasActiveBooking();
         if (hasActive) {
+          window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');
           setShowActiveBookingBlockAlert(true);
           return;
         }
-        setPendingTargetPage(targetPage);
-        setShowExitConfirmModal(true);
-        return;
+
+        const isOnline = await checkIsCompanionOnline();
+        if (isOnline) {
+          // Hold companion on companion-dashboard URL ONLY if online
+          window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');
+          setPendingTargetPage(targetPage);
+          setShowExitConfirmModal(true);
+          return;
+        }
+
+        // Already offline: switch role to client and let back navigation proceed naturally
+        if (targetPage === 'client-dashboard' || targetPage === 'home') {
+          selectActiveRole('CLIENT').catch(() => {});
+        }
       }
 
       if (targetPage === 'admin' || window.location.pathname === '/admin') {
@@ -248,14 +300,14 @@ const MainAppContent: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Automatically redirect to companion-dashboard when a companion logs in
+  // Redirect to companion-dashboard on initial load if URL is specifically /companion-dashboard
   useEffect(() => {
-    if (user && (user.role === 'COMPANION' || activeRole === 'COMPANION')) {
-      if (activeRole === 'COMPANION' && (currentPage === 'home' || currentPage === 'client-dashboard')) {
+    if (user && activeRole === 'COMPANION') {
+      if (currentPage === 'home' && window.location.pathname === '/companion-dashboard') {
         executeNavigation('companion-dashboard', { replace: true });
       }
     }
-  }, [user?.id, user?.role, activeRole]);
+  }, [user?.id, activeRole]);
 
   // Automatically redirect to home page whenever user logs out
   const prevUserRef = React.useRef(user);
@@ -347,13 +399,13 @@ const MainAppContent: React.FC = () => {
       case 'client-dashboard':
         return (
           <ErrorBoundary fallbackTitle="Client Dashboard">
-            <ClientDashboard />
+            <ClientDashboard onNavigateToPage={navigateToPage} />
           </ErrorBoundary>
         );
       case 'companion-dashboard':
         return (
           <ErrorBoundary fallbackTitle="Companion Dashboard">
-            <CompanionDashboard />
+            <CompanionDashboard onNavigateToPage={navigateToPage} />
           </ErrorBoundary>
         );
       case 'home':
@@ -394,15 +446,15 @@ const MainAppContent: React.FC = () => {
 
         {/* Modals & Wizards */}
         <AuthGatewayModal
-          onNavigateToDashboard={targetPage => navigateToPage(targetPage)}
+          onNavigateToDashboard={targetPage => executeNavigation(targetPage)}
         />
         <KycWizardModal />
         <RoleSelectionModal
           onSelectRoleDone={role => {
             if (role === 'COMPANION') {
-              navigateToPage('companion-dashboard');
+              executeNavigation('companion-dashboard');
             } else {
-              navigateToPage('client-dashboard');
+              executeNavigation('client-dashboard');
             }
           }}
         />
@@ -419,20 +471,21 @@ const MainAppContent: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-100">
-                    Booking Active in Progress
+                    {language === 'bn' ? 'বুকিং সেশন সক্রিয় রয়েছে' : language === 'hi' ? 'सक्रिय बुकिंग प्रगति पर है' : 'Booking Active in Progress'}
                   </h3>
                   <p className="text-xs text-rose-400 font-medium">
-                    বুকিং সেশন সক্রিয় রয়েছে
+                    {language === 'bn' ? 'একটি ক্লায়েন্ট মিটিং সেশন বর্তমানে চলমান' : language === 'hi' ? 'एक ग्राहक सत्र वर्तमान में प्रगति पर है' : 'Client meeting currently active'}
                   </p>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2 text-slate-300">
                 <p>
-                  You currently have a booking in progress or waiting for acceptance. You cannot go offline or leave the Companion Dashboard until this session is completed or cancelled.
-                </p>
-                <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
-                  বুকিং সেশন সক্রিয় থাকা অবস্থায় আপনি অফলাইন হতে বা ড্যাশবোর্ড থেকে বের হতে পারবেন না।
+                  {language === 'bn'
+                    ? 'নিরাপত্তা ও নীতি অনুযায়ী, সক্রিয় মিটিং চলাকালীন আপনি কম্প্যানিয়ন ড্যাশবোর্ড ত্যাগ করতে বা রোল পরিবর্তন করতে পারবেন না। অনুগ্রহ করে মিটিংটি সম্পন্ন করুন।'
+                    : language === 'hi'
+                    ? 'सुरक्षा और नीतियों के अनुसार, सक्रिय मीटिंग के दौरान आप कंपेनियन डैशबोर्ड छोड़कर नहीं जा सकते। कृपया पहले मीटिंग पूरी करें।'
+                    : 'You currently have a booking in progress. You cannot go offline or leave the Companion Dashboard until this session is completed or cancelled.'}
                 </p>
               </div>
 
@@ -441,7 +494,7 @@ const MainAppContent: React.FC = () => {
                 onClick={() => setShowActiveBookingBlockAlert(false)}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-extrabold text-xs shadow-lg shadow-rose-950/40 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
               >
-                <span>Stay on Companion Dashboard / ড্যাশবোর্ডে থাকুন</span>
+                <span>{language === 'bn' ? 'ড্যাশবোর্ডে থাকুন' : language === 'hi' ? 'डैशबोर्ड पर बने रहें' : 'Stay on Dashboard'}</span>
               </button>
             </div>
           </div>
@@ -457,23 +510,37 @@ const MainAppContent: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-100">
-                    Switch to Client & Go Offline?
+                    {language === 'bn' ? 'অফলাইন হয়ে ক্লায়েন্ট মোডে যাবেন?' : language === 'hi' ? 'ऑफ़लाइन होकर क्लाइंट मोड में जाएँ?' : 'Switch to Client & Go Offline?'}
                   </h3>
                   <p className="text-xs text-amber-400 font-medium">
-                    অফলাইন হয়ে ক্লায়েন্ট মোডে যাবেন?
+                    {language === 'bn' ? 'কম্প্যানিয়ন মোড (অনলাইন)' : language === 'hi' ? 'कंपेनियन मोड (ऑनलाइन)' : 'Companion Mode (Online)'}
                   </p>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2.5 text-slate-300">
                 <p>
-                  You are currently in <strong>Companion Mode (Online)</strong>. To visit the Home page or browse as a client, you will automatically be set to <strong>OFFLINE</strong> and your active role will switch to <strong>Client</strong>.
+                  {language === 'bn' ? (
+                    <>আপনি বর্তমানে কম্প্যানিয়ন হিসেবে <strong>অনলাইনে</strong> রয়েছেন। ক্লায়েন্ট মোডে যেতে বা এই পৃষ্ঠাটি দেখতে, আপনাকে স্বয়ংক্রিয়ভাবে <strong>অফলাইন</strong> করা হবে এবং আপনার সক্রিয় ভূমিকা <strong>ক্লায়েন্টে</strong> পরিবর্তিত হবে।</>
+                  ) : language === 'hi' ? (
+                    <>आप वर्तमान में कंपेनियन के रूप में <strong>ऑनलाइन</strong> हैं। क्लाइंट मोड में जाने या इस पृष्ठ को देखने के लिए, आपको स्वचालित रूप से <strong>ऑफ़लाइन</strong> कर दिया जाएगा और आपकी भूमिका <strong>क्लाइंट</strong> में बदल जाएगी।</>
+                  ) : (
+                    <>You are currently in <strong>Companion Mode (Online)</strong>. To visit this page or browse as a client, you will automatically be set to <strong>OFFLINE</strong> and your active role will switch to <strong>Client</strong>.</>
+                  )}
                 </p>
                 <p className="text-[11px] text-amber-300/90 bg-amber-950/30 p-2.5 rounded-xl border border-amber-500/30">
-                  ⚠️ While offline, clients will no longer see your profile on the map or send you booking requests.
+                  {language === 'bn'
+                    ? '⚠️ অফলাইন থাকলে ক্লায়েন্টরা আপনাকে মানচিত্রে দেখতে পাবে না বা বুকিং অনুরোধ পাঠাতে পারবে না।'
+                    : language === 'hi'
+                    ? '⚠️ ऑफ़लाइन रहने पर ग्राहक आपको मानचित्र पर नहीं देख पाएंगे या बुकिंग अनुरोध नहीं भेज सकेंगे।'
+                    : '⚠️ While offline, clients will no longer see your profile on the map or send you booking requests.'}
                 </p>
                 <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
-                  ড্যাশবোর্ড ছেড়ে হোমপেজে যেতে হলে আপনাকে অফলাইন হতে হবে। আপনি চাইলে পুনরায় কম্প্যানিয়ন ড্যাশবোর্ডে এসে যেকোনো সময় অনলাইন হতে পারবেন।
+                  {language === 'bn'
+                    ? 'ড্যাশবোর্ড ছেড়ে যেতে হলে অফলাইন হতে হয়। আপনি পরবর্তীতে কম্প্যানিয়ন ড্যাশবোর্ডে এসে যেকোনো সময় পুনরায় অনলাইন হতে পারবেন।'
+                    : language === 'hi'
+                    ? 'डैशबोर्ड छोड़ने के लिए ऑफ़लाइन होना आवश्यक है। आप जब चाहें कंपेनियन डैशबोर्ड पर लौटकर पुनः ऑनलाइन हो सकते हैं।'
+                    : 'Leaving the companion dashboard requires going offline. You can return to the Companion Dashboard and go online at any time.'}
                 </p>
               </div>
 
@@ -484,7 +551,7 @@ const MainAppContent: React.FC = () => {
                   onClick={handleCancelExit}
                   className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-colors cursor-pointer active:scale-95 text-center"
                 >
-                  Cancel / বাতিল
+                  {language === 'bn' ? 'বাতিল' : language === 'hi' ? 'रद्द करें' : 'Cancel'}
                 </button>
 
                 <button
@@ -496,10 +563,10 @@ const MainAppContent: React.FC = () => {
                   {isProcessingExit ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Switching...</span>
+                      <span>{language === 'bn' ? 'পরিবর্তন হচ্ছে...' : language === 'hi' ? 'बदला जा रहा है...' : 'Switching...'}</span>
                     </>
                   ) : (
-                    <span>Go Offline / নিশ্চিত</span>
+                    <span>{language === 'bn' ? 'অফলাইন হয়ে যান' : language === 'hi' ? 'ऑफ़लाइन जाएँ' : 'Go Offline'}</span>
                   )}
                 </button>
               </div>
