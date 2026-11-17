@@ -595,14 +595,9 @@ export const CompanionDashboard: React.FC = () => {
     }
   }, [incomingBookingRequest, isAvailabilityPaused]);
 
-  const togglePipOverlay = async () => {
+  const activatePipOverlay = async () => {
     try {
       startBackgroundKeepalive();
-      if (typeof document !== 'undefined' && document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-        setIsPipActive(false);
-        return;
-      }
       if (!pipVideoRef.current || !pipCanvasRef.current) return;
 
       drawPipFrame();
@@ -616,15 +611,24 @@ export const CompanionDashboard: React.FC = () => {
 
       await pipVideoRef.current.play().catch(() => {});
       if (typeof pipVideoRef.current.requestPictureInPicture === 'function') {
-        await pipVideoRef.current.requestPictureInPicture();
-        setIsPipActive(true);
-        setActionMsg('📺 Floating Overlay enabled! This window will stay visible over Facebook, WhatsApp, and phone calls.');
-        setTimeout(() => setActionMsg(null), 5000);
-      } else {
-        setActionMsg('Picture-in-Picture floating overlay is not supported by your current browser.');
+        if (!document.pictureInPictureElement) {
+          await pipVideoRef.current.requestPictureInPicture();
+          setIsPipActive(true);
+        }
       }
     } catch (err: any) {
-      console.warn('PiP toggle error:', err);
+      console.warn('PiP auto-activation notice:', err);
+    }
+  };
+
+  const deactivatePipOverlay = async () => {
+    try {
+      if (typeof document !== 'undefined' && document.pictureInPictureElement) {
+        await document.exitPictureInPicture().catch(() => {});
+      }
+      setIsPipActive(false);
+    } catch (err: any) {
+      console.warn('PiP auto-deactivation notice:', err);
     }
   };
 
@@ -1421,8 +1425,12 @@ export const CompanionDashboard: React.FC = () => {
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted') {
             Notification.requestPermission().then(p => setNotificationPermission(p)).catch(() => {});
           }
+          // Automatically activate floating overlay window when companion goes online
+          activatePipOverlay();
         } else {
           stopBackgroundKeepalive();
+          // Automatically deactivate floating overlay window when companion goes offline
+          deactivatePipOverlay();
         }
         setActionMsg(
           nextPaused
@@ -2129,21 +2137,6 @@ export const CompanionDashboard: React.FC = () => {
                   <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${!isAvailabilityPaused ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
                 </span>
                 <span className="font-extrabold">{!isAvailabilityPaused ? 'LIVE' : 'OFFLINE'}</span>
-              </button>
-
-              {/* Picture-in-Picture Floating Overlay Button */}
-              <button
-                type="button"
-                onClick={togglePipOverlay}
-                title={isPipActive ? 'Floating Overlay ACTIVE' : 'Enable Floating Overlay'}
-                className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                  isPipActive
-                    ? 'bg-purple-50 border-purple-300 text-purple-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <span>📺</span>
-                <span>{isPipActive ? 'PiP Active' : 'Floating Overlay'}</span>
               </button>
 
               {/* Notification Bell */}
