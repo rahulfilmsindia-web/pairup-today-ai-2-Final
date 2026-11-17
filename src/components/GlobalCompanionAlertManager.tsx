@@ -59,13 +59,21 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
   const [incomingBooking, setIncomingBooking] = useState<any | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<string>(() => {
+    return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted';
+  });
 
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const ringtoneTimerRef = useRef<any>(null);
   const pulseTimerRef = useRef<any>(null);
 
+  // Reliable companion detection across ALL pages (Home, About, Dashboard, etc.)
   const isCompanion = Boolean(
-    user && (user.activeRole === 'COMPANION' || (Array.isArray(user.roles) && user.roles.includes('COMPANION')))
+    user && (
+      user.role === 'COMPANION' ||
+      user.activeRole === 'COMPANION' ||
+      user.role === 'DUAL'
+    )
   );
 
   // Close any ongoing system notifications
@@ -163,7 +171,7 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
         } catch {}
       }
 
-      // Vibration pattern
+      // Loud vibration pattern on phone
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
         navigator.vibrate([800, 300, 800, 300, 800]);
       }
@@ -173,40 +181,87 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
   }, [stopRingtone]);
 
   // Initialize and register Web Push Subscription via Service Worker & VAPID
-  useEffect(() => {
+  const setupWebPush = useCallback(async () => {
     if (!isCompanion || typeof window === 'undefined') return;
 
-    const setupWebPush = async () => {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      const reg = await navigator.serviceWorker.ready;
+
+      const res = await apiFetch('/api/companion/push-vapid-key');
+      if (!res.ok) return;
+      const { publicKey } = await res.json();
+      if (!publicKey) return;
+
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+          return;
+        }
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+      }
+      if (sub) {
+        await apiFetch('/api/companion/push-subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub })
+        });
+      }
+    } catch (err) {
+      console.warn('Web Push setup warning:', err);
+    }
+  }, [isCompanion]);
+
+  useEffect(() => {
+    setupWebPush();
+  }, [setupWebPush, user?.id]);
+
+  // Handle user interaction to enable alerts & audio permissions
+  const handleEnableAlerts = async () => {
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        const p = await Notification.requestPermission();
+        setNotificationPermission(p);
+        if (p === 'granted') {
+          setupWebPush();
+          if (!backgroundAudioRef.current) {
+            const audio = new Audio('/assets/silent.wav');
+            audio.loop = true;
+            audio.volume = 0.01;
+            backgroundAudioRef.current = audio;
+          }
+          backgroundAudioRef.current?.play().catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn('Enable alerts error', e);
+    }
+  };
+
+  // Screen Wake Lock API to prevent device from sleeping or freezing background timers
+  useEffect(() => {
+    if (!isCompanion || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
       try {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-        const reg = await navigator.serviceWorker.ready;
-
-        const res = await apiFetch('/api/companion/push-vapid-key');
-        if (!res.ok) return;
-        const { publicKey } = await res.json();
-        if (!publicKey) return;
-
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicKey)
-          });
-        }
-        if (sub) {
-          await apiFetch('/api/companion/push-subscription', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subscription: sub })
-          });
-        }
-      } catch (err) {
-        console.warn('Web Push setup warning:', err);
+        wakeLock = await (navigator as any).wakeLock.request('screen');
+      } catch {}
+    };
+    requestWakeLock();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
       }
     };
-
-    setupWebPush();
-  }, [isCompanion, user?.id]);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (wakeLock) wakeLock.release().catch(() => {});
+    };
+  }, [isCompanion]);
 
   // Keep background audio active when companion is logged in
   useEffect(() => {
@@ -233,9 +288,9 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
     };
   }, [isCompanion, stopRingtone]);
 
-  // Persistent Global SSE Alert Stream + 3.5s Fallback Polling
+  // Persistent Global SSE Alert Stream + 2.5s Fallback Polling across ALL pages
   useEffect(() => {
-    if (!isCompanion || typeof window === 'undefined') return;
+    if (!isCompanion || typeof window === 'undefined' || !user?.id) return;
 
     let eventSource: EventSource | null = null;
     let pollTimer: any = null;
@@ -269,7 +324,23 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
       });
     };
 
-    // 1. SSE Connection
+    // Listen to Service Worker notifications actions (e.g. user clicked notification on lock screen)
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NOTIFICATION_ACTION') {
+        if (event.data.action === 'open') {
+          if (onNavigateToDashboard) {
+            onNavigateToDashboard();
+          } else {
+            window.location.href = '/companion-dashboard';
+          }
+        }
+      }
+    };
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+
+    // 1. Real-time SSE Connection
     try {
       const token = localStorage.getItem('pairup_token') || '';
       const sseUrl = token
@@ -302,41 +373,55 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
       console.warn('Global SSE initialization error', sseErr);
     }
 
-    // 2. Fallback Polling every 3.5s
+    // 2. High-frequency Fallback Polling every 2.5s (Hits /api/bookings/my/:userId)
     const checkPendingBookings = async () => {
       try {
-        const res = await apiFetch('/api/companion/bookings');
+        let list: any[] = [];
+        const res = await apiFetch(`/api/bookings/my/${user.id}`);
         if (res.ok) {
           const data = await res.json();
-          const list = Array.isArray(data.bookings) ? data.bookings : [];
-          const pending = list.find((b: any) => b.status === 'PENDING' && !b.companionAccepted);
-          if (pending) {
-            setIncomingBooking((prev: any) => {
-              if (!prev || prev.id !== pending.id) {
-                handleIncomingBooking(pending);
-              }
-              return pending;
-            });
-          } else {
-            setIncomingBooking((prev: any) => {
-              if (prev) {
-                stopRingtone();
-              }
-              return null;
-            });
+          list = Array.isArray(data.bookings) ? data.bookings : [];
+        } else {
+          const altRes = await apiFetch('/api/companion/bookings');
+          if (altRes.ok) {
+            const altData = await altRes.json();
+            list = Array.isArray(altData.bookings) ? altData.bookings : [];
           }
+        }
+        const pending = list.find((b: any) =>
+          b.companionId === user.id &&
+          (b.status === 'PENDING' || b.status === 'PENDING_PAYMENT') &&
+          !b.companionAccepted
+        );
+        if (pending) {
+          setIncomingBooking((prev: any) => {
+            if (!prev || prev.id !== pending.id) {
+              handleIncomingBooking(pending);
+            }
+            return pending;
+          });
+        } else {
+          setIncomingBooking((prev: any) => {
+            if (prev) {
+              stopRingtone();
+            }
+            return null;
+          });
         }
       } catch {}
     };
 
     checkPendingBookings();
-    pollTimer = setInterval(checkPendingBookings, 3500);
+    pollTimer = setInterval(checkPendingBookings, 2500);
 
     return () => {
       if (eventSource) eventSource.close();
       if (pollTimer) clearInterval(pollTimer);
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
     };
-  }, [isCompanion, startRingtone, stopRingtone]);
+  }, [isCompanion, user?.id, startRingtone, stopRingtone, onNavigateToDashboard]);
 
   // Repeating notification pulse while booking is pending
   useEffect(() => {
@@ -409,6 +494,25 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
 
   return (
     <>
+      {/* Background Alert Activation Banner (Shows across ALL pages if permission not yet granted) */}
+      {isCompanion && notificationPermission !== 'granted' && (
+        <div className="fixed top-0 left-0 right-0 z-[1100] px-4 py-2.5 bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 text-white shadow-2xl flex flex-wrap items-center justify-between gap-2 text-xs animate-fade-in">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 animate-bounce text-amber-200 shrink-0" />
+            <span>
+              <strong>Turn On Incoming Booking Calls:</strong> Enable alerts to receive loud ringing & popups even when minimized, screen is locked, or in other apps.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleEnableAlerts}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-950 text-pink-300 hover:text-white font-black text-xs shadow-md border border-pink-400/50 cursor-pointer active:scale-95 transition-all"
+          >
+            Enable Instant Alerts
+          </button>
+        </div>
+      )}
+
       {/* Toast Alert Banner */}
       {actionMsg && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] px-5 py-3 rounded-2xl bg-slate-900/95 border border-pink-500/60 text-slate-100 text-xs shadow-2xl flex items-center gap-2.5 animate-bounce">

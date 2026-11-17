@@ -2957,8 +2957,39 @@ try {
   console.warn('Web Push setVapidDetails warning:', vapidErr);
 }
 
-// In-memory push subscriptions & SSE streams
-const companionPushSubscriptions = new Map<string, any[]>();
+// Persistent Web Push Subscriptions & SSE streams
+const PUSH_SUBS_FILE = path.join(DATA_DIR, 'push_subscriptions.json');
+
+function loadPushSubscriptions(): Map<string, any[]> {
+  const map = new Map<string, any[]>();
+  try {
+    if (fs.existsSync(PUSH_SUBS_FILE)) {
+      const raw = fs.readFileSync(PUSH_SUBS_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      for (const [k, v] of Object.entries(data)) {
+        if (Array.isArray(v)) map.set(k, v);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not load push subscriptions from disk:', e);
+  }
+  return map;
+}
+
+function savePushSubscriptions(map: Map<string, any[]>) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    const obj: Record<string, any[]> = {};
+    for (const [k, v] of map.entries()) {
+      obj[k] = v;
+    }
+    fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('Could not save push subscriptions to disk:', e);
+  }
+}
+
+const companionPushSubscriptions = loadPushSubscriptions();
 const companionAlertStreams = new Map<string, Set<Response>>();
 
 async function pushCompanionAlert(companionId: string, event: { type: string; [key: string]: any }) {
@@ -2979,7 +3010,7 @@ async function pushCompanionAlert(companionId: string, event: { type: string; [k
     });
   }
 
-  // 2. Deliver via W3C Web Push (FCM / Google Push Service)
+  // 2. Deliver via W3C Web Push (FCM / Google Push Service) with High Urgency
   // Wakes up Android / mobile Service Worker even when browser is minimized, screen is locked, or inside WhatsApp/Facebook/calls!
   const subs = companionPushSubscriptions.get(companionId);
   if (subs && subs.length > 0) {
@@ -3005,10 +3036,19 @@ async function pushCompanionAlert(companionId: string, event: { type: string; [k
       url: '/companion-dashboard'
     });
 
+    const pushOptions = {
+      TTL: 120, // 2 minutes urgency window
+      urgency: 'high' as any,
+      headers: {
+        Urgency: 'high',
+        Topic: 'incoming-call'
+      }
+    };
+
     const activeSubs: any[] = [];
     for (const sub of subs) {
       try {
-        await webpush.sendNotification(sub, pushPayload);
+        await webpush.sendNotification(sub, pushPayload, pushOptions);
         activeSubs.push(sub);
       } catch (pushErr: any) {
         // Drop dead/expired push subscriptions (404/410)
@@ -3018,6 +3058,7 @@ async function pushCompanionAlert(companionId: string, event: { type: string; [k
       }
     }
     companionPushSubscriptions.set(companionId, activeSubs);
+    savePushSubscriptions(companionPushSubscriptions);
   }
 }
 
@@ -3038,7 +3079,23 @@ app.post('/api/companion/push-subscription', async (req: Request, res: Response)
   const filtered = list.filter((s: any) => s.endpoint !== subscription.endpoint);
   filtered.push(subscription);
   companionPushSubscriptions.set(authUser.id, filtered);
+  savePushSubscriptions(companionPushSubscriptions);
   return res.json({ success: true, count: filtered.length });
+});
+
+// Companion direct bookings list endpoint
+app.get('/api/companion/bookings', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const bookings = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.listBookings({ companionId: authUser.id })
+      : Object.values(db.bookings).filter((b: any) => b.companionId === authUser.id);
+    return res.json({ bookings });
+  } catch (err) {
+    const list = Object.values(db.bookings || {}).filter((b: any) => b.companionId === authUser.id);
+    return res.json({ bookings: list });
+  }
 });
 
 // Verify Razorpay payment signature (server-side HMAC-SHA256)
@@ -6853,6 +6910,18 @@ async function startServer() {
   });
 
   if (isProduction && fs.existsSync(distDir)) {
+    // Explicitly serve sw.js with zero-cache headers so mobile service worker updates immediately
+    app.get('/sw.js', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Content-Type', 'application/javascript');
+      const swPath = fs.existsSync(path.join(distDir, 'sw.js'))
+        ? path.join(distDir, 'sw.js')
+        : path.join(__dirname, 'public', 'sw.js');
+      res.sendFile(swPath);
+    });
+
     // Serve separately built Admin assets if present. The admin SPA references
     // absolute /assets/... URLs, so chain dist-admin/assets BEFORE dist/assets;
     // express.static falls through to the next mount on a miss.
@@ -6862,6 +6931,10 @@ async function startServer() {
     app.use(express.static(distDir));
     app.get('*', (req, res) => {
       const host = req.headers.host || '';
+      // HTML documents must never be cached so clients immediately get new deployment chunks
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       if (host.startsWith('admin.') && fs.existsSync(distAdminDir)) {
         return res.sendFile(path.join(distAdminDir, 'admin.html'));
       }

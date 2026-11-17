@@ -14,19 +14,30 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const targetUrl = data.url || '/companion-dashboard';
 
+  // If companion clicked decline directly on the heads-up notification
+  if (action === 'decline' && data.bookingId) {
+    event.waitUntil(
+      fetch(`/api/bookings/${data.bookingId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }).catch(() => {})
+    );
+    return;
+  }
+
+  // Answer / View or notification clicked — focus or open companion dashboard
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       // Focus open companion dashboard window
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
         if (client.url.includes('/companion-dashboard') || client.url.includes('pairuptoday')) {
-          if (action && data.bookingId) {
-            client.postMessage({
-              type: 'NOTIFICATION_ACTION',
-              action,
-              bookingId: data.bookingId
-            });
-          }
+          client.postMessage({
+            type: 'NOTIFICATION_ACTION',
+            action: action || 'open',
+            bookingId: data.bookingId,
+            booking: data.booking
+          });
           return client.focus();
         }
       }

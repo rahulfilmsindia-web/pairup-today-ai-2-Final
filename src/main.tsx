@@ -2,21 +2,12 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Bulletproof Mobile Chrome Guard: Prevent "Failed to construct 'Notification': Illegal constructor"
+// Safe Mobile Chrome Guard: Ensure ServiceWorkerRegistration.showNotification is preferred
 if (typeof window !== 'undefined' && 'Notification' in window) {
   try {
-    const NativeNotification = window.Notification;
-    // Test if new Notification() is legal in this environment
-    let isConstructorAllowed = true;
-    try {
-      new (NativeNotification as any)('__test_probe__', { silent: true });
-    } catch (testErr: any) {
-      if (testErr && testErr.message && testErr.message.includes('Illegal constructor')) {
-        isConstructorAllowed = false;
-      }
-    }
-
-    if (!isConstructorAllowed) {
+    const desc = Object.getOwnPropertyDescriptor(window, 'Notification');
+    if (!desc || desc.configurable !== false) {
+      const NativeNotification = window.Notification;
       const SafeNotification = function (title: string, options?: NotificationOptions) {
         if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
           navigator.serviceWorker.ready.then((reg) => {
@@ -32,15 +23,15 @@ if (typeof window !== 'undefined' && 'Notification' in window) {
         ? NativeNotification.requestPermission.bind(NativeNotification)
         : () => Promise.resolve('denied');
 
-      Object.defineProperty(window, 'Notification', {
-        value: SafeNotification,
-        writable: true,
-        configurable: true
-      });
+      try {
+        Object.defineProperty(window, 'Notification', {
+          value: SafeNotification,
+          writable: true,
+          configurable: true
+        });
+      } catch {}
     }
-  } catch (guardErr) {
-    console.warn('Notification polyfill notice:', guardErr);
-  }
+  } catch {}
 }
 
 // Register Service Worker for background overlay alerts & notifications
