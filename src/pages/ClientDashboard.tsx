@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { apiFetch } from '../utils/api';
@@ -13,8 +13,7 @@ import {
   CreditCard, KeyRound, AlertTriangle, ChevronRight, UserCheck, X,
   Bell, Settings, LifeBuoy, LogOut, Heart, Sparkles, User, FileText,
   DollarSign, Compass, CheckCircle2, Sliders, Shield, Eye, ChevronLeft,
-  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users,
-  LayoutGrid, History, Home
+  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert
 } from 'lucide-react';
 
 export const ClientDashboard: React.FC = () => {
@@ -48,7 +47,6 @@ export const ClientDashboard: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<ClientTab>('overview');
   const [trackedBooking, setTrackedBooking] = useState<any | null>(null);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Tab scroll ref for desktop Left/Right arrow navigation
   const tabsNavRef = useRef<HTMLDivElement>(null);
@@ -64,58 +62,6 @@ export const ClientDashboard: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<string>('all');
   const [maxBudgetHourly, setMaxBudgetHourly] = useState<number>(3000);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [smartFilter, setSmartFilter] = useState<'all' | 'online' | 'suggested'>('all');
-  const [showAllCompanions, setShowAllCompanions] = useState(false);
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
-
-  const toggleFavorite = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  // In-app Back Navigation Handler (prevents unexpected page exits)
-  const activeTabRef = useRef(activeTab);
-  activeTabRef.current = activeTab;
-  const quickViewCompanionRef = useRef<any>(null);
-  const selectedCompanionRef = useRef<any>(null);
-
-  const handleDashboardBack = useCallback(() => {
-    if (quickViewCompanionRef.current) {
-      setQuickViewCompanion(null);
-      return;
-    }
-    if (selectedCompanionRef.current) {
-      setSelectedCompanion(null);
-      setBookingStep('form');
-      return;
-    }
-    if (activeTabRef.current !== 'overview') {
-      setActiveTab('overview');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleInAppEvent = (e: Event) => {
-      if (quickViewCompanionRef.current || selectedCompanionRef.current || activeTabRef.current !== 'overview') {
-        e.preventDefault();
-        handleDashboardBack();
-      }
-    };
-    window.addEventListener('pairup:inapp_back', handleInAppEvent);
-    return () => window.removeEventListener('pairup:inapp_back', handleInAppEvent);
-  }, [handleDashboardBack]);
-
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      if (quickViewCompanionRef.current || selectedCompanionRef.current || activeTabRef.current !== 'overview') {
-        handleDashboardBack();
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [handleDashboardBack]);
 
   // Multi-step booking request & companion acceptance flow
   type BookingStep = 'form' | 'waiting_acceptance' | 'accepted' | 'rejected';
@@ -226,8 +172,6 @@ export const ClientDashboard: React.FC = () => {
   // Quick View modal state
   const [quickViewCompanion, setQuickViewCompanion] = useState<any | null>(null);
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(0);
-  quickViewCompanionRef.current = quickViewCompanion;
-  selectedCompanionRef.current = selectedCompanion;
 
   const openQuickView = (companion: any) => {
     setQuickViewCompanion(companion);
@@ -530,8 +474,8 @@ export const ClientDashboard: React.FC = () => {
   };
 
   // Fetch verified LIVE companions
-  const fetchCompanions = async (isBackgroundSync = false) => {
-    if (!isBackgroundSync) setLoadingCompanions(true);
+  const fetchCompanions = async () => {
+    setLoadingCompanions(true);
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.append('query', searchQuery);
@@ -546,7 +490,7 @@ export const ClientDashboard: React.FC = () => {
     } catch (err) {
       console.error('Failed to load companions', err);
     } finally {
-      if (!isBackgroundSync) setLoadingCompanions(false);
+      setLoadingCompanions(false);
     }
   };
 
@@ -593,10 +537,9 @@ export const ClientDashboard: React.FC = () => {
     fetchNotifications();
     refreshUserData();
     const interval = setInterval(() => {
-      fetchCompanions(true);
       fetchMyBookings();
       fetchNotifications();
-    }, 6000);
+    }, 7000);
     return () => clearInterval(interval);
   }, [user?.id, selectedServiceId, selectedCity]);
 
@@ -887,699 +830,417 @@ export const ClientDashboard: React.FC = () => {
     return true;
   });
 
-  const clientNavTabs = [
-    { id: 'overview' as ClientTab, label: t.tabOverview, icon: Home },
-    { id: 'profile' as ClientTab, label: t.tabProfile, icon: User },
-    { id: 'kyc-status' as ClientTab, label: t.tabKycStatus, icon: ShieldCheck, badge: isKycApproved ? undefined : 'Verify' },
-    { id: 'services' as ClientTab, label: t.tabServices, icon: LayoutGrid },
-    ...(trackedBooking || upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS')
-      ? [{ id: 'tracking' as ClientTab, label: 'Live Tracking', icon: Navigation, isLiveBadge: true }]
-      : []),
-    { id: 'history' as ClientTab, label: t.tabHistory, icon: History, badge: pastBookings.length || undefined },
-    { id: 'chat' as ClientTab, label: t.tabChat, icon: MessageSquare, badge: 2 },
-    { id: 'notifications' as ClientTab, label: t.tabNotifications, icon: Bell, badge: notifications.length || 2 },
-    { id: 'payments' as ClientTab, label: t.tabPayments, icon: CreditCard },
-    { id: 'help-safety' as ClientTab, label: t.tabSafetyAndHelp, icon: Shield },
-    { id: 'settings' as ClientTab, label: t.tabSettings, icon: Settings },
-  ];
-
   return (
-    <div className="min-h-screen bg-[#F4F2FA] text-slate-800 flex overflow-x-hidden relative">
-      {/* Ambient background soft pastel gradient waves */}
-      <div className="fixed top-0 right-0 w-[500px] h-[500px] bg-purple-200/20 rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="fixed bottom-10 left-1/3 w-[600px] h-[400px] bg-pink-200/20 rounded-full blur-3xl pointer-events-none -z-10" />
+    <div className="min-h-screen bg-slate-950 text-slate-100 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Top Status & Role Verification Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <img
+                src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
+                alt={user?.legalName}
+                className="w-14 h-14 rounded-full object-cover ring-2 ring-amber-400"
+              />
+              <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full ring-2 ring-slate-900 ${isKycApproved ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+            </div>
 
-      {/* ============================================================== */}
-      {/* 1. DESKTOP / TABLET DOCKED SIDEBAR (INDIGO / VIOLET GRADIENT)   */}
-      {/* ============================================================== */}
-      <aside className="w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#20145c] to-[#1c1248] text-white shrink-0 min-h-screen border-r border-[#261b5c]/50 hidden lg:flex flex-col select-none relative overflow-hidden z-20">
-        {/* Top Branding matching reference design */}
-        <div className="p-6 border-b border-white/10 flex flex-col items-center text-center">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 via-rose-500 to-purple-600 p-0.5 shadow-xl shadow-pink-500/30 flex items-center justify-center mb-2.5">
-            <div className="w-full h-full bg-[#1A135E] rounded-[14px] flex items-center justify-center">
-              <Heart className="w-7 h-7 text-pink-400 fill-pink-400" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-slate-100">
+                  {user?.profileName || user?.legalName || 'Client Member'}
+                </h1>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-300 font-semibold">
+                  Client Member
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                {user?.phone} · Live GPS Discovery Active
+              </p>
             </div>
           </div>
-          <h1 className="text-xl font-black tracking-tight text-white">
-            PairUpToday
-          </h1>
+
+          {/* EXACT KYC STATUS REQUIREMENT (SECTION 7) */}
+          <div className="flex items-center gap-2">
+            {isKycApproved ? (
+              <div className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2 shadow-inner">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Client Profile Active</span>
+              </div>
+            ) : (
+              <div className="px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold flex items-center gap-2 shadow-inner">
+                <AlertCircle className="w-4 h-4" />
+                <span>Client Inactive: Wait for KYC Approval</span>
+              </div>
+            )}
+            {/* Notification Bell — always visible in header */}
+            <button
+              onClick={() => setActiveTab('notifications')}
+              title="Notifications"
+              className={`relative p-2.5 rounded-xl border transition-all shadow ${
+                activeTab === 'notifications'
+                  ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-amber-400/20'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
+              }`}
+            >
+              <Bell className="w-4 h-4" />
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-extrabold px-1 shadow">
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Navigation Tabs Menu */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5 scrollbar-thin scrollbar-thumb-purple-900/40">
-          {clientNavTabs.map(item => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full px-3.5 py-2.5 rounded-xl transition-all flex items-center justify-between text-xs font-semibold cursor-pointer ${
-                  isActive
-                    ? 'bg-[#6D28D9] text-white shadow-lg shadow-purple-900/40 font-bold'
-                    : 'text-slate-200 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300'}`} />
-                  <span className="truncate">{item.label}</span>
-                </div>
-                {item.isLiveBadge && (
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-                  </span>
-                )}
-                {item.badge && !item.isLiveBadge && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                    item.id === 'chat' || item.id === 'notifications'
-                      ? 'bg-[#EC4899] text-white'
-                      : typeof item.badge === 'string'
-                      ? 'bg-amber-400 text-slate-950'
-                      : 'bg-rose-500 text-white'
-                  }`}>
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Persistent Account Suspension Alert */}
+        {user?.isSuspended && (
+          <div className="p-4 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-200 flex items-start gap-3 shadow-lg shadow-rose-950/60 animate-fade-in">
+            <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0 mt-0.5">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm text-rose-300">
+                Account Suspended by Administration
+              </h4>
+              <p className="text-xs text-rose-200 font-medium">
+                Reason: {user.suspendedReason || 'Terms of service violation'}.
+              </p>
+              <p className="text-[11px] text-slate-300">
+                New bookings, companion services, and messaging are temporarily restricted. Please contact customer support for appeal.
+              </p>
+            </div>
+          </div>
+        )}
 
-          <div className="pt-2 border-t border-white/10 mt-2">
+        {/* Persistent Account Warning Alert */}
+        {Boolean(!user?.isSuspended && user?.warningCount && user.warningCount > 0) && (
+          <div className="p-4 rounded-2xl bg-amber-950/60 border border-amber-500/50 text-amber-200 flex items-start gap-3 shadow-lg shadow-amber-950/50 animate-fade-in">
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm text-amber-300">
+                Official Account Warning #{user?.warningCount}
+              </h4>
+              <p className="text-xs text-amber-200 font-medium">
+                Notice: {user?.lastWarningReason || 'Policy compliance reminder'}.
+              </p>
+              <p className="text-[11px] text-slate-300">
+                Please maintain professional and respectful behavior. Repeated violations will result in account suspension.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Persistent KYC Action Required Banner if rejected */}
+        {(user?.kycStatus === 'REJECTED' || user?.kycRejectionReason) && (
+          <div className="p-4 rounded-2xl bg-red-950/40 border border-red-500/50 text-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-red-950/50 animate-fade-in">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2 rounded-xl bg-red-500/20 text-red-400 shrink-0 mt-0.5 sm:mt-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="font-bold text-sm text-red-300 block">
+                  KYC Verification Action Required
+                </span>
+                <span className="text-xs text-amber-300 block font-medium">
+                  Reason: {user.kycRejectionReason || 'Document photo blur or unreadable. Please re-upload clear photos.'}
+                </span>
+                <span className="text-[11px] text-slate-300 block">
+                  Please fix the issue and submit clear documents to activate your client account.
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                refreshUserData();
+                setActiveTab('kyc-status');
+                openKycWizard();
+              }}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-extrabold text-xs shadow-md shadow-red-600/30 whitespace-nowrap transition-transform active:scale-95 cursor-pointer"
+            >
+              Fix & Re-upload KYC Documents →
+            </button>
+          </div>
+        )}
+
+        {/* 100% Free Client Membership Notice (SECTION 7) */}
+        <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-amber-500/10 border border-amber-400/20 text-xs text-amber-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <UserCheck className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>
+              <strong>Client Membership is 100% FREE:</strong> Never pay subscription fees to browse or book. You only pay the transparent fee for sessions you schedule.
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+            Free Active Access (₹0)
+          </span>
+        </div>
+
+        {/* 16 Visible Navigation Tabs Bar with Left/Right Scroll Arrows */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2 shadow-lg">
+          <div className="relative flex items-center gap-1.5">
+            {/* Left scroll arrow */}
+            <button
+              onClick={() => scrollTabs('left')}
+              className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shrink-0 shadow"
+              title="Scroll tabs left"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            {/* Scrollable tabs */}
+            <div ref={tabsNavRef} className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-smooth text-xs font-medium">
+          <div className="flex items-center gap-1.5 min-w-max text-xs font-medium">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'overview' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>Overview</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'profile' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>My Profile</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('kyc-status')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'kyc-status' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>My KYC Status</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('discover')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'discover' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Discover Companions</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('services')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'services' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>24 Services</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('nearby')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'nearby' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Nearby Companions</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('suggested')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'suggested' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Star className="w-3.5 h-3.5" />
+              <span>Suggested</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('search-filters')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'search-filters' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Search & Filters</span>
+            </button>
+
+            {/* TAB: LIVE COMPANION ARRIVAL TRACKING */}
+            <button
+              onClick={() => setActiveTab('tracking')}
+              className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'tracking'
+                  ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white font-extrabold shadow-md shadow-pink-500/20'
+                  : trackedBooking || upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS')
+                  ? 'bg-pink-500/15 border border-pink-500/40 text-pink-300 font-bold hover:bg-pink-500/25'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Live Tracking</span>
+              {(trackedBooking || upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS')) && (
+                <span className="relative flex h-2 w-2 ml-0.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('upcoming')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'upcoming' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Upcoming ({upcomingBookings.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'history' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Booking History ({pastBookings.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'chat' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Secure Chat</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'notifications' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>Notifications ({notifications.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'payments' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Payments</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('help-safety')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'help-safety' ? 'bg-rose-500 text-slate-950 font-bold shadow' : 'text-rose-300 hover:bg-rose-950/40'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Help & Safety</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === 'settings' ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </button>
+
             <button
               onClick={() => {
                 if (window.confirm('Log out of PairUpToday Client portal?')) {
                   logout();
                 }
               }}
-              className="w-full px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-3 text-xs font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-950/30 cursor-pointer"
+              className="px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800"
             >
-              <LogOut className="w-4 h-4" />
-              <span>{t.logoutText}</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
             </button>
-          </div>
-        </nav>
-
-        {/* Couple Silhouette Artwork with Neon Glow at Bottom */}
-        <div className="w-full pt-2 pb-2 px-3 select-none pointer-events-none relative mt-auto border-t border-white/5">
-          <div className="relative w-full h-24 flex items-end justify-center overflow-hidden">
-            <div className="absolute -bottom-3 w-36 h-20 bg-gradient-to-t from-pink-500/30 via-purple-600/20 to-transparent blur-xl rounded-full" />
-            <div className="absolute top-1 left-6 text-pink-400 opacity-90 animate-pulse">
-              <Heart className="w-3 h-3 fill-pink-500 text-pink-500" />
-            </div>
-            <div className="absolute top-0 right-8 text-rose-300 opacity-80 animate-bounce">
-              <Heart className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
-            </div>
-            <div className="absolute top-5 right-5 text-pink-300 opacity-70">
-              <Heart className="w-2 h-2 fill-pink-400 text-pink-400" />
-            </div>
-            <svg className="w-full h-full" viewBox="0 0 240 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="cliGlowWave" x1="0" y1="0" x2="240" y2="100" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#6366f1" stopOpacity="0.8" />
-                  <stop offset="0.5" stopColor="#c026d3" stopOpacity="0.85" />
-                  <stop offset="1" stopColor="#ec4899" stopOpacity="0.9" />
-                </linearGradient>
-                <linearGradient id="cliSilFill" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#09061b" />
-                  <stop offset="1" stopColor="#1a0f3d" />
-                </linearGradient>
-              </defs>
-              <path d="M 44 100 L 44 68 C 44 65 48 61 54 59 C 58 57 63 55 66 50 C 70 45 69 36 67 32 C 66 28 63 24 59 23 C 54 22 49 25 47 28 C 44 26 39 28 38 33 C 37 38 38 43 41 47 C 42 49 43 51 42 55 C 40 60 32 64 26 69 L 26 100 Z" fill="url(#cliSilFill)" />
-              <path d="M 110 100 L 110 69 C 105 64 97 60 95 55 C 94 51 95 49 96 47 C 99 44 100 38 99 33 C 98 27 93 24 89 27 C 87 23 83 21 77 22 C 73 23 70 27 69 31 C 67 35 66 44 70 49 C 74 54 79 56 83 58 C 88 60 92 64 92 68 L 92 100 Z" fill="url(#cliSilFill)" />
-              <path d="M 0 82 C 55 70 100 96 150 78 C 180 68 210 72 240 82 L 240 100 L 0 100 Z" fill="url(#cliGlowWave)" opacity="0.3" />
-              <path d="M 0 89 C 45 80 110 98 160 84 C 190 77 215 87 240 92 L 240 100 L 0 100 Z" fill="url(#cliGlowWave)" opacity="0.6" />
-              <path d="M 0 94 C 35 89 90 100 170 91 C 200 87 220 93 240 97 L 240 100 L 0 100 Z" fill="url(#cliGlowWave)" />
-            </svg>
-          </div>
+            </div>{/* end min-w-max scrollable inner */}
+            </div>{/* end flex-1 scrollable container */}
+            {/* Right scroll arrow */}
+            <button
+              onClick={() => scrollTabs('right')}
+              className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shrink-0 shadow"
+              title="Scroll tabs right"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>{/* end relative flex wrapper */}
         </div>
-      </aside>
 
-      {/* ============================================================== */}
-      {/* 2. MOBILE SLIDE-OVER DRAWER SIDEBAR                            */}
-      {/* ============================================================== */}
-      {isMobileSidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setIsMobileSidebarOpen(false)}
-          />
-          <aside className="relative w-72 bg-gradient-to-b from-[#1A135E] via-[#20145c] to-[#1c1248] text-white flex flex-col z-10 shadow-2xl h-full">
-            <div className="p-4 border-b border-white/10 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Heart className="w-5 h-5 text-pink-400 fill-pink-400" />
-                <span className="font-extrabold text-white text-base">PairUpToday</span>
+        {/* TAB 1: OVERVIEW */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-400 text-xs">Total Bookings</span>
+                <div className="text-2xl font-bold text-slate-100 mt-1">{myBookings.length}</div>
+                <span className="text-[11px] text-emerald-400 mt-1 block">Active Sessions: {upcomingBookings.length}</span>
               </div>
-              <button
-                onClick={() => setIsMobileSidebarOpen(false)}
-                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-1">
-              {clientNavTabs.map(item => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMobileSidebarOpen(false);
-                    }}
-                    className={`w-full px-3 py-2.5 rounded-xl transition-all flex items-center justify-between text-xs font-semibold cursor-pointer ${
-                      isActive
-                        ? 'bg-[#6D28D9] text-white shadow-lg shadow-purple-900/40 font-bold'
-                        : 'text-slate-300 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon className="w-4 h-4 text-purple-300" />
-                      <span>{item.label}</span>
-                    </div>
-                    {item.badge && (
-                      <span className="px-2 py-0.5 rounded-full bg-[#EC4899] text-white text-[10px] font-bold">
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          </aside>
-        </div>
-      )}
-
-      {/* ============================================================== */}
-      {/* 3. MAIN DASHBOARD CONTENT AREA                                 */}
-      {/* ============================================================== */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        {/* MOBILE HEADER (Row 1: Logo & User Actions, Row 2: Search & Filter) */}
-        <div className="lg:hidden w-full bg-white/95 backdrop-blur-md border-b border-purple-100/70 sticky top-0 z-30 shadow-xs">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-purple-50">
-            {/* Top-Left: Mobile Hamburger + PairUpToday Logo */}
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={() => setIsMobileSidebarOpen(true)}
-                className="p-1.5 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('overview')}>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 via-rose-500 to-purple-600 p-0.5 shadow-sm">
-                  <div className="w-full h-full bg-[#1A135E] rounded-full flex items-center justify-center">
-                    <Heart className="w-4 h-4 text-pink-400 fill-pink-400" />
-                  </div>
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-400 text-xs">Verification Status</span>
+                <div className="text-base font-bold text-amber-400 mt-1">
+                  {isKycApproved ? 'Client Profile Active' : 'Pending Verification'}
                 </div>
-                <span className="text-base font-black tracking-tight text-[#19125E]">PairUpToday</span>
+                <span className="text-[11px] text-slate-400 mt-1 block">Govt ID & Selfie</span>
+              </div>
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-400 text-xs">Client Membership</span>
+                <div className="text-2xl font-bold text-emerald-400 mt-1">100% FREE</div>
+                <span className="text-[11px] text-slate-400 mt-1 block">Zero subscription fees</span>
+              </div>
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+                <span className="text-slate-400 text-xs">Emergency SOS</span>
+                <div className="text-lg font-bold text-rose-400 mt-1">Police 100 / SOS 112</div>
+                <span className="text-[11px] text-slate-400 mt-1 block">Instant speed dial active</span>
               </div>
             </div>
 
-            {/* Top-Right: Notification bell & profile avatar */}
-            <div className="flex items-center gap-2.5">
-              {activeTab !== 'overview' && (
+            {/* Quick Actions */}
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-100">Ready to Discover Companions?</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Explore companions across social, travel, dining, shopping and events in your city.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={handleDashboardBack}
-                  className="p-1.5 rounded-xl bg-purple-50 text-[#5B21B6] border border-purple-200"
-                  title={t.goBack}
+                  onClick={() => setActiveTab('discover')}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 text-slate-950 font-bold text-xs shadow-md shadow-pink-500/20"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  Browse Companions
                 </button>
-              )}
-              <button
-                onClick={() => setActiveTab('notifications')}
-                className="relative p-2 rounded-full bg-[#f8f6fe] border border-purple-100 text-slate-600"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-full bg-[#EC4899] text-white text-[9px] font-black">2</span>
-              </button>
-              <div onClick={() => setActiveTab('profile')} className="flex items-center gap-1.5 cursor-pointer">
-                <img
-                  src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
-                  alt="Profile"
-                  className="w-7 h-7 rounded-full object-cover ring-1 ring-purple-300"
-                />
-                <ChevronRight className="w-3.5 h-3.5 text-slate-500 rotate-90" />
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2: Search input & Search & Filters button stacked cleanly */}
-          <div className="px-4 py-2.5 flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.discoverCompanionsPlaceholder || "Discover Companions..."}
-                className="w-full pl-9 pr-3 py-2 rounded-full bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-              />
-            </div>
-            <button
-              onClick={() => setActiveTab('search-filters')}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#5B21B6] text-white text-xs font-bold shadow-xs whitespace-nowrap"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Search & Filters</span>
-            </button>
-          </div>
-        </div>
-
-        {/* DESKTOP TOPBAR (Matching exact reference design) */}
-        <header className="hidden lg:flex bg-white/95 backdrop-blur-md border-b border-purple-100/70 px-6 py-3.5 items-center justify-between sticky top-0 z-30 shadow-xs">
-          <div className="flex items-center gap-3 flex-1 max-w-xl">
-            {activeTab !== 'overview' && (
-              <button
-                onClick={handleDashboardBack}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 text-[#5B21B6] hover:bg-purple-100 border border-purple-200 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
-                title={t.goBack}
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>{t.goBack}</span>
-              </button>
-            )}
-
-            {/* Pill Search Bar */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setActiveTab('discover');
-                    fetchCompanions();
-                  }
-                }}
-                placeholder={t.discoverCompanionsPlaceholder || "Discover Companions..."}
-                className="w-full pl-10 pr-4 py-2.5 rounded-full bg-slate-50/80 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white transition-all shadow-xs"
-              />
-            </div>
-
-            {/* Search & Filters Button */}
-            <button
-              onClick={() => setActiveTab('search-filters')}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#5B21B6] hover:bg-[#4c1d95] text-white text-xs font-bold shadow-md shadow-purple-900/10 cursor-pointer transition-all active:scale-95"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>{t.searchAndFilters || "Search & Filters"}</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Notification Bell with Badge */}
-            <button
-              onClick={() => setActiveTab('notifications')}
-              title="Notifications"
-              className="relative p-2.5 rounded-full bg-[#f8f6fe] border border-purple-100/80 text-slate-600 hover:text-[#5B21B6] hover:bg-white transition-all shadow-xs cursor-pointer"
-            >
-              <Bell className="w-4 h-4" />
-              {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-[#EC4899] text-white text-[9px] font-black px-1 shadow">
-                  {notifications.length > 9 ? '9+' : notifications.length}
-                </span>
-              )}
-            </button>
-
-            {/* User Profile Pill */}
-            <div
-              onClick={() => setActiveTab('profile')}
-              className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full bg-white border border-purple-100/80 shadow-xs cursor-pointer hover:border-purple-300 transition-all"
-            >
-              <div className="relative">
-                <img
-                  src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
-                  alt={user?.legalName}
-                  className="w-7 h-7 rounded-full object-cover ring-1 ring-purple-400"
-                />
-                <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full ring-1 ring-white ${isKycApproved ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-              </div>
-              <span className="text-xs font-bold text-[#19125E] hidden md:inline">
-                {user?.profileName || user?.legalName || 'Rahul Mondal'}
-              </span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400 rotate-90" />
-            </div>
-          </div>
-        </header>
-
-        {/* Scrollable Main Container */}
-        <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
-          {/* Persistent Account Suspension Alert */}
-          {user?.isSuspended && (
-            <div className="p-4 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-200 flex items-start gap-3 shadow-lg shadow-rose-950/60 animate-fade-in">
-              <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0 mt-0.5">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="font-bold text-sm text-rose-300">Account Suspended by Administration</h4>
-                <p className="text-xs text-rose-200 font-medium">Reason: {user.suspendedReason || 'Terms of service violation'}.</p>
-                <p className="text-[11px] text-slate-300">New bookings, companion services, and messaging are temporarily restricted. Please contact customer support for appeal.</p>
-              </div>
-            </div>
-          )}
-
-          {/* Persistent Account Warning Alert */}
-          {Boolean(!user?.isSuspended && user?.warningCount && user.warningCount > 0) && (
-            <div className="p-4 rounded-2xl bg-amber-950/60 border border-amber-500/50 text-amber-200 flex items-start gap-3 shadow-lg shadow-amber-950/50 animate-fade-in">
-              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="font-bold text-sm text-amber-300">Official Account Warning #{user?.warningCount}</h4>
-                <p className="text-xs text-amber-200 font-medium">Notice: {user?.lastWarningReason || 'Policy compliance reminder'}.</p>
-                <p className="text-[11px] text-slate-300">Please maintain professional and respectful behavior. Repeated violations will result in account suspension.</p>
-              </div>
-            </div>
-          )}
-
-          {/* Persistent KYC Action Required Banner if rejected */}
-          {(user?.kycStatus === 'REJECTED' || user?.kycRejectionReason) && (
-            <div className="p-4 rounded-2xl bg-red-950/40 border border-red-500/50 text-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-red-950/50 animate-fade-in">
-              <div className="flex items-start sm:items-center gap-3">
-                <div className="p-2 rounded-xl bg-red-500/20 text-red-400 shrink-0 mt-0.5 sm:mt-0">
-                  <AlertCircle className="w-5 h-5" />
-                </div>
-                <div className="space-y-0.5">
-                  <span className="font-bold text-sm text-red-300 block">KYC Verification Action Required</span>
-                  <span className="text-xs text-amber-300 block font-medium">Reason: {user.kycRejectionReason || 'Document photo blur or unreadable. Please re-upload clear photos.'}</span>
-                  <span className="text-[11px] text-slate-300 block">Please fix the issue and submit clear documents to activate your client account.</span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  refreshUserData();
-                  setActiveTab('kyc-status');
-                  openKycWizard();
-                }}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-extrabold text-xs shadow-md shadow-red-600/30 whitespace-nowrap transition-transform active:scale-95 cursor-pointer"
-              >
-                Fix & Re-upload KYC Documents →
-              </button>
-            </div>
-          )}
-
-          {/* ============================================================== */}
-          {/* TAB 1: OVERVIEW (EXACT TO REFERENCE SCREENSHOT)                */}
-          {/* ============================================================== */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6 animate-fade-in">
-              {/* Hero Banner with Modern Lifestyle Casual Couple Image (No Wedding Clothes) */}
-              <div className="relative rounded-3xl bg-gradient-to-r from-[#ffeef2] via-[#fff5f6] to-[#fedfe7] border border-pink-100/90 p-5 sm:p-7 overflow-hidden shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6 w-full md:w-auto z-10">
-                  {/* Modern Casual Companionship Image (Strictly Non-Wedding) */}
-                  <div className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-2xl overflow-hidden shrink-0 shadow-lg ring-4 ring-white/90">
-                    <img
-                      src="/assets/modern_companion_banner.jpg"
-                      alt="PairUpToday Companionship"
-                      className="w-full h-full object-cover object-center"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
-                  </div>
-
-                  <div className="space-y-2 text-center sm:text-left">
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-[#191040] tracking-tight">
-                      {t.welcomeBack}, <span className="text-[#db2777]">{user?.profileName?.split(' ')[0] || user?.legalName?.split(' ')[0] || 'Rahul'}</span>!
-                    </h2>
-                    <p className="text-xs sm:text-sm text-slate-600 max-w-md font-medium">
-                      {t.findPerfectCompanion}
-                    </p>
-                    <div className="pt-2">
-                      <button
-                        onClick={() => {
-                          setShowAllCompanions(true);
-                          const el = document.getElementById('nearby-companions-section');
-                          if (el) el.scrollIntoView({ behavior: 'smooth' });
-                        }}
-                        className="px-6 py-2.5 rounded-full bg-[#5038ee] hover:bg-[#432cc7] text-white text-xs font-bold shadow-lg shadow-purple-600/30 flex items-center gap-2 cursor-pointer transition-transform active:scale-95 mx-auto sm:mx-0"
-                      >
-                        <span>{t.exploreMatches}</span>
-                        <span>→</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Decorative Indian Heritage Palace Silhouette & Floating Hearts on Right */}
-                <div className="hidden md:block absolute right-0 bottom-0 h-full w-96 pointer-events-none select-none overflow-hidden">
-                  {/* Floating Soft Hearts */}
-                  <div className="absolute top-4 right-32 text-pink-400 opacity-80 animate-pulse">
-                    <Heart className="w-5 h-5 fill-pink-400 text-pink-400" />
-                  </div>
-                  <div className="absolute top-9 right-20 text-rose-300 opacity-90">
-                    <Heart className="w-3.5 h-3.5 fill-rose-300 text-rose-300" />
-                  </div>
-                  {/* Victorian / Indian Palace Monument Silhouette */}
-                  <svg className="absolute bottom-0 right-0 h-40 w-full text-pink-300/40" viewBox="0 0 400 160" fill="currentColor">
-                    <rect x="0" y="152" width="400" height="8" />
-                    <rect x="40" y="142" width="360" height="10" />
-                    <path d="M 290 142 L 290 95 C 290 95 290 68 325 48 C 325 40 325 35 325 28 L 327 28 L 327 18 L 328 18 L 328 12 L 329 18 L 330 18 L 330 28 L 332 28 C 332 35 332 40 332 48 C 367 68 367 95 367 95 L 367 142 Z" opacity="0.85" />
-                    <rect x="300" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
-                    <rect x="314" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
-                    <rect x="328" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
-                    <rect x="342" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
-                    <rect x="356" y="98" width="5" height="44" opacity="0.6" fill="#fff" />
-                    <path d="M 180 142 L 180 110 C 180 100 195 90 205 80 L 205 72 L 207 72 L 207 80 C 217 90 232 100 232 110 L 232 142 Z" opacity="0.75" />
-                    <rect x="190" y="112" width="4" height="30" opacity="0.5" fill="#fff" />
-                    <rect x="204" y="112" width="4" height="30" opacity="0.5" fill="#fff" />
-                    <rect x="218" y="112" width="4" height="30" opacity="0.5" fill="#fff" />
-                    <path d="M 232 142 L 232 120 L 290 120 L 290 142 Z" opacity="0.7" />
-                    <path d="M 110 142 L 110 125 L 180 125 L 180 142 Z" opacity="0.6" />
-                    <path d="M 90 142 L 90 120 C 90 112 100 105 105 100 L 105 95 L 107 95 L 107 100 C 112 105 122 112 122 120 L 122 142 Z" opacity="0.6" />
-                  </svg>
-                </div>
-              </div>
-
-              {/* 4 KPI Metric Cards (2x2 on Mobile, 4 Columns on Desktop matching reference design) */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                {/* 1. Total Matches */}
-                <div className="p-3.5 sm:p-5 rounded-2xl bg-[#f5f1fd] border border-purple-100/70 shadow-xs flex items-center justify-between hover:border-purple-200 transition-all">
-                  <div className="space-y-0.5 sm:space-y-1">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-100/80 text-purple-700 flex items-center justify-center mb-1 sm:mb-1.5 shadow-xs">
-                      <Users className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </div>
-                    <div className="text-xl sm:text-2xl font-black text-[#19125E]">{filteredCompanions.length || 12}</div>
-                    <div className="text-[11px] sm:text-xs font-semibold text-slate-500">{t.totalMatches}</div>
-                    <div className="text-[10px] sm:text-[11px] font-bold text-emerald-600">↑ +2 {t.thisMonth}</div>
-                  </div>
-                  <svg className="w-16 h-8 sm:w-20 sm:h-10 text-purple-500 overflow-visible shrink-0" viewBox="0 0 80 40" fill="none">
-                    <path d="M0 35 C 20 30, 25 15, 45 25 C 60 32, 65 5, 80 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  </svg>
-                </div>
-
-                {/* 2. Bookings */}
-                <div className="p-3.5 sm:p-5 rounded-2xl bg-[#edfbf4] border border-emerald-100/70 shadow-xs flex items-center justify-between hover:border-emerald-200 transition-all">
-                  <div className="space-y-0.5 sm:space-y-1">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-100/80 text-emerald-700 flex items-center justify-center mb-1 sm:mb-1.5 shadow-xs">
-                      <CalendarCheck className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </div>
-                    <div className="text-xl sm:text-2xl font-black text-[#19125E]">{myBookings.length || 3}</div>
-                    <div className="text-[11px] sm:text-xs font-semibold text-slate-500">{t.tabBookings}</div>
-                    <div className="text-[10px] sm:text-[11px] font-bold text-emerald-600">↑ +1 {t.thisMonth}</div>
-                  </div>
-                  <svg className="w-16 h-8 sm:w-20 sm:h-10 text-emerald-500 overflow-visible shrink-0" viewBox="0 0 80 40" fill="none">
-                    <path d="M0 35 C 25 32, 35 18, 50 24 C 62 28, 68 10, 80 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  </svg>
-                </div>
-
-                {/* 3. Upcoming */}
-                <div 
+                <button
                   onClick={() => setActiveTab('upcoming')}
-                  className="p-3.5 sm:p-5 rounded-2xl bg-[#fbf4ff] border border-purple-100/70 shadow-xs flex items-center justify-between cursor-pointer hover:border-purple-200 transition-all group"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700"
                 >
-                  <div className="space-y-0.5 sm:space-y-1">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-100/80 text-purple-700 flex items-center justify-center mb-1 sm:mb-1.5 shadow-xs">
-                      <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </div>
-                    <div className="text-sm sm:text-base font-black text-[#19125E]">{t.upcomingBookings}</div>
-                    <div className="text-[11px] sm:text-xs text-slate-500 font-medium">{t.upcomingPlans}</div>
-                  </div>
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white text-purple-600 shadow-xs flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
-                </div>
-
-                {/* 4. KYC Verified */}
-                <div 
-                  onClick={() => setActiveTab('kyc-status')}
-                  className="p-3.5 sm:p-5 rounded-2xl bg-[#eff8ff] border border-blue-100/70 shadow-xs flex items-center justify-between cursor-pointer hover:border-blue-200 transition-all group"
-                >
-                  <div className="space-y-0.5 sm:space-y-1">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100/80 text-blue-700 flex items-center justify-center mb-1 sm:mb-1.5 shadow-xs">
-                      <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </div>
-                    <div className="text-sm sm:text-base font-black text-[#19125E]">
-                      {isKycApproved ? t.kycVerified : 'KYC Pending'}
-                    </div>
-                    <div className="flex items-center gap-1 text-[11px] sm:text-xs text-slate-600 font-semibold pt-0.5">
-                      {isKycApproved ? (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span className="truncate">{t.accountVerified}</span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          <span className="truncate">Upload ID</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white text-blue-600 shadow-xs flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Nearby Companions Section with Smart Integrated Filters */}
-              <div id="nearby-companions-section" className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-purple-100/80 text-[#5B21B6] flex items-center justify-center shadow-xs">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                    <h3 className="text-base sm:text-lg font-black text-[#19125E]">{t.nearbyCompanions}</h3>
-                  </div>
-
-                  {/* Smart Filters (All, Online, Suggested) */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center bg-white p-1 rounded-xl border border-purple-100 shadow-xs">
-                      <button
-                        onClick={() => setSmartFilter('all')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          smartFilter === 'all'
-                            ? 'bg-[#5B21B6] text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        {t.smartFilterAll}
-                      </button>
-                      <button
-                        onClick={() => setSmartFilter('online')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                          smartFilter === 'online'
-                            ? 'bg-emerald-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        {t.smartFilterOnline}
-                      </button>
-                      <button
-                        onClick={() => setSmartFilter('suggested')}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                          smartFilter === 'suggested'
-                            ? 'bg-purple-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <Star className="w-3 h-3 fill-amber-300 text-amber-300" />
-                        {t.smartFilterSuggested}
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={() => setShowAllCompanions(!showAllCompanions)}
-                      className="text-xs font-bold text-[#5B21B6] hover:text-[#431487] flex items-center gap-1 cursor-pointer pl-2"
-                    >
-                      <span>{showAllCompanions ? t.showLess : t.viewAll}</span>
-                      <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAllCompanions ? '-rotate-90' : ''}`} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2 Columns on Mobile, 4 Columns on Desktop matching reference design */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4.5">
-                  {(filteredCompanions
-                    .filter(c => {
-                      if (smartFilter === 'online') return c.isOnline !== false;
-                      if (smartFilter === 'suggested') return (c.rating || 0) >= 4.8;
-                      return true;
-                    })
-                    .slice(0, showAllCompanions ? 40 : 4)
-                  ).map((comp) => (
-                    <div
-                      key={comp.id}
-                      className="rounded-2xl bg-white border border-purple-100/60 p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
-                    >
-                      <div>
-                        {/* Rounded portrait photo with floating status badge */}
-                        <div className="relative aspect-[4/3] w-full rounded-xl overflow-hidden bg-slate-100 shadow-inner">
-                          <img
-                            src={comp.profilePhoto}
-                            alt={comp.name}
-                            referrerPolicy="no-referrer"
-                            onError={(e: any) => {
-                              e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="%23e2e8f0"/><circle cx="150" cy="80" r="40" fill="%23cbd5e1"/><circle cx="150" cy="180" r="70" fill="%23cbd5e1"/></svg>';
-                            }}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute top-2 right-2">
-                            {comp.isOnline !== false ? (
-                              <span className="px-2 py-0.5 rounded-full bg-white/95 backdrop-blur-sm text-[10px] font-bold shadow-xs flex items-center gap-1 text-emerald-600">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span>Online</span>
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full bg-white/95 backdrop-blur-sm text-[10px] font-bold shadow-xs flex items-center gap-1 text-slate-500">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                                <span>Offline</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Name, Status dot, Age & Location */}
-                        <div className="pt-2.5 pb-1 space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs sm:text-sm font-black text-[#19125E] truncate">{comp.name}</span>
-                            {comp.isOnline !== false ? (
-                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 shrink-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span>Online</span>
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1 shrink-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                                <span>Offline</span>
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-400 font-medium truncate">
-                            {comp.age ? `${comp.age}, ` : ''}{comp.address || comp.city || 'Kolkata'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Bottom Action Row: Outlined View Profile Pill + Circular Heart Button (♡) */}
-                      <div className="pt-2 flex items-center gap-1.5 sm:gap-2">
-                        <button
-                          onClick={() => openQuickView(comp)}
-                          className="flex-1 py-1.5 px-2 rounded-full border border-[#6D28D9] text-[#6D28D9] hover:bg-purple-50 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs active:scale-95"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>{t.viewProfile || "View Profile"}</span>
-                        </button>
-                        <button
-                          onClick={(e) => toggleFavorite(comp.id, e)}
-                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border transition-colors flex items-center justify-center shrink-0 cursor-pointer shadow-xs active:scale-95 ${
-                            favorites[comp.id]
-                              ? 'bg-pink-50 border-pink-300 text-[#EC4899]'
-                              : 'border-purple-200 text-[#6D28D9] hover:bg-pink-50 hover:text-[#EC4899]'
-                          }`}
-                          title="Favorite"
-                        >
-                          <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${favorites[comp.id] ? 'fill-[#EC4899] text-[#EC4899]' : 'text-[#6D28D9]'}`} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                  View Bookings
+                </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
         {/* TAB 2: MY PROFILE */}
         {activeTab === 'profile' && (
@@ -1936,7 +1597,7 @@ export const ClientDashboard: React.FC = () => {
               </div>
 
               <button
-                onClick={() => fetchCompanions()}
+                onClick={fetchCompanions}
                 className="py-2 px-4 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold hover:bg-amber-500 transition-colors"
               >
                 Apply Search
@@ -2675,7 +2336,6 @@ export const ClientDashboard: React.FC = () => {
           </div>
         )}
 
-        </div>
       </div>
 
       {/* QUICK VIEW PROFILE MODAL */}
