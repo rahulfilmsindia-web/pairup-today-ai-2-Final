@@ -1926,7 +1926,7 @@ export const ClientDashboard: React.FC = () => {
                     <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/30">
                       <span className="text-amber-400 block mb-1">1. Start OTP (Give verbally on arrival)</span>
                       <span className="font-mono text-base font-bold text-amber-300">
-                        {b.startOtpVerified ? 'Verified ✓' : (b.startOtp || 'Available on arrival')}
+                        {b.startOtpVerified ? 'Verified ✓' : (b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS' ? (b.startOtp || 'Available on arrival') : 'Locked until arrival')}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/30">
