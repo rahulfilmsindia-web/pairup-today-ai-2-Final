@@ -886,6 +886,12 @@ export const CompanionDashboard: React.FC = () => {
         const list = data.bookings || [];
         setBookings(list);
 
+        // Keep active booking status synchronized in storage for safe navigation lock
+        const hasActive = list.some((b: any) =>
+          ['PENDING', 'CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status)
+        );
+        localStorage.setItem('pairup_has_active_booking', hasActive ? 'true' : 'false');
+
         // Detect real-time booking requests waiting for companion acceptance
         const pendingRequest = list.find((b: any) => 
           b.companionId === user.id && 
@@ -1353,6 +1359,18 @@ export const CompanionDashboard: React.FC = () => {
   const [togglingOnline, setTogglingOnline] = useState(false);
   const handleToggleAvailabilityPause = async () => {
     if (!user || togglingOnline) return;
+
+    // Guard: Prevent going offline while a booking is active or pending
+    const hasActiveBooking = bookings.some((b: any) =>
+      ['PENDING', 'CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status)
+    ) || Boolean(incomingBookingRequest) || localStorage.getItem('pairup_has_active_booking') === 'true';
+
+    if (!isAvailabilityPaused && hasActiveBooking) {
+      setActionMsg('⚠️ Booking active in progress. You cannot go offline until this session is completed or cancelled.');
+      setTimeout(() => setActionMsg(null), 5000);
+      return;
+    }
+
     setTogglingOnline(true);
     try {
       const nextPaused = !isAvailabilityPaused;
@@ -1362,6 +1380,11 @@ export const CompanionDashboard: React.FC = () => {
         body: JSON.stringify({ userId: user.id, isPaused: nextPaused })
       });
       const data = await res.json();
+      if (!res.ok) {
+        setActionMsg(data.error || 'Failed to update availability status.');
+        setTimeout(() => setActionMsg(null), 5000);
+        return;
+      }
       if (res.ok) {
         setIsAvailabilityPaused(nextPaused);
         await fetchCompanionStatus();

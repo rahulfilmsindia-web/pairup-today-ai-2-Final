@@ -2995,6 +2995,21 @@ const companionAlertStreams = new Map<string, Set<Response>>();
 async function pushCompanionAlert(companionId: string, event: { type: string; [key: string]: any }) {
   if (!companionId) return;
 
+  // Suppress incoming booking calls if companion has switched to offline / paused
+  if (event.type === 'NEW_BOOKING_REQUEST') {
+    try {
+      const profile = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getCompanionProfile(companionId)
+        : db.companionProfiles[companionId];
+      if (profile && (profile.isPaused || profile.isLive === false)) {
+        console.log(`[pushCompanionAlert] Suppressed NEW_BOOKING_REQUEST for offline companion: ${companionId}`);
+        return;
+      }
+    } catch (e) {
+      console.warn('[pushCompanionAlert] Companion status check notice:', e);
+    }
+  }
+
   // 1. Deliver via real-time SSE stream for connected client tabs (<50ms)
   const streams = companionAlertStreams.get(companionId);
   if (streams && streams.size > 0) {
@@ -3186,6 +3201,18 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
           title: 'New Confirmed Booking 💰',
           body: `Booking #${finalizedBooking.bookingCode || ''} payment confirmed for ${finalizedBooking.date} (${finalizedBooking.durationHours} hrs).`,
           data: { type: 'BOOKING', bookingId: finalizedBooking.id }
+        });
+
+        // Send high-urgency Web Push & SSE alert so companion receives call-style notification even if app/browser is closed!
+        pushCompanionAlert(finalizedBooking.companionId, {
+          type: 'NEW_BOOKING_REQUEST',
+          booking: {
+            ...safeBooking,
+            status: 'CONFIRMED',
+            paymentStatus: 'PAID',
+            startOtp: verifiedStartOtp,
+            endOtp: verifiedCompletionOtp
+          }
         });
       } catch (nErr) {
         console.warn('Booking payment notification warning:', nErr);
@@ -3556,7 +3583,9 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Companion discovery is temporarily unavailable.' });
     }
   } else {
-    profileEntries = Object.entries(db.companionProfiles).map(([userId, profile]) => [userId, profile, db.users[userId]]);
+    profileEntries = Object.entries(db.companionProfiles)
+      .filter(([_, profile]) => !profile.isPaused && profile.isLive !== false)
+      .map(([userId, profile]) => [userId, profile, db.users[userId]]);
   }
 
   for (const [userId, profile, dbUser] of profileEntries) {
@@ -3967,6 +3996,9 @@ app.post('/api/bookings/create', async (req: Request, res: Response) => {
     const profile = await databaseAdapter.getCompanionProfile(companionId);
     if (!companion || !profile || profile.isInitialListing) {
       return res.status(404).json({ error: 'This Companion is unavailable for booking.' });
+    }
+    if (profile.isPaused || !profile.isLive) {
+      return res.status(400).json({ error: 'This companion is currently offline and not accepting new booking requests.' });
     }
 
     const hourlyPaise = profile?.rates?.hourlyPaise || 49900;
@@ -6130,6 +6162,23 @@ app.post('/api/companion/availability/toggle', async (req: Request, res: Respons
   const userId = (req as AuthenticatedRequest).authUser.id;
   if (req.body.userId && req.body.userId !== userId) return res.status(403).json({ error: 'You cannot change another user’s availability.' });
   if (typeof req.body.isPaused !== 'boolean') return res.status(400).json({ error: 'isPaused must be a boolean.' });
+
+  // Guard: Companion cannot go offline while a booking session is active
+  if (req.body.isPaused) {
+    try {
+      const activeBookings = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.listBookings({ companionId: userId })
+        : Object.values(db.bookings).filter((b: any) => b.companionId === userId);
+      const hasActive = activeBookings.some((b: any) =>
+        ['PENDING', 'CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status)
+      );
+      if (hasActive) {
+        return res.status(409).json({ error: 'You have active bookings in progress. You cannot go offline until they are completed or cancelled.' });
+      }
+    } catch (e) {
+      console.warn('Active booking check warning:', e);
+    }
+  }
   if (getDatabaseType() === 'json') {
     const profile = db.companionProfiles[userId];
     if (!profile) return res.status(404).json({ error: 'Profile not found' });

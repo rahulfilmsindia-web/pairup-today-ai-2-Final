@@ -240,8 +240,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Check if user still needs KYC
       if (data.user.kycStatus === 'NOT_SUBMITTED') {
         setShowKycWizard(true);
+      } else if (data.user.role === 'COMPANION' || data.user.activeRole === 'COMPANION') {
+        // Direct companion entry: land directly on companion dashboard without role prompt
+        setActiveRole('COMPANION');
+        localStorage.setItem('pairup_active_role', 'COMPANION');
+        setShowRoleSelection(false);
       } else {
-        // Every successful login displays role selection
+        // Dual or Client role selection
         setShowRoleSelection(true);
       }
 

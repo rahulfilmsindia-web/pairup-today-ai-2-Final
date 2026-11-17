@@ -121,9 +121,12 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
   }, [initialServiceId]);
 
   // Fetch companions from backend
-  const fetchCompanions = async () => {
-    setLoading(true);
-    setError(null);
+  // Fetch companions from backend with real-time silent background update
+  const fetchCompanions = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const params = new URLSearchParams();
       if (selectedCity && selectedCity !== 'all') params.append('city', selectedCity);
@@ -135,26 +138,47 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
 
       const res = await fetch(`/api/companions/search?${params.toString()}`);
       if (!res.ok) {
-        let message = 'Failed to load companion profiles.';
-        try {
-          const errorBody = await res.json();
-          if (typeof errorBody?.error === 'string') message = errorBody.error;
-        } catch {
-          // Keep the generic message when the server does not return JSON.
+        if (!silent) {
+          let message = 'Failed to load companion profiles.';
+          try {
+            const errorBody = await res.json();
+            if (typeof errorBody?.error === 'string') message = errorBody.error;
+          } catch {
+            // Keep the generic message when the server does not return JSON.
+          }
+          throw new Error(message);
         }
-        throw new Error(message);
+        return;
       }
       const data = await res.json();
-      setCompanions(data.companions || []);
+      const freshList: CompanionDiscoveryItem[] = data.companions || [];
+      setCompanions(freshList);
+
+      // If client has opened a booking context for a companion who just went offline, close modal and notify
+      setBookingContext(prev => {
+        if (prev && !freshList.some(c => c.id === prev.companionId)) {
+          setBookingAlert({
+            id: prev.companionId,
+            message: `${prev.companionName} has just gone offline and is no longer accepting new bookings.`
+          });
+          return null;
+        }
+        return prev;
+      });
     } catch (err: any) {
-      setError(err.message || 'Error loading profiles.');
+      if (!silent) setError(err.message || 'Error loading profiles.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchCompanions();
+    // Silent real-time polling every 4s so offline companions instantly disappear without manual page reload
+    const pollInterval = setInterval(() => {
+      fetchCompanions(true);
+    }, 4000);
+    return () => clearInterval(pollInterval);
   }, [selectedCity, selectedServiceId, clientCoords]);
 
   const handleBookNow = (companion: CompanionDiscoveryItem) => {
@@ -165,6 +189,15 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
       setBookingAlert({
         id: companion.id,
         message: t.profileUnavailableForBooking
+      });
+      return;
+    }
+
+    // Check if companion is currently in our active online list
+    if (!companions.some(c => c.id === companion.id)) {
+      setBookingAlert({
+        id: companion.id,
+        message: `${companion.name} is currently offline and not accepting new bookings.`
       });
       return;
     }

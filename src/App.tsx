@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AdminAuthProvider } from './context/AdminAuthContext';
@@ -20,6 +20,8 @@ import { ServiceItem } from './constants/services';
 import { CompanionListing } from './components/CompanionListing';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalCompanionAlertManager } from './components/GlobalCompanionAlertManager';
+import { apiFetch } from './utils/api';
+import { AlertTriangle, PowerOff, Loader2, ShieldAlert } from 'lucide-react';
 
 const pageToPath = (page: string): string => {
   switch (page) {
@@ -77,8 +79,50 @@ const MainAppContent: React.FC = () => {
     return getInitialPage() === 'admin';
   });
 
-  // Centralized navigation handler that synchronizes browser/device history
-  const navigateToPage = (targetPage: string, options?: { replace?: boolean }) => {
+  // Navigation interceptor & offline confirmation state for Companion Dashboard
+  const [pendingTargetPage, setPendingTargetPage] = useState<string | null>(null);
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState<boolean>(false);
+  const [showActiveBookingBlockAlert, setShowActiveBookingBlockAlert] = useState<boolean>(false);
+  const [isProcessingExit, setIsProcessingExit] = useState<boolean>(false);
+
+  const currentPageRef = useRef(currentPage);
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  // Check if an active booking is in progress
+  const checkHasActiveBooking = async (): Promise<boolean> => {
+    if (localStorage.getItem('pairup_has_active_booking') === 'true') {
+      return true;
+    }
+    if (userRef.current?.id) {
+      try {
+        const res = await apiFetch(`/api/bookings/my/${userRef.current.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data.bookings) ? data.bookings : [];
+          const hasActive = list.some((b: any) =>
+            b.companionId === userRef.current?.id &&
+            ['PENDING', 'PENDING_PAYMENT', 'CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status) &&
+            b.status !== 'CANCELLED' && b.status !== 'COMPLETED'
+          );
+          if (hasActive) {
+            localStorage.setItem('pairup_has_active_booking', 'true');
+            return true;
+          }
+        }
+      } catch {}
+    }
+    return false;
+  };
+
+  // Base navigation executor
+  const executeNavigation = (targetPage: string, options?: { replace?: boolean }) => {
     if (targetPage === 'admin') {
       setIsAdminHostMode(true);
       if (options?.replace) {
@@ -107,6 +151,56 @@ const MainAppContent: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Centralized navigation handler with companion exit gate
+  const navigateToPage = async (targetPage: string, options?: { replace?: boolean }) => {
+    // If user is currently on companion-dashboard and trying to navigate to any other page
+    if (currentPage === 'companion-dashboard' && targetPage !== 'companion-dashboard' && user) {
+      const hasActive = await checkHasActiveBooking();
+      if (hasActive) {
+        setShowActiveBookingBlockAlert(true);
+        return;
+      }
+      setPendingTargetPage(targetPage);
+      setShowExitConfirmModal(true);
+      return;
+    }
+
+    executeNavigation(targetPage, options);
+  };
+
+  // Confirm Go Offline and Switch to Client Role
+  const handleConfirmExitToClient = async () => {
+    if (!user) return;
+    setIsProcessingExit(true);
+    try {
+      // 1. Mark companion OFFLINE on the server immediately
+      await apiFetch('/api/companion/availability/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, isPaused: true })
+      });
+      // 2. Switch role to CLIENT
+      await selectActiveRole('CLIENT');
+      // 3. Clear modal and proceed to target page
+      setShowExitConfirmModal(false);
+      const target = pendingTargetPage || 'home';
+      setPendingTargetPage(null);
+      executeNavigation(target);
+    } catch (err) {
+      console.warn('Exit switch warning:', err);
+      selectActiveRole('CLIENT').catch(() => {});
+      setShowExitConfirmModal(false);
+      executeNavigation(pendingTargetPage || 'home');
+    } finally {
+      setIsProcessingExit(false);
+    }
+  };
+
+  const handleCancelExit = () => {
+    setShowExitConfirmModal(false);
+    setPendingTargetPage(null);
+  };
+
   // URL routing and device/browser back button (popstate) synchronization
   useEffect(() => {
     // 1. Ensure initial history entry has the state attached so back button can return to it
@@ -117,7 +211,7 @@ const MainAppContent: React.FC = () => {
     }
 
     // 2. Listen to popstate (browser back/forward, mobile hardware back button, touch swipe back)
-    const handlePopState = (event: PopStateEvent) => {
+    const handlePopState = async (event: PopStateEvent) => {
       const state = event.state;
       let targetPage = 'home';
 
@@ -125,6 +219,20 @@ const MainAppContent: React.FC = () => {
         targetPage = state.page;
       } else {
         targetPage = pathToPage(window.location.pathname);
+      }
+
+      // If user is on companion-dashboard and presses browser back button to leave
+      if (currentPageRef.current === 'companion-dashboard' && targetPage !== 'companion-dashboard' && userRef.current) {
+        // Hold companion on companion-dashboard URL
+        window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');
+        const hasActive = await checkHasActiveBooking();
+        if (hasActive) {
+          setShowActiveBookingBlockAlert(true);
+          return;
+        }
+        setPendingTargetPage(targetPage);
+        setShowExitConfirmModal(true);
+        return;
       }
 
       if (targetPage === 'admin' || window.location.pathname === '/admin') {
@@ -140,11 +248,20 @@ const MainAppContent: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Automatically redirect to companion-dashboard when a companion logs in
+  useEffect(() => {
+    if (user && (user.role === 'COMPANION' || activeRole === 'COMPANION')) {
+      if (activeRole === 'COMPANION' && (currentPage === 'home' || currentPage === 'client-dashboard')) {
+        executeNavigation('companion-dashboard', { replace: true });
+      }
+    }
+  }, [user?.id, user?.role, activeRole]);
+
   // Automatically redirect to home page whenever user logs out
   const prevUserRef = React.useRef(user);
   useEffect(() => {
     if (prevUserRef.current && !user) {
-      navigateToPage('home', { replace: true });
+      executeNavigation('home', { replace: true });
     }
     prevUserRef.current = user;
   }, [user]);
@@ -152,7 +269,7 @@ const MainAppContent: React.FC = () => {
   // Safety fallback: if not logged in, client/companion dashboards cannot be viewed
   useEffect(() => {
     if (!user && (currentPage === 'client-dashboard' || currentPage === 'companion-dashboard')) {
-      navigateToPage('home', { replace: true });
+      executeNavigation('home', { replace: true });
     }
   }, [user, currentPage]);
 
@@ -289,6 +406,104 @@ const MainAppContent: React.FC = () => {
         />
         {/* Global Companion Alert Manager: listens & alerts across ALL pages (Home, About, etc.) */}
         <GlobalCompanionAlertManager onNavigateToDashboard={() => navigateToPage('companion-dashboard')} />
+
+        {/* Modal A: Active Booking Block Alert */}
+        {showActiveBookingBlockAlert && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+            <div className="relative w-full max-w-md bg-slate-900 border-2 border-rose-500/80 rounded-3xl shadow-2xl p-6 text-slate-100 space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-rose-400 shrink-0">
+                  <ShieldAlert className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-100">
+                    Booking Active in Progress
+                  </h3>
+                  <p className="text-xs text-rose-400 font-medium">
+                    বুকিং সেশন সক্রিয় রয়েছে
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2 text-slate-300">
+                <p>
+                  You currently have a booking in progress or waiting for acceptance. You cannot go offline or leave the Companion Dashboard until this session is completed or cancelled.
+                </p>
+                <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                  বুকিং সেশন সক্রিয় থাকা অবস্থায় আপনি অফলাইন হতে বা ড্যাশবোর্ড থেকে বের হতে পারবেন না।
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowActiveBookingBlockAlert(false)}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-extrabold text-xs shadow-lg shadow-rose-950/40 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <span>Stay on Companion Dashboard / ড্যাশবোর্ডে থাকুন</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal B: Switch to Client Role & Go Offline Confirmation */}
+        {showExitConfirmModal && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+            <div className="relative w-full max-w-md bg-slate-900 border-2 border-amber-500/80 rounded-3xl shadow-2xl p-6 text-slate-100 space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 shrink-0">
+                  <PowerOff className="w-6 h-6 animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-100">
+                    Switch to Client & Go Offline?
+                  </h3>
+                  <p className="text-xs text-amber-400 font-medium">
+                    অফলাইন হয়ে ক্লায়েন্ট মোডে যাবেন?
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2.5 text-slate-300">
+                <p>
+                  You are currently in <strong>Companion Mode (Online)</strong>. To visit the Home page or browse as a client, you will automatically be set to <strong>OFFLINE</strong> and your active role will switch to <strong>Client</strong>.
+                </p>
+                <p className="text-[11px] text-amber-300/90 bg-amber-950/30 p-2.5 rounded-xl border border-amber-500/30">
+                  ⚠️ While offline, clients will no longer see your profile on the map or send you booking requests.
+                </p>
+                <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                  ড্যাশবোর্ড ছেড়ে হোমপেজে যেতে হলে আপনাকে অফলাইন হতে হবে। আপনি চাইলে পুনরায় কম্প্যানিয়ন ড্যাশবোর্ডে এসে যেকোনো সময় অনলাইন হতে পারবেন।
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={isProcessingExit}
+                  onClick={handleCancelExit}
+                  className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-colors cursor-pointer active:scale-95 text-center"
+                >
+                  Cancel / বাতিল
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isProcessingExit}
+                  onClick={handleConfirmExitToClient}
+                  className="py-3 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-pink-600 hover:from-amber-600 hover:to-pink-700 text-white font-extrabold text-xs shadow-lg shadow-pink-950/40 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+                >
+                  {isProcessingExit ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Switching...</span>
+                    </>
+                  ) : (
+                    <span>Go Offline / নিশ্চিত</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
