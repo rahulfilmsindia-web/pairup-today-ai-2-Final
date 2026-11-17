@@ -13,7 +13,8 @@ import {
   CreditCard, KeyRound, AlertTriangle, ChevronRight, UserCheck, X,
   Bell, Settings, LifeBuoy, LogOut, Heart, Sparkles, User, FileText,
   DollarSign, Compass, CheckCircle2, Sliders, Shield, Eye, ChevronLeft,
-  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users
+  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users,
+  LayoutGrid, History, Home
 } from 'lucide-react';
 
 export const ClientDashboard: React.FC = () => {
@@ -63,6 +64,8 @@ export const ClientDashboard: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<string>('all');
   const [maxBudgetHourly, setMaxBudgetHourly] = useState<number>(3000);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [smartFilter, setSmartFilter] = useState<'all' | 'online' | 'suggested'>('all');
+  const [showAllCompanions, setShowAllCompanions] = useState(false);
 
   // Multi-step booking request & companion acceptance flow
   type BookingStep = 'form' | 'waiting_acceptance' | 'accepted' | 'rejected';
@@ -833,19 +836,14 @@ export const ClientDashboard: React.FC = () => {
   });
 
   const clientNavTabs = [
-    { id: 'overview' as ClientTab, label: 'Overview', icon: Compass },
+    { id: 'overview' as ClientTab, label: 'Overview', icon: Home },
     { id: 'profile' as ClientTab, label: 'My Profile', icon: User },
     { id: 'kyc-status' as ClientTab, label: 'My KYC Status', icon: ShieldCheck, badge: isKycApproved ? undefined : 'Verify' },
-    { id: 'discover' as ClientTab, label: 'Discover Companions', icon: Search },
-    { id: 'services' as ClientTab, label: '24 Services', icon: Sparkles },
-    { id: 'nearby' as ClientTab, label: 'Nearby Companions', icon: MapPin },
-    { id: 'suggested' as ClientTab, label: 'Suggested', icon: Star },
-    { id: 'search-filters' as ClientTab, label: 'Search & Filters', icon: Sliders },
+    { id: 'services' as ClientTab, label: '24 Services', icon: LayoutGrid },
     ...(trackedBooking || upcomingBookings.some(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS')
       ? [{ id: 'tracking' as ClientTab, label: 'Live Tracking', icon: Navigation, isLiveBadge: true }]
       : []),
-    { id: 'upcoming' as ClientTab, label: 'Upcoming', icon: Calendar, badge: upcomingBookings.length || undefined },
-    { id: 'history' as ClientTab, label: 'Booking History', icon: FileText, badge: pastBookings.length || undefined },
+    { id: 'history' as ClientTab, label: 'Booking History', icon: History, badge: pastBookings.length || undefined },
     { id: 'chat' as ClientTab, label: 'Secure Chat', icon: MessageSquare, badge: 2 },
     { id: 'notifications' as ClientTab, label: 'Notifications', icon: Bell, badge: notifications.length || 2 },
     { id: 'payments' as ClientTab, label: 'Payments', icon: CreditCard },
@@ -1306,26 +1304,72 @@ export const ClientDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Nearby Companions Section */}
+              {/* Nearby Companions Section with Smart Integrated Filters */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
                       <MapPin className="w-4 h-4" />
                     </div>
                     <h3 className="text-lg font-extrabold text-[#191040]">Nearby Companions</h3>
                   </div>
-                  <button
-                    onClick={() => setActiveTab('nearby')}
-                    className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>View All</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+
+                  {/* Smart Filters (All, Online, Suggested) */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200/80 shadow-xs">
+                      <button
+                        onClick={() => setSmartFilter('all')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          smartFilter === 'all'
+                            ? 'bg-[#5038ee] text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => setSmartFilter('online')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          smartFilter === 'online'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        Online
+                      </button>
+                      <button
+                        onClick={() => setSmartFilter('suggested')}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          smartFilter === 'suggested'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Star className="w-3 h-3 fill-amber-300 text-amber-300" />
+                        Suggested
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => setShowAllCompanions(!showAllCompanions)}
+                      className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer pl-2"
+                    >
+                      <span>{showAllCompanions ? 'Show Less' : 'View All'}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAllCompanions ? '-rotate-90' : ''}`} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {(filteredCompanions.length > 0 ? filteredCompanions.slice(0, 4) : companions.slice(0, 4)).map((comp) => (
+                  {(filteredCompanions
+                    .filter(c => {
+                      if (smartFilter === 'online') return c.isOnline !== false;
+                      if (smartFilter === 'suggested') return (c.rating || 0) >= 4.8;
+                      return true;
+                    })
+                    .slice(0, showAllCompanions ? 40 : 4)
+                  ).map((comp) => (
                     <div
                       key={comp.id}
                       className="rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
@@ -1380,56 +1424,28 @@ export const ClientDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="p-3.5 pt-0 flex items-center gap-2">
+                      {/* View Profile & Book Now Buttons */}
+                      <div className="p-3.5 pt-0 grid grid-cols-2 gap-2">
                         <button
                           onClick={() => openQuickView(comp)}
-                          className="flex-1 py-2 px-3 rounded-xl border border-purple-200 text-purple-700 hover:bg-purple-50 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          className="py-2 px-2.5 rounded-xl border border-purple-200 text-purple-700 hover:bg-purple-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>View Profile</span>
                         </button>
                         <button
-                          onClick={() => setSelectedCompanion(comp)}
-                          className="p-2 rounded-xl border border-purple-200 text-purple-600 hover:bg-purple-50 hover:text-rose-600 transition-colors cursor-pointer"
-                          title="Book / Save"
+                          onClick={() => {
+                            setSelectedCompanion(comp);
+                            setBookingStep('form');
+                          }}
+                          className="py-2 px-2.5 rounded-xl bg-gradient-to-r from-[#5038ee] to-[#7c3aed] text-white hover:from-[#432cc7] hover:to-[#6d28d9] text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-purple-600/30 transition-transform active:scale-95 cursor-pointer"
                         >
-                          <Heart className="w-4 h-4" />
+                          <CalendarCheck className="w-3.5 h-3.5" />
+                          <span>Book Now</span>
                         </button>
                       </div>
                     </div>
                   ))}
-                </div>
-              </div>
-
-              {/* 100% Free Client Membership Notice & Quick SOS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm text-xs text-slate-700 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <UserCheck className="w-5 h-5 text-purple-600 shrink-0" />
-                    <div>
-                      <strong className="block text-slate-900">Client Membership is 100% FREE</strong>
-                      <span className="text-[11px] text-slate-500">Zero subscription charges. You only pay for confirmed booking sessions.</span>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-mono text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 font-bold shrink-0">
-                    Free Active Access (₹0)
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm text-xs text-slate-700 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <Shield className="w-5 h-5 text-rose-600 shrink-0" />
-                    <div>
-                      <strong className="block text-slate-900">24/7 Client Emergency SOS</strong>
-                      <span className="text-[11px] text-slate-500">Instant connection to Women Helpline & Police emergency dispatch.</span>
-                    </div>
-                  </div>
-                  <a
-                    href="tel:112"
-                    className="text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-full border border-rose-200 shrink-0 transition-colors"
-                  >
-                    SOS 112 / 100
-                  </a>
                 </div>
               </div>
             </div>
