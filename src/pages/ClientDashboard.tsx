@@ -66,6 +66,12 @@ export const ClientDashboard: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [smartFilter, setSmartFilter] = useState<'all' | 'online' | 'suggested'>('all');
   const [showAllCompanions, setShowAllCompanions] = useState(false);
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+
+  const toggleFavorite = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // In-app Back Navigation Handler (prevents unexpected page exits)
   const activeTabRef = useRef(activeTab);
@@ -898,33 +904,29 @@ export const ClientDashboard: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f5f6fc] text-slate-800 flex overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#F4F2FA] text-slate-800 flex overflow-x-hidden relative">
+      {/* Ambient background soft pastel gradient waves */}
+      <div className="fixed top-0 right-0 w-[500px] h-[500px] bg-purple-200/20 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="fixed bottom-10 left-1/3 w-[600px] h-[400px] bg-pink-200/20 rounded-full blur-3xl pointer-events-none -z-10" />
+
       {/* ============================================================== */}
       {/* 1. DESKTOP / TABLET DOCKED SIDEBAR (INDIGO / VIOLET GRADIENT)   */}
       {/* ============================================================== */}
-      <aside className="w-64 xl:w-72 bg-gradient-to-b from-[#0b0826] via-[#100c31] to-[#1c1248] text-white shrink-0 min-h-screen border-r border-[#261b5c]/50 hidden lg:flex flex-col select-none relative overflow-hidden z-20">
-        {/* Brand Header */}
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="relative w-9 h-9 rounded-2xl bg-gradient-to-tr from-pink-500 via-rose-500 to-purple-600 p-0.5 shadow-lg shadow-pink-500/30 flex items-center justify-center shrink-0">
-              <div className="w-full h-full bg-[#120c32] rounded-[14px] flex items-center justify-center">
-                <Heart className="w-5 h-5 text-pink-400 fill-pink-400" />
-              </div>
-            </div>
-            <div>
-              <div className="text-base font-extrabold tracking-tight text-white flex items-center">
-                <span>PairUp</span>
-                <span className="text-pink-400">Today</span>
-              </div>
-              <div className="text-[9px] font-bold tracking-wider uppercase text-purple-300/80 -mt-0.5">
-                Client Portal
-              </div>
+      <aside className="w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#20145c] to-[#1c1248] text-white shrink-0 min-h-screen border-r border-[#261b5c]/50 hidden lg:flex flex-col select-none relative overflow-hidden z-20">
+        {/* Top Branding matching reference design */}
+        <div className="p-6 border-b border-white/10 flex flex-col items-center text-center">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 via-rose-500 to-purple-600 p-0.5 shadow-xl shadow-pink-500/30 flex items-center justify-center mb-2.5">
+            <div className="w-full h-full bg-[#1A135E] rounded-[14px] flex items-center justify-center">
+              <Heart className="w-7 h-7 text-pink-400 fill-pink-400" />
             </div>
           </div>
+          <h1 className="text-xl font-black tracking-tight text-white">
+            PairUpToday
+          </h1>
         </div>
 
         {/* Navigation Tabs Menu */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-thin scrollbar-thumb-purple-900/40">
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5 scrollbar-thin scrollbar-thumb-purple-900/40">
           {clientNavTabs.map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -934,12 +936,12 @@ export const ClientDashboard: React.FC = () => {
                 onClick={() => setActiveTab(item.id)}
                 className={`w-full px-3.5 py-2.5 rounded-xl transition-all flex items-center justify-between text-xs font-semibold cursor-pointer ${
                   isActive
-                    ? 'bg-gradient-to-r from-[#5038ee] to-[#7c3aed] text-white shadow-lg shadow-purple-600/30 font-bold'
-                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                    ? 'bg-[#6D28D9] text-white shadow-lg shadow-purple-900/40 font-bold'
+                    : 'text-slate-200 hover:text-white hover:bg-white/5'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300/80'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300'}`} />
                   <span className="truncate">{item.label}</span>
                 </div>
                 {item.isLiveBadge && (
@@ -949,8 +951,10 @@ export const ClientDashboard: React.FC = () => {
                   </span>
                 )}
                 {item.badge && !item.isLiveBadge && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    typeof item.badge === 'string'
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                    item.id === 'chat' || item.id === 'notifications'
+                      ? 'bg-[#EC4899] text-white'
+                      : typeof item.badge === 'string'
                       ? 'bg-amber-400 text-slate-950'
                       : 'bg-rose-500 text-white'
                   }`}>
@@ -1020,7 +1024,7 @@ export const ClientDashboard: React.FC = () => {
             className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setIsMobileSidebarOpen(false)}
           />
-          <aside className="relative w-72 bg-gradient-to-b from-[#0b0826] via-[#100c31] to-[#1c1248] text-white flex flex-col z-10 shadow-2xl h-full">
+          <aside className="relative w-72 bg-gradient-to-b from-[#1A135E] via-[#20145c] to-[#1c1248] text-white flex flex-col z-10 shadow-2xl h-full">
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Heart className="w-5 h-5 text-pink-400 fill-pink-400" />
@@ -1046,7 +1050,7 @@ export const ClientDashboard: React.FC = () => {
                     }}
                     className={`w-full px-3 py-2.5 rounded-xl transition-all flex items-center justify-between text-xs font-semibold cursor-pointer ${
                       isActive
-                        ? 'bg-gradient-to-r from-[#5038ee] to-[#7c3aed] text-white shadow-lg shadow-purple-600/30 font-bold'
+                        ? 'bg-[#6D28D9] text-white shadow-lg shadow-purple-900/40 font-bold'
                         : 'text-slate-300 hover:text-white hover:bg-white/5'
                     }`}
                   >
@@ -1055,7 +1059,7 @@ export const ClientDashboard: React.FC = () => {
                       <span>{item.label}</span>
                     </div>
                     {item.badge && (
-                      <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded-full bg-[#EC4899] text-white text-[10px] font-bold">
                         {item.badge}
                       </span>
                     )}
@@ -1071,32 +1075,95 @@ export const ClientDashboard: React.FC = () => {
       {/* 3. MAIN DASHBOARD CONTENT AREA                                 */}
       {/* ============================================================== */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        {/* Topbar matching reference design */}
-        <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-3 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-xs">
-          <div className="flex items-center gap-3 flex-1 max-w-xl">
-            {/* Mobile Hamburger Button */}
-            <button
-              onClick={() => setIsMobileSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+        {/* MOBILE HEADER (Row 1: Logo & User Actions, Row 2: Search & Filter) */}
+        <div className="lg:hidden w-full bg-white/95 backdrop-blur-md border-b border-purple-100/70 sticky top-0 z-30 shadow-xs">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-purple-50">
+            {/* Top-Left: Mobile Hamburger + PairUpToday Logo */}
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="p-1.5 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('overview')}>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 via-rose-500 to-purple-600 p-0.5 shadow-sm">
+                  <div className="w-full h-full bg-[#1A135E] rounded-full flex items-center justify-center">
+                    <Heart className="w-4 h-4 text-pink-400 fill-pink-400" />
+                  </div>
+                </div>
+                <span className="text-base font-black tracking-tight text-[#19125E]">PairUpToday</span>
+              </div>
+            </div>
 
-            {/* In-App Back Button when not on Overview */}
+            {/* Top-Right: Notification bell & profile avatar */}
+            <div className="flex items-center gap-2.5">
+              {activeTab !== 'overview' && (
+                <button
+                  onClick={handleDashboardBack}
+                  className="p-1.5 rounded-xl bg-purple-50 text-[#5B21B6] border border-purple-200"
+                  title={t.goBack}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab('notifications')}
+                className="relative p-2 rounded-full bg-[#f8f6fe] border border-purple-100 text-slate-600"
+              >
+                <Bell className="w-4 h-4" />
+                <span className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-full bg-[#EC4899] text-white text-[9px] font-black">2</span>
+              </button>
+              <div onClick={() => setActiveTab('profile')} className="flex items-center gap-1.5 cursor-pointer">
+                <img
+                  src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
+                  alt="Profile"
+                  className="w-7 h-7 rounded-full object-cover ring-1 ring-purple-300"
+                />
+                <ChevronRight className="w-3.5 h-3.5 text-slate-500 rotate-90" />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Search input & Search & Filters button stacked cleanly */}
+          <div className="px-4 py-2.5 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t.discoverCompanionsPlaceholder || "Discover Companions..."}
+                className="w-full pl-9 pr-3 py-2 rounded-full bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+              />
+            </div>
+            <button
+              onClick={() => setActiveTab('search-filters')}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#5B21B6] text-white text-xs font-bold shadow-xs whitespace-nowrap"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Search & Filters</span>
+            </button>
+          </div>
+        </div>
+
+        {/* DESKTOP TOPBAR (Matching exact reference design) */}
+        <header className="hidden lg:flex bg-white/95 backdrop-blur-md border-b border-purple-100/70 px-6 py-3.5 items-center justify-between sticky top-0 z-30 shadow-xs">
+          <div className="flex items-center gap-3 flex-1 max-w-xl">
             {activeTab !== 'overview' && (
               <button
                 onClick={handleDashboardBack}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-50 text-[#5B21B6] hover:bg-purple-100 border border-purple-200 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
                 title={t.goBack}
               >
                 <ChevronLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">{t.goBack}</span>
+                <span>{t.goBack}</span>
               </button>
             )}
 
             {/* Pill Search Bar */}
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
@@ -1107,31 +1174,31 @@ export const ClientDashboard: React.FC = () => {
                     fetchCompanions();
                   }
                 }}
-                placeholder={t.discoverCompanionsPlaceholder}
-                className="w-full pl-10 pr-4 py-2 rounded-full bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white transition-all shadow-xs"
+                placeholder={t.discoverCompanionsPlaceholder || "Discover Companions..."}
+                className="w-full pl-10 pr-4 py-2.5 rounded-full bg-slate-50/80 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white transition-all shadow-xs"
               />
             </div>
-          </div>
 
-          <div className="flex items-center gap-2.5">
             {/* Search & Filters Button */}
             <button
               onClick={() => setActiveTab('search-filters')}
-              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-[#432bb3] hover:bg-[#372297] text-white text-xs font-semibold shadow-md shadow-indigo-600/20 cursor-pointer transition-all active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#5B21B6] hover:bg-[#4c1d95] text-white text-xs font-bold shadow-md shadow-purple-900/10 cursor-pointer transition-all active:scale-95"
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>{t.searchAndFilters}</span>
+              <span>{t.searchAndFilters || "Search & Filters"}</span>
             </button>
+          </div>
 
+          <div className="flex items-center gap-3">
             {/* Notification Bell with Badge */}
             <button
               onClick={() => setActiveTab('notifications')}
               title="Notifications"
-              className="relative p-2.5 rounded-full bg-slate-50 border border-slate-200 text-slate-600 hover:text-purple-600 hover:bg-white transition-all shadow-xs cursor-pointer"
+              className="relative p-2.5 rounded-full bg-[#f8f6fe] border border-purple-100/80 text-slate-600 hover:text-[#5B21B6] hover:bg-white transition-all shadow-xs cursor-pointer"
             >
               <Bell className="w-4 h-4" />
               {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-rose-500 text-white text-[9px] font-extrabold px-1 shadow">
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-[#EC4899] text-white text-[9px] font-black px-1 shadow">
                   {notifications.length > 9 ? '9+' : notifications.length}
                 </span>
               )}
@@ -1140,7 +1207,7 @@ export const ClientDashboard: React.FC = () => {
             {/* User Profile Pill */}
             <div
               onClick={() => setActiveTab('profile')}
-              className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full bg-slate-50 border border-slate-200 shadow-xs cursor-pointer hover:border-purple-300 hover:bg-white transition-all"
+              className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full bg-white border border-purple-100/80 shadow-xs cursor-pointer hover:border-purple-300 transition-all"
             >
               <div className="relative">
                 <img
@@ -1150,7 +1217,7 @@ export const ClientDashboard: React.FC = () => {
                 />
                 <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full ring-1 ring-white ${isKycApproved ? 'bg-emerald-500' : 'bg-amber-400'}`} />
               </div>
-              <span className="text-xs font-bold text-slate-800 hidden md:inline">
+              <span className="text-xs font-bold text-[#19125E] hidden md:inline">
                 {user?.profileName || user?.legalName || 'Rahul Mondal'}
               </span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400 rotate-90" />
@@ -1285,34 +1352,34 @@ export const ClientDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* 4 KPI Metric Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 4 KPI Metric Cards (2x2 on Mobile, 4 Columns on Desktop matching reference design) */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {/* 1. Total Matches */}
-                <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between hover:border-purple-200 transition-all">
-                  <div className="space-y-1">
-                    <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1.5">
-                      <Users className="w-5 h-5" />
+                <div className="p-3.5 sm:p-5 rounded-2xl bg-[#f5f1fd] border border-purple-100/70 shadow-xs flex items-center justify-between hover:border-purple-200 transition-all">
+                  <div className="space-y-0.5 sm:space-y-1">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-100/80 text-purple-700 flex items-center justify-center mb-1 sm:mb-1.5 shadow-xs">
+                      <Users className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
-                    <div className="text-2xl font-extrabold text-slate-900">{filteredCompanions.length || 12}</div>
-                    <div className="text-xs font-semibold text-slate-500">{t.totalMatches}</div>
-                    <div className="text-[11px] font-bold text-emerald-600">↑ +2 {t.thisMonth}</div>
+                    <div className="text-xl sm:text-2xl font-black text-[#19125E]">{filteredCompanions.length || 12}</div>
+                    <div className="text-[11px] sm:text-xs font-semibold text-slate-500">{t.totalMatches}</div>
+                    <div className="text-[10px] sm:text-[11px] font-bold text-emerald-600">↑ +2 {t.thisMonth}</div>
                   </div>
-                  <svg className="w-20 h-10 text-purple-500 overflow-visible" viewBox="0 0 80 40" fill="none">
+                  <svg className="w-16 h-8 sm:w-20 sm:h-10 text-purple-500 overflow-visible shrink-0" viewBox="0 0 80 40" fill="none">
                     <path d="M0 35 C 20 30, 25 15, 45 25 C 60 32, 65 5, 80 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                   </svg>
                 </div>
 
                 {/* 2. Bookings */}
-                <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between hover:border-emerald-200 transition-all">
-                  <div className="space-y-1">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5">
-                      <CalendarCheck className="w-5 h-5" />
+                <div className="p-3.5 sm:p-5 rounded-2xl bg-[#edfbf4] border border-emerald-100/70 shadow-xs flex items-center justify-between hover:border-emerald-200 transition-all">
+                  <div className="space-y-0.5 sm:space-y-1">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-100/80 text-emerald-700 flex items-center justify-center mb-1 sm:mb-1.5 shadow-xs">
+                      <CalendarCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
-                    <div className="text-2xl font-extrabold text-slate-900">{myBookings.length || 3}</div>
-                    <div className="text-xs font-semibold text-slate-500">{t.tabBookings}</div>
-                    <div className="text-[11px] font-bold text-emerald-600">↑ +1 {t.thisMonth}</div>
+                    <div className="text-xl sm:text-2xl font-black text-[#19125E]">{myBookings.length || 3}</div>
+                    <div className="text-[11px] sm:text-xs font-semibold text-slate-500">{t.tabBookings}</div>
+                    <div className="text-[10px] sm:text-[11px] font-bold text-emerald-600">↑ +1 {t.thisMonth}</div>
                   </div>
-                  <svg className="w-20 h-10 text-emerald-500 overflow-visible" viewBox="0 0 80 40" fill="none">
+                  <svg className="w-16 h-8 sm:w-20 sm:h-10 text-emerald-500 overflow-visible shrink-0" viewBox="0 0 80 40" fill="none">
                     <path d="M0 35 C 25 32, 35 18, 50 24 C 62 28, 68 10, 80 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                   </svg>
                 </div>
@@ -1320,16 +1387,16 @@ export const ClientDashboard: React.FC = () => {
                 {/* 3. Upcoming */}
                 <div 
                   onClick={() => setActiveTab('upcoming')}
-                  className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-200 transition-all group"
+                  className="p-3.5 sm:p-5 rounded-2xl bg-[#fbf4ff] border border-purple-100/70 shadow-xs flex items-center justify-between cursor-pointer hover:border-purple-200 transition-all group"
                 >
-                  <div className="space-y-1">
-                    <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1.5">
-                      <Calendar className="w-5 h-5" />
+                  <div className="space-y-0.5 sm:space-y-1">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-purple-100/80 text-purple-700 flex items-center justify-center mb-1 sm:mb-1.5 shadow-xs">
+                      <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
-                    <div className="text-base font-extrabold text-slate-900">{t.upcomingBookings}</div>
-                    <div className="text-xs text-slate-500 font-medium">{t.upcomingPlans}</div>
+                    <div className="text-sm sm:text-base font-black text-[#19125E]">{t.upcomingBookings}</div>
+                    <div className="text-[11px] sm:text-xs text-slate-500 font-medium">{t.upcomingPlans}</div>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-purple-50 group-hover:text-purple-600 text-slate-400 flex items-center justify-center transition-colors">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white text-purple-600 shadow-xs flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                     <ChevronRight className="w-4 h-4" />
                   </div>
                 </div>
@@ -1337,30 +1404,30 @@ export const ClientDashboard: React.FC = () => {
                 {/* 4. KYC Verified */}
                 <div 
                   onClick={() => setActiveTab('kyc-status')}
-                  className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-200 transition-all group"
+                  className="p-3.5 sm:p-5 rounded-2xl bg-[#eff8ff] border border-blue-100/70 shadow-xs flex items-center justify-between cursor-pointer hover:border-blue-200 transition-all group"
                 >
-                  <div className="space-y-1">
-                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1.5">
-                      <ShieldCheck className="w-5 h-5" />
+                  <div className="space-y-0.5 sm:space-y-1">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100/80 text-blue-700 flex items-center justify-center mb-1 sm:mb-1.5 shadow-xs">
+                      <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
-                    <div className="text-base font-extrabold text-slate-900">
+                    <div className="text-sm sm:text-base font-black text-[#19125E]">
                       {isKycApproved ? t.kycVerified : 'KYC Pending'}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-600 font-semibold pt-0.5">
+                    <div className="flex items-center gap-1 text-[11px] sm:text-xs text-slate-600 font-semibold pt-0.5">
                       {isKycApproved ? (
                         <>
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span>{t.accountVerified}</span>
+                          <span className="truncate">{t.accountVerified}</span>
                         </>
                       ) : (
                         <>
                           <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          <span>Upload ID to verify</span>
+                          <span className="truncate">Upload ID</span>
                         </>
                       )}
                     </div>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 text-slate-400 flex items-center justify-center transition-colors">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white text-blue-600 shadow-xs flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                     <ChevronRight className="w-4 h-4" />
                   </div>
                 </div>
@@ -1370,20 +1437,20 @@ export const ClientDashboard: React.FC = () => {
               <div id="nearby-companions-section" className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-xl bg-purple-100/80 text-[#5B21B6] flex items-center justify-center shadow-xs">
                       <MapPin className="w-4 h-4" />
                     </div>
-                    <h3 className="text-lg font-extrabold text-[#191040]">{t.nearbyCompanions}</h3>
+                    <h3 className="text-base sm:text-lg font-black text-[#19125E]">{t.nearbyCompanions}</h3>
                   </div>
 
                   {/* Smart Filters (All, Online, Suggested) */}
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200/80 shadow-xs">
+                    <div className="flex items-center bg-white p-1 rounded-xl border border-purple-100 shadow-xs">
                       <button
                         onClick={() => setSmartFilter('all')}
                         className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                           smartFilter === 'all'
-                            ? 'bg-[#5038ee] text-white shadow-xs'
+                            ? 'bg-[#5B21B6] text-white shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
@@ -1415,7 +1482,7 @@ export const ClientDashboard: React.FC = () => {
 
                     <button
                       onClick={() => setShowAllCompanions(!showAllCompanions)}
-                      className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1 cursor-pointer pl-2"
+                      className="text-xs font-bold text-[#5B21B6] hover:text-[#431487] flex items-center gap-1 cursor-pointer pl-2"
                     >
                       <span>{showAllCompanions ? t.showLess : t.viewAll}</span>
                       <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAllCompanions ? '-rotate-90' : ''}`} />
@@ -1423,7 +1490,8 @@ export const ClientDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 2 Columns on Mobile, 4 Columns on Desktop matching reference design */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4.5">
                   {(filteredCompanions
                     .filter(c => {
                       if (smartFilter === 'online') return c.isOnline !== false;
@@ -1434,10 +1502,11 @@ export const ClientDashboard: React.FC = () => {
                   ).map((comp) => (
                     <div
                       key={comp.id}
-                      className="rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
+                      className="rounded-2xl bg-white border border-purple-100/60 p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
                     >
                       <div>
-                        <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                        {/* Rounded portrait photo with floating status badge */}
+                        <div className="relative aspect-[4/3] w-full rounded-xl overflow-hidden bg-slate-100 shadow-inner">
                           <img
                             src={comp.profilePhoto}
                             alt={comp.name}
@@ -1447,63 +1516,62 @@ export const ClientDashboard: React.FC = () => {
                             }}
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute top-2.5 right-2.5">
+                          <div className="absolute top-2 right-2">
                             {comp.isOnline !== false ? (
-                              <span className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-[11px] font-bold shadow-xs flex items-center gap-1.5 text-emerald-600">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                                <span>{t.smartFilterOnline}</span>
-                              </span>
-                            ) : (
-                              <span className="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-[11px] font-bold shadow-xs flex items-center gap-1.5 text-slate-500">
-                                <span className="w-2 h-2 rounded-full bg-slate-400" />
-                                <span>Offline</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 space-y-1">
-                          <div className="text-sm font-bold text-slate-900 flex items-center justify-between">
-                            <span>{comp.name}</span>
-                            {comp.isOnline !== false ? (
-                              <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                              <span className="px-2 py-0.5 rounded-full bg-white/95 backdrop-blur-sm text-[10px] font-bold shadow-xs flex items-center gap-1 text-emerald-600">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span>{t.smartFilterOnline}</span>
+                                <span>Online</span>
                               </span>
                             ) : (
-                              <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+                              <span className="px-2 py-0.5 rounded-full bg-white/95 backdrop-blur-sm text-[10px] font-bold shadow-xs flex items-center gap-1 text-slate-500">
                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                 <span>Offline</span>
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-slate-500 flex items-center justify-between">
-                            <span>{comp.age ? `${comp.age}, ` : ''}{comp.address || comp.city || 'Kolkata'}</span>
-                            <span className="text-xs font-bold text-purple-700">
-                              ₹{(((comp.rates?.hourlyPaise ?? 49900)) / 100).toFixed(0)}/hr
-                            </span>
+                        </div>
+
+                        {/* Name, Status dot, Age & Location */}
+                        <div className="pt-2.5 pb-1 space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs sm:text-sm font-black text-[#19125E] truncate">{comp.name}</span>
+                            {comp.isOnline !== false ? (
+                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                <span>Online</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1 shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                <span>Offline</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-medium truncate">
+                            {comp.age ? `${comp.age}, ` : ''}{comp.address || comp.city || 'Kolkata'}
                           </div>
                         </div>
                       </div>
 
-                      {/* View Profile & Book Now Buttons */}
-                      <div className="p-3.5 pt-0 grid grid-cols-2 gap-2">
+                      {/* Bottom Action Row: Outlined View Profile Pill + Circular Heart Button (♡) */}
+                      <div className="pt-2 flex items-center gap-1.5 sm:gap-2">
                         <button
                           onClick={() => openQuickView(comp)}
-                          className="py-2 px-2.5 rounded-xl border border-purple-200 text-purple-700 hover:bg-purple-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          className="flex-1 py-1.5 px-2 rounded-full border border-[#6D28D9] text-[#6D28D9] hover:bg-purple-50 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer shadow-xs active:scale-95"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          <span>{t.viewProfile}</span>
+                          <span>{t.viewProfile || "View Profile"}</span>
                         </button>
                         <button
-                          onClick={() => {
-                            setSelectedCompanion(comp);
-                            setBookingStep('form');
-                          }}
-                          className="py-2 px-2.5 rounded-xl bg-gradient-to-r from-[#5038ee] to-[#7c3aed] text-white hover:from-[#432cc7] hover:to-[#6d28d9] text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm shadow-purple-600/30 transition-transform active:scale-95 cursor-pointer"
+                          onClick={(e) => toggleFavorite(comp.id, e)}
+                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border transition-colors flex items-center justify-center shrink-0 cursor-pointer shadow-xs active:scale-95 ${
+                            favorites[comp.id]
+                              ? 'bg-pink-50 border-pink-300 text-[#EC4899]'
+                              : 'border-purple-200 text-[#6D28D9] hover:bg-pink-50 hover:text-[#EC4899]'
+                          }`}
+                          title="Favorite"
                         >
-                          <CalendarCheck className="w-3.5 h-3.5" />
-                          <span>{t.bookNow}</span>
+                          <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${favorites[comp.id] ? 'fill-[#EC4899] text-[#EC4899]' : 'text-[#6D28D9]'}`} />
                         </button>
                       </div>
                     </div>
