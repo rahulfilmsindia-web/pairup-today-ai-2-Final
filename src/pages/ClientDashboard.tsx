@@ -938,22 +938,33 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   ];
 
   return (
-    <div className="min-h-screen bg-[#F4F2FA] text-slate-800 flex overflow-x-hidden relative font-sans">
+    <div className="min-h-screen max-w-full bg-[#F4F2FA] text-slate-800 flex overflow-x-hidden relative font-sans">
       
-      {/* ─── DESKTOP & TABLET LEFT FIXED SIDEBAR ─── */}
-      <aside className="hidden md:flex md:w-64 lg:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white flex-col justify-between min-h-screen sticky top-0 h-screen z-30 shrink-0 shadow-2xl p-5 overflow-y-auto scrollbar-none">
+      {/* ─── DESKTOP LEFT FIXED SIDEBAR (Docked strictly on lg+ screens >= 1024px) ─── */}
+      <aside className="hidden lg:flex lg:w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white flex-col justify-between min-h-screen sticky top-0 h-screen z-30 shrink-0 shadow-2xl p-5 overflow-y-auto scrollbar-none">
         <div className="space-y-6">
-          {/* Top Logo Branding (Click to go Home) */}
+          {/* Top Logo Branding: Identical to Home Page (Click to go Home) */}
           <button
             type="button"
-            onClick={() => onNavigateToPage?.('home')}
+            onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
             className="w-full flex flex-col items-center gap-1.5 py-2 group cursor-pointer"
             title="Return to PairUpToday Home"
           >
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center shadow-lg shadow-pink-500/30 group-hover:scale-105 transition-transform">
-              <Heart className="w-7 h-7 text-white fill-white" />
+            <div className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-amber-400/80 shadow-lg shadow-pink-500/30 transition-transform group-hover:scale-105">
+              <img
+                src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
+                alt="PairUpToday Logo"
+                className="w-full h-full object-cover"
+              />
             </div>
-            <span className="text-xl font-extrabold tracking-tight text-white group-hover:text-pink-300 transition-colors">PairUpToday</span>
+            <div className="flex flex-col items-center">
+              <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
+                PairUpToday
+              </span>
+              <span className="text-[9px] text-pink-300 uppercase tracking-widest font-semibold">
+                Connect · Match · Belong
+              </span>
+            </div>
           </button>
 
           {/* Navigation Items */}
@@ -985,18 +996,32 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
             })}
           </nav>
 
-          {/* Logout Button */}
-          <div className="pt-2 border-t border-white/10">
+          {/* Action Links: Switch to Companion & Logout */}
+          <div className="pt-2 border-t border-white/10 space-y-1.5">
             <button
-              onClick={() => {
-                if (window.confirm('Log out of PairUpToday Client portal?')) {
-                  logout();
+              type="button"
+              onClick={handleSwitchToCompanion}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-amber-300 hover:text-white hover:bg-amber-500/20 transition-all cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>{language === 'bn' ? 'কম্প্যানিয়ন মোডে যান ⇄' : language === 'hi' ? 'कंपैनियन मोड में जाएँ ⇄' : 'Switch to Companion ⇄'}</span>
+            </button>
+
+            <button
+              onClick={async () => {
+                if (window.confirm(language === 'bn' ? 'আপনি কি PairUpToday থেকে লগআউট করতে চান?' : language === 'hi' ? 'क्या आप लॉगआउट करना चाहते हैं?' : 'Log out of PairUpToday?')) {
+                  await logout();
+                  if (onNavigateToPage) {
+                    onNavigateToPage('home');
+                  } else {
+                    window.location.href = '/';
+                  }
                 }
               }}
               className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20 transition-all cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
-              <span>Logout</span>
+              <span>{language === 'bn' ? 'লগআউট' : language === 'hi' ? 'लॉगआउट' : 'Logout'}</span>
             </button>
           </div>
         </div>
@@ -1015,9 +1040,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
         </div>
       </aside>
 
-      {/* ─── MOBILE SLIDE-OVER DRAWER ─── */}
+      {/* ─── MOBILE SLIDE-OVER DRAWER (For all screens < lg) ─── */}
       {isMobileSidebarOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
+        <div className="fixed inset-0 z-50 lg:hidden flex">
           <div 
             onClick={() => setIsMobileSidebarOpen(false)} 
             className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
@@ -1025,12 +1050,26 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           <div className="relative w-72 max-w-[80vw] bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white p-5 flex flex-col justify-between shadow-2xl z-10">
             <div className="space-y-5">
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center">
-                    <Heart className="w-5 h-5 text-white fill-white" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileSidebarOpen(false);
+                    onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/');
+                  }}
+                  className="flex items-center gap-2 cursor-pointer text-left"
+                >
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden ring-2 ring-amber-400/80 shadow-md">
+                    <img
+                      src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
+                      alt="PairUpToday"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
-                  <span className="font-extrabold text-white text-base">PairUpToday</span>
-                </div>
+                  <div>
+                    <span className="font-extrabold text-white text-sm block">PairUpToday</span>
+                    <span className="text-[8px] text-pink-300 uppercase tracking-widest block">Client Portal</span>
+                  </div>
+                </button>
                 <button
                   onClick={() => setIsMobileSidebarOpen(false)}
                   className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20"
@@ -1079,17 +1118,35 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               </nav>
             </div>
 
-            <div className="pt-4 border-t border-white/10">
+            <div className="pt-4 border-t border-white/10 space-y-1.5">
               <button
+                type="button"
                 onClick={() => {
-                  if (window.confirm('Log out of PairUpToday Client portal?')) {
-                    logout();
+                  setIsMobileSidebarOpen(false);
+                  handleSwitchToCompanion();
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold text-amber-300 hover:text-white hover:bg-amber-500/20"
+              >
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>{language === 'bn' ? 'কম্প্যানিয়ন মোডে যান ⇄' : language === 'hi' ? 'कंपैनियन मोड में जाएँ ⇄' : 'Switch to Companion ⇄'}</span>
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (window.confirm(language === 'bn' ? 'আপনি কি PairUpToday থেকে লগআউট করতে চান?' : language === 'hi' ? 'क्या आप लॉगआउट करना चाहते हैं?' : 'Log out of PairUpToday?')) {
+                    setIsMobileSidebarOpen(false);
+                    await logout();
+                    if (onNavigateToPage) {
+                      onNavigateToPage('home');
+                    } else {
+                      window.location.href = '/';
+                    }
                   }
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <span>{language === 'bn' ? 'লগআউট' : language === 'hi' ? 'लॉगआउट' : 'Logout'}</span>
               </button>
             </div>
           </div>
@@ -1097,33 +1154,55 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       )}
 
       {/* ─── MAIN CONTENT AREA (RIGHT SIDE ON DESKTOP) ─── */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-[#F4F2FA]">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen max-w-full bg-[#F4F2FA]">
         
-        {/* Mobile Header Bar */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white/95 backdrop-blur-md border-b border-purple-100 sticky top-0 z-20 shadow-sm">
-          <div className="flex items-center gap-2">
+        {/* Mobile Header Bar (Active on all screens < lg) */}
+        <header className="lg:hidden flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-white/95 backdrop-blur-md border-b border-purple-100 sticky top-0 z-20 shadow-sm">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Top-Left: Home Button */}
+            <button
+              onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 text-[#1A135E] border border-purple-200 text-xs font-bold shadow-sm transition-all shrink-0 cursor-pointer"
+              title="Return to Home"
+            >
+              <Home className="w-3.5 h-3.5 text-purple-700" />
+              <span>Home</span>
+            </button>
+
+            {/* Menu Drawer Toggle */}
             <button 
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="p-2 rounded-xl text-[#1A135E] hover:bg-purple-50 transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl text-[#1A135E] hover:bg-purple-50 transition-colors cursor-pointer"
+              aria-label="Open Navigation Menu"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <button
-              onClick={() => onNavigateToPage?.('home')}
-              className="p-2 rounded-xl text-purple-700 hover:bg-purple-50 transition-colors cursor-pointer"
-              title="Return to Home"
-            >
-              <Home className="w-5 h-5" />
-            </button>
+
+            {/* Logo: Exact Home Page Logo */}
             <div className="flex items-center gap-1.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center">
-                <Heart className="w-4 h-4 text-white fill-white" />
+              <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden ring-2 ring-amber-400/80 shadow-sm shrink-0">
+                <img
+                  src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
+                  alt="PairUpToday"
+                  className="w-full h-full object-cover"
+                />
               </div>
-              <span className="font-extrabold text-[#1A135E] text-sm">PairUpToday</span>
+              <span className="font-extrabold text-[#1A135E] text-xs sm:text-sm truncate">PairUpToday</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Switch to Companion Button on Mobile */}
+            <button
+              onClick={handleSwitchToCompanion}
+              className="px-2 sm:px-2.5 py-1 rounded-full bg-gradient-to-r from-pink-500 to-rose-600 text-white text-[10px] sm:text-xs font-bold flex items-center gap-1 shadow-sm shrink-0"
+              title="Switch to Companion Mode"
+            >
+              <Sparkles className="w-3 h-3 text-yellow-200" />
+              <span className="hidden sm:inline">Companion</span>
+              <span>⇄</span>
+            </button>
+
             {/* Quick Language switch on mobile */}
             <div className="flex items-center bg-purple-50 rounded-lg p-0.5 border border-purple-200 text-[10px] font-bold">
               <button onClick={() => setLanguage('en')} className={`px-1.5 py-0.5 rounded ${language === 'en' ? 'bg-[#4C1D95] text-white' : 'text-slate-600'}`}>EN</button>
@@ -1134,7 +1213,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
             {/* Notification Bell */}
             <button
               onClick={() => setActiveTab('notifications')}
-              className="relative p-2 rounded-full bg-white border border-purple-100 text-slate-700 shadow-sm"
+              className="relative p-1.5 sm:p-2 rounded-full bg-white border border-purple-100 text-slate-700 shadow-sm"
             >
               <Bell className="w-4 h-4 text-[#1A135E]" />
               {notifications.length > 0 && (
@@ -1149,14 +1228,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               <img
                 src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
                 alt={user?.legalName}
-                className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-400"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover ring-2 ring-purple-400"
               />
             </button>
           </div>
         </header>
 
         {/* Mobile Search & Filters Sub-Header */}
-        <div className="md:hidden px-4 py-2.5 bg-white border-b border-purple-100 flex items-center gap-2">
+        <div className="lg:hidden px-3 sm:px-4 py-2 bg-white border-b border-purple-100 flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
             <input
@@ -1164,24 +1243,24 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Discover Companions..."
-              className="w-full pl-9 pr-3 py-2 rounded-full bg-slate-50 border border-purple-100 text-slate-800 placeholder-slate-400 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+              className="w-full pl-9 pr-3 py-1.5 rounded-full bg-slate-50 border border-purple-100 text-slate-800 placeholder-slate-400 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
             />
           </div>
           <button
             onClick={() => setShowFilterDrawer(!showFilterDrawer)}
-            className="px-3 py-2 rounded-xl bg-[#4C1D95] text-white text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm"
+            className="px-3 py-1.5 rounded-xl bg-[#4C1D95] text-white text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
           >
             <Sliders className="w-3.5 h-3.5" />
             <span>Filters</span>
           </button>
         </div>
 
-        {/* ─── DESKTOP TOPBAR HEADER ─── */}
-        <header className="hidden md:flex items-center justify-between px-6 lg:px-8 py-3.5 bg-white/95 backdrop-blur-md border-b border-purple-100/90 sticky top-0 z-20 shadow-sm">
+        {/* ─── DESKTOP TOPBAR HEADER (Active strictly on screens >= lg) ─── */}
+        <header className="hidden lg:flex items-center justify-between px-6 lg:px-8 py-3.5 bg-white/95 backdrop-blur-md border-b border-purple-100/90 sticky top-0 z-20 shadow-sm shrink-0">
           {/* Left: Home Button + Search input + Search & Filters Button */}
           <div className="flex items-center gap-3">
             <button
-              onClick={() => onNavigateToPage?.('home')}
+              onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
               className="px-3.5 py-2 rounded-full bg-purple-50 hover:bg-purple-100 text-[#1A135E] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm shrink-0 cursor-pointer"
               title="Return to PairUpToday Home"
             >
@@ -1220,17 +1299,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               </button>
             )}
 
-            {/* Switch to Companion Mode (For DUAL or Companion Accounts) */}
-            {(user?.role === 'DUAL' || user?.role === 'COMPANION') && (
-              <button
-                onClick={handleSwitchToCompanion}
-                className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-pink-500/25 transition-all cursor-pointer active:scale-95 shrink-0"
-                title="Switch to Companion Portal"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
-                <span>Companion Mode ⇄</span>
-              </button>
-            )}
+            {/* Switch to Companion Mode (Available for all Clients & Companions) */}
+            <button
+              onClick={handleSwitchToCompanion}
+              className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-pink-500/25 transition-all cursor-pointer active:scale-95 shrink-0"
+              title="Switch to Companion Portal"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+              <span>Companion Mode ⇄</span>
+            </button>
 
             {/* 1-Click Language Switcher */}
             <div className="flex items-center bg-purple-50 p-1 rounded-full border border-purple-200 text-xs font-semibold">
@@ -1478,20 +1555,22 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                     backgroundRepeat: "no-repeat"
                   }}
                 >
-                  {/* Subtle right-side gradient to ensure text readability while leaving couple 100% natural and unshaded */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-900/10 to-slate-950/70 pointer-events-none" />
-
-                  {/* Right-aligned Frosted Glass Card (completely clear of the couple on left) */}
-                  <div className="relative z-10 w-full max-w-sm md:max-w-md lg:max-w-lg bg-slate-950/75 sm:bg-slate-950/65 backdrop-blur-md border border-white/20 rounded-3xl p-6 shadow-2xl space-y-3 text-left">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-pink-500/20 border border-pink-400/40 text-pink-200 text-[11px] font-bold tracking-wide">
-                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-ping" />
+                  {/* Ultra-sheer glassmorphic container: Leaves 100% of the couple, sky & palace unblocked */}
+                  <div className="relative z-10 w-full max-w-sm md:max-w-md lg:max-w-lg bg-black/20 sm:bg-black/15 backdrop-blur-[2px] border border-white/30 rounded-3xl p-5 sm:p-6 shadow-xl space-y-3 text-left">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-pink-500/80 border border-white/40 text-white text-[11px] font-bold tracking-wide shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
                       <span>✨ Verified Social Companionship</span>
                     </div>
-                    <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight leading-snug">
-                      Welcome Back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-rose-300 to-amber-300">{userFirstName}!</span>
+                    <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)]">
+                      {language === 'bn' ? 'স্বাগতম, ' : language === 'hi' ? 'स्वागत है, ' : 'Welcome Back, '}
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-rose-200 to-amber-200">{userFirstName}!</span>
                     </h1>
-                    <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
-                      Let's find your perfect companion together... Explore verified companions across social, dining, events, and travel in your city.
+                    <p className="text-xs sm:text-sm text-white font-medium leading-relaxed drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">
+                      {language === 'bn' 
+                        ? 'চলুন একসাথে আপনার আদর্শ কম্প্যানিয়ন খুঁজে নিই... আপনার শহরের ভেরিফাইড কম্প্যানিয়নদের এক্সপ্লোর করুন।'
+                        : language === 'hi'
+                        ? 'आइए मिलकर आपके लिए सही साथी खोजें... अपने शहर में सत्यापित साथियों को एक्सप्लोर करें।'
+                        : "Let's find your perfect companion together... Explore verified companions across social, dining, events, and travel in your city."}
                     </p>
                     <div className="pt-1 flex items-center gap-3">
                       <button
@@ -1501,9 +1580,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                             compSection.scrollIntoView({ behavior: 'smooth' });
                           }
                         }}
-                        className="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs sm:text-sm font-extrabold shadow-lg shadow-pink-500/25 flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+                        className="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs sm:text-sm font-extrabold shadow-lg shadow-pink-500/30 flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
                       >
-                        <span>Explore Matches</span>
+                        <span>{language === 'bn' ? 'ম্যাচ এক্সপ্লোর করুন' : language === 'hi' ? 'मैच एक्सप्लोर करें' : 'Explore Matches'}</span>
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -1524,10 +1603,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                       <span>✨ Verified Social Companionship</span>
                     </div>
                     <h1 className="text-lg font-black text-[#19125E] tracking-tight">
-                      Welcome Back, <span className="text-pink-600">{userFirstName}!</span>
+                      {language === 'bn' ? 'স্বাগতম, ' : language === 'hi' ? 'स्वागत है, ' : 'Welcome Back, '}
+                      <span className="text-pink-600">{userFirstName}!</span>
                     </h1>
                     <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                      Let's find your perfect companion together... Explore verified companions across social, dining, events, and travel in your city.
+                      {language === 'bn' 
+                        ? 'চলুন একসাথে আপনার আদর্শ কম্প্যানিয়ন খুঁজে নিই... আপনার শহরের ভেরিফাইড কম্প্যানিয়নদের এক্সপ্লোর করুন।'
+                        : language === 'hi'
+                        ? 'आइए मिलकर आपके लिए सही साथी खोजें... अपने शहर में सत्यापित साथियों को एक्सप्लोर करें।'
+                        : "Let's find your perfect companion together... Explore verified companions across social, dining, events, and travel in your city."}
                     </p>
                     <div className="pt-1">
                       <button
@@ -1539,7 +1623,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                         }}
                         className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-extrabold shadow-md shadow-pink-500/20 flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
                       >
-                        <span>Explore Matches</span>
+                        <span>{language === 'bn' ? 'ম্যাচ এক্সপ্লোর করুন' : language === 'hi' ? 'मैच एक्सप्लोर करें' : 'Explore Matches'}</span>
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -1696,8 +1780,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5">
-                    {visibleCompanions.map((comp) => {
+                  <div className="overflow-y-auto max-h-[580px] lg:max-h-[calc(100vh-380px)] pr-1.5 scrollbar-thin scrollbar-thumb-purple-300">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5 pb-6">
+                      {visibleCompanions.map((comp) => {
                       const hourly = (((comp.rates?.hourlyPaise ?? 49900)) / 100).toFixed(0);
                       const isFav = Boolean(favorites[comp.id]);
                       return (
@@ -1789,6 +1874,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                         </div>
                       );
                     })}
+                    </div>
                   </div>
                 )}
               </div>

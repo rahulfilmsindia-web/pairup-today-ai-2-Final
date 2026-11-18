@@ -1493,6 +1493,46 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     }
   };
 
+  // Point 8: Companion to Client switch safety check
+  const handleSwitchToClientWithCheck = async () => {
+    // If companion is currently ONLINE (!isAvailabilityPaused), alert them to go OFFLINE first!
+    if (!isAvailabilityPaused) {
+      const confirmSwitch = window.confirm(
+        language === 'bn'
+          ? '⚠️ আপনি বর্তমানে ONLINE আছেন এবং ক্লায়েন্ট বুকিংয়ের জন্য সক্রিয়। ক্লায়েন্ট মোডে যাওয়ার আগে দয়া করে Offline হয়ে নিন। আপনি কি এখনই Offline হয়ে ক্লায়েন্ট মোডে যেতে চান?'
+          : language === 'hi'
+          ? '⚠️ आप वर्तमान में ONLINE हैं। क्लाइंट मोड पर स्विच करने से पहले कृपया Offline हो जाएं। क्या आप अभी Offline होकर स्विच करना चाहते हैं?'
+          : '⚠️ You are currently ONLINE and live for client bookings. Please go OFFLINE before switching to Client Mode. Would you like to go Offline and switch now?'
+      );
+      if (!confirmSwitch) return;
+
+      try {
+        await handleToggleAvailabilityPause();
+      } catch (e) {
+        console.warn('Auto offline error', e);
+      }
+    }
+
+    // Offline companions switch directly without notice
+    if (onNavigateToPage) {
+      onNavigateToPage('client-dashboard');
+    } else {
+      window.dispatchEvent(new CustomEvent('pairup:navigate', { detail: { page: 'client-dashboard' } }));
+    }
+  };
+
+  // Point 9: Direct logout to home page
+  const handleCompanionLogout = async () => {
+    if (window.confirm(language === 'bn' ? 'আপনি কি PairUpToday থেকে লগআউট করতে চান?' : language === 'hi' ? 'क्या आप लॉगआउट करना चाहते हैं?' : 'Log out of PairUpToday Companion portal?')) {
+      await logout();
+      if (onNavigateToPage) {
+        onNavigateToPage('home');
+      } else {
+        window.location.href = '/';
+      }
+    }
+  };
+
   // MEETING ARRIVED slide action
   const handleSlideMeetingArrived = async (bookingId: string) => {
     if (!user) return;
@@ -1977,23 +2017,36 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
 
   return (
     <ErrorBoundary fallbackTitle="Companion Dashboard">
-      <div className="min-h-screen bg-[#F4F2FA] text-slate-800 flex overflow-x-hidden relative font-sans">
+      <div className="min-h-screen max-w-full bg-[#F4F2FA] text-slate-800 flex overflow-x-hidden relative font-sans">
         
         {/* ============================================================== */}
         {/* 1. DESKTOP / TABLET DOCKED SIDEBAR (ROYAL INDIGO GRADIENT)     */}
         {/* ============================================================== */}
         <aside className="w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white shrink-0 min-h-screen border-r border-[#261b5c]/50 hidden lg:flex flex-col select-none relative overflow-hidden z-20 shadow-2xl p-4 justify-between">
           <div className="space-y-5 overflow-y-auto scrollbar-none pr-1">
-            {/* Brand Header */}
-            <div className="flex flex-col items-center gap-1.5 py-2 border-b border-white/10">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
-                <Heart className="w-7 h-7 text-white fill-white" />
+            {/* Brand Header: Official Home Page Logo */}
+            <button
+              type="button"
+              onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
+              className="w-full flex flex-col items-center gap-1.5 py-2 border-b border-white/10 group cursor-pointer"
+              title="Return to PairUpToday Home"
+            >
+              <div className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-amber-400/80 shadow-lg shadow-pink-500/30 transition-transform group-hover:scale-105">
+                <img
+                  src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
+                  alt="PairUpToday Logo"
+                  className="w-full h-full object-cover"
+                />
               </div>
-              <span className="text-xl font-extrabold tracking-tight text-white">PairUpToday</span>
-              <span className="text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-white/10 text-pink-300">
-                Companion Host Station
-              </span>
-            </div>
+              <div className="flex flex-col items-center">
+                <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
+                  PairUpToday
+                </span>
+                <span className="text-[9px] text-pink-300 uppercase tracking-widest font-semibold">
+                  Companion Host Station
+                </span>
+              </div>
+            </button>
 
             {/* Grouped Navigation Sections */}
             <nav className="space-y-4">
@@ -2035,22 +2088,16 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
             <div className="pt-2 border-t border-white/10 space-y-1">
               <button
                 type="button"
-                onClick={() => {
-                  onNavigateToPage ? onNavigateToPage('client-dashboard') : window.dispatchEvent(new CustomEvent('pairup:navigate', { detail: { page: 'client-dashboard' } }));
-                }}
+                onClick={handleSwitchToClientWithCheck}
                 className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20 transition-all cursor-pointer"
               >
                 <UserCheck className="w-4 h-4 text-amber-400" />
-                <span>{language === 'bn' ? 'ক্লায়েন্ট মোডে যান' : language === 'hi' ? 'क्लाइंट मोड में जाएँ' : 'Switch to Client Mode'}</span>
+                <span>{language === 'bn' ? 'ক্লায়েন্ট মোডে যান ⇄' : language === 'hi' ? 'क्लाइंट मोड में जाएँ ⇄' : 'Switch to Client Mode ⇄'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm('Log out of PairUpToday Companion portal?')) {
-                    logout();
-                  }
-                }}
+                onClick={handleCompanionLogout}
                 className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20 transition-all cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
@@ -2085,15 +2132,26 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
             <aside className="relative w-72 max-w-[80vw] bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white flex flex-col justify-between z-10 shadow-2xl h-full p-4 overflow-y-auto">
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center">
-                      <Heart className="w-5 h-5 text-white fill-white" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileSidebarOpen(false);
+                      onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/');
+                    }}
+                    className="flex items-center gap-2 cursor-pointer text-left"
+                  >
+                    <div className="relative w-8 h-8 rounded-full overflow-hidden ring-2 ring-amber-400/80 shadow-md">
+                      <img
+                        src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
+                        alt="PairUpToday"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div>
                       <span className="font-extrabold text-white text-sm block">PairUpToday</span>
-                      <span className="text-[9px] text-pink-300 uppercase tracking-wider block">Host Station</span>
+                      <span className="text-[8px] text-pink-300 uppercase tracking-wider block">Companion Host</span>
                     </div>
-                  </div>
+                  </button>
                   <button
                     onClick={() => setIsMobileSidebarOpen(false)}
                     className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20"
@@ -2154,19 +2212,18 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   type="button"
                   onClick={() => {
                     setIsMobileSidebarOpen(false);
-                    onNavigateToPage ? onNavigateToPage('client-dashboard') : window.dispatchEvent(new CustomEvent('pairup:navigate', { detail: { page: 'client-dashboard' } }));
+                    handleSwitchToClientWithCheck();
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20"
                 >
                   <UserCheck className="w-4 h-4 text-amber-400" />
-                  <span>{language === 'bn' ? 'ক্লায়েন্ট মোডে যান' : language === 'hi' ? 'क्लाइंट मोड में जाएँ' : 'Switch to Client Mode'}</span>
+                  <span>{language === 'bn' ? 'ক্লায়েন্ট মোডে যান ⇄' : language === 'hi' ? 'क्लाइंट मोड में जाएँ ⇄' : 'Switch to Client Mode ⇄'}</span>
                 </button>
 
                 <button
                   onClick={() => {
-                    if (window.confirm('Log out of PairUpToday Companion portal?')) {
-                      logout();
-                    }
+                    setIsMobileSidebarOpen(false);
+                    handleCompanionLogout();
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20"
                 >
@@ -2261,6 +2318,18 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${!isAvailabilityPaused ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
                 </span>
                 <span className="font-extrabold">{!isAvailabilityPaused ? 'LIVE' : 'OFFLINE'}</span>
+              </button>
+
+              {/* Switch to Client Mode Button (Checks if Online first) */}
+              <button
+                type="button"
+                onClick={handleSwitchToClientWithCheck}
+                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-purple-600/25 transition-all cursor-pointer active:scale-95 shrink-0"
+                title="Switch to Client Mode"
+              >
+                <UserCheck className="w-3.5 h-3.5 text-amber-200" />
+                <span className="hidden sm:inline">Client Mode</span>
+                <span>⇄</span>
               </button>
 
               {/* 1-Click Language Switcher */}
@@ -2450,25 +2519,22 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   backgroundRepeat: "no-repeat"
                 }}
               >
-                {/* Subtle right-side gradient to ensure text readability while leaving couple 100% natural and unshaded */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-900/15 to-slate-950/75 pointer-events-none" />
-
                 {/* Right-Side "Spread Happiness ❤️🌹" Floating Badge */}
                 <div className="absolute top-4 right-4 sm:top-5 sm:right-6 z-20">
                   <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-pink-500/85 backdrop-blur-md border border-white/40 text-white text-xs font-extrabold shadow-lg shadow-pink-500/30 animate-pulse">
-                    <span>Spread Happiness ❤️🌹</span>
+                    <span>{language === 'bn' ? 'আনন্দ ছড়ান ❤️🌹' : language === 'hi' ? 'खुशियां फैलाएं ❤️🌹' : 'Spread Happiness ❤️🌹'}</span>
                   </div>
                 </div>
 
-                {/* Right-aligned Frosted Glass Card with Round Profile Photo on Left & Details on Right */}
-                <div className="relative z-10 w-full max-w-lg lg:max-w-xl bg-slate-950/75 sm:bg-slate-950/70 backdrop-blur-md border border-white/20 rounded-3xl p-5 sm:p-6 shadow-2xl flex items-center gap-4 sm:gap-5 text-left">
+                {/* Right-aligned Sheer Glass Card with Round Profile Photo on Left & Details on Right (Leaves roses & couple 100% visible) */}
+                <div className="relative z-10 w-full max-w-lg lg:max-w-xl bg-black/20 sm:bg-black/15 backdrop-blur-[2px] border border-white/30 rounded-3xl p-5 sm:p-6 shadow-xl flex items-center gap-4 sm:gap-5 text-left">
                   
                   {/* Left: User Round Profile Photo */}
                   <div className="relative shrink-0">
                     <img
                       src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
                       alt={user?.legalName}
-                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover ring-4 ring-pink-400/90 shadow-xl"
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover ring-4 ring-pink-400 shadow-xl"
                     />
                     <span className={`absolute bottom-0 right-0 px-2 py-0.5 rounded-full text-[9px] font-extrabold shadow-md border-2 border-slate-900 ${!isAvailabilityPaused ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-slate-200'}`}>
                       {!isAvailabilityPaused ? 'LIVE' : 'OFF'}
@@ -2477,26 +2543,26 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
 
                   {/* Right: Text Details & Status */}
                   <div className="flex-1 space-y-2">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pink-500/20 border border-pink-400/40 text-pink-200 text-[10px] font-bold tracking-wide">
-                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-ping" />
-                      <span>✨ Verified Companion Host</span>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pink-500/80 border border-white/40 text-white text-[10px] font-bold tracking-wide shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                      <span>{language === 'bn' ? '✨ ভেরিফাইড কম্প্যানিয়ন হোস্ট' : language === 'hi' ? '✨ सत्यापित साथी होस्ट' : '✨ Verified Companion Host'}</span>
                     </div>
 
-                    <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight leading-snug flex items-center gap-1.5">
-                      <span>Welcome Back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-rose-300 to-amber-300">{userFirstName}!</span></span>
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight leading-snug flex items-center gap-1.5 drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)]">
+                      <span>{language === 'bn' ? 'স্বাগতম, ' : language === 'hi' ? 'स्वागत है, ' : 'Welcome Back, '}<span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-rose-200 to-amber-200">{userFirstName}!</span></span>
                       <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-black shadow-sm" title="Verified Companion">✓</span>
                     </h1>
 
-                    <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
-                      You're an amazing companion. Keep spreading positivity!
+                    <p className="text-xs sm:text-sm text-white font-medium leading-relaxed drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">
+                      {language === 'bn' ? 'আপনি একজন অসাধারণ কম্প্যানিয়ন। ইতিবাচকতা ছড়াতে থাকুন!' : language === 'hi' ? 'आप एक अद्भुत साथी हैं। सकारात्मकता फैलाते रहें!' : "You're an amazing companion. Keep spreading positivity!"}
                     </p>
 
                     {/* Status & Buttons */}
                     <div className="pt-1.5 flex flex-wrap items-center gap-2">
                       <div className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-200 bg-white/10 px-2.5 py-1 rounded-xl border border-white/15">
-                        <span>My Status:</span>
+                        <span>{language === 'bn' ? 'আমার স্ট্যাটাস:' : language === 'hi' ? 'मेरी स्थिति:' : 'My Status:'}</span>
                         <span className={!isAvailabilityPaused ? 'text-emerald-400 font-extrabold' : 'text-slate-400 font-semibold'}>
-                          {!isAvailabilityPaused ? 'Online 🟢' : 'Offline ⚪'}
+                          {!isAvailabilityPaused ? (language === 'bn' ? 'অনলাইন 🟢' : language === 'hi' ? 'ऑनलाइन 🟢' : 'Online 🟢') : (language === 'bn' ? 'অফলাইন ⚪' : language === 'hi' ? 'ऑफलाइन ⚪' : 'Offline ⚪')}
                         </span>
                       </div>
 
@@ -2510,14 +2576,14 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                         }`}
                       >
                         {!isAvailabilityPaused ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                        <span>{!isAvailabilityPaused ? 'Go Offline' : 'Go Online (Live)'}</span>
+                        <span>{!isAvailabilityPaused ? (language === 'bn' ? 'অফলাইন হন' : language === 'hi' ? 'ऑफलाइन हों' : 'Go Offline') : (language === 'bn' ? 'অনলাইন হন' : language === 'hi' ? 'Go Online (Live)' : 'Go Online (Live)')}</span>
                       </button>
 
                       <button
                         onClick={() => setActiveTab('requests')}
                         className="px-3 py-1 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs font-extrabold shadow-md shadow-pink-500/25 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
                       >
-                        <span>Requests ({pendingBookings.length})</span>
+                        <span>{language === 'bn' ? 'অনুরোধ' : language === 'hi' ? 'अनुरोध' : 'Requests'} ({pendingBookings.length})</span>
                         <ChevronRight className="w-3 h-3" />
                       </button>
                     </div>
@@ -2536,7 +2602,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   />
                   <div className="absolute top-2 right-2">
                     <span className="px-2.5 py-0.5 rounded-full bg-pink-500/90 text-white text-[10px] font-extrabold shadow">
-                      Spread Happiness ❤️🌹
+                      {language === 'bn' ? 'আনন্দ ছড়ান ❤️🌹' : language === 'hi' ? 'खुशियां फैलाएं ❤️🌹' : 'Spread Happiness ❤️🌹'}
                     </span>
                   </div>
                 </div>
@@ -2553,18 +2619,18 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                     </div>
                     <div className="min-w-0 flex-1">
                       <h2 className="text-base font-extrabold text-[#191040] flex items-center gap-1 truncate">
-                        <span>Welcome Back, <span className="text-pink-600">{userFirstName}!</span></span>
+                        <span>{language === 'bn' ? 'স্বাগতম, ' : language === 'hi' ? 'स्वागत है, ' : 'Welcome Back, '}<span className="text-pink-600">{userFirstName}!</span></span>
                         <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-sky-500 text-white text-[9px] font-bold">✓</span>
                       </h2>
                       <p className="text-[11px] text-slate-500 line-clamp-1">
-                        You're an amazing companion. Keep spreading positivity!
+                        {language === 'bn' ? 'আপনি একজন অসাধারণ কম্প্যানিয়ন। ইতিবাচকতা ছড়াতে থাকুন!' : language === 'hi' ? 'आप एक अद्भुत साथी हैं। सकारात्मकता फैलाते रहें!' : "You're an amazing companion. Keep spreading positivity!"}
                       </p>
                     </div>
                   </div>
 
                   <div className="pt-1 flex items-center justify-between gap-2 border-t border-purple-50">
                     <div className="text-[11px] font-bold text-slate-600">
-                      My Status: <span className={!isAvailabilityPaused ? 'text-emerald-600 font-bold' : 'text-slate-500'}>{!isAvailabilityPaused ? 'Online 🟢' : 'Offline ⚪'}</span>
+                      {language === 'bn' ? 'আমার স্ট্যাটাস:' : language === 'hi' ? 'मेरी स्थिति:' : 'My Status:'} <span className={!isAvailabilityPaused ? 'text-emerald-600 font-bold' : 'text-slate-500'}>{!isAvailabilityPaused ? (language === 'bn' ? 'অনলাইন 🟢' : 'Online 🟢') : (language === 'bn' ? 'অফলাইন ⚪' : 'Offline ⚪')}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
@@ -2576,13 +2642,13 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                             : 'bg-emerald-600 text-white'
                         }`}
                       >
-                        {!isAvailabilityPaused ? 'Offline' : 'Online'}
+                        {!isAvailabilityPaused ? (language === 'bn' ? 'অফলাইন' : 'Offline') : (language === 'bn' ? 'অনলাইন' : 'Online')}
                       </button>
                       <button
                         onClick={() => setActiveTab('requests')}
                         className="px-3 py-1.5 rounded-xl bg-purple-700 text-white text-[11px] font-bold"
                       >
-                        Requests ({pendingBookings.length})
+                        {language === 'bn' ? 'অনুরোধ' : 'Requests'} ({pendingBookings.length})
                       </button>
                     </div>
                   </div>
