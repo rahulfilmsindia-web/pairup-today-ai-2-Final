@@ -89,7 +89,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --min-instances 1 \
   --max-instances 10 \
   --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
-  --set-env-vars="NODE_ENV=production,PORT=8080" \
+  --set-env-vars="NODE_ENV=production" \
   --project "${PROJECT_ID}"
 
 PRIMARY_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${PRIMARY_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
@@ -108,7 +108,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --min-instances 1 \
   --max-instances 10 \
   --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
-  --set-env-vars="NODE_ENV=production,PORT=8080" \
+  --set-env-vars="NODE_ENV=production" \
   --project "${PROJECT_ID}"
 
 FAILOVER_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${FAILOVER_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
