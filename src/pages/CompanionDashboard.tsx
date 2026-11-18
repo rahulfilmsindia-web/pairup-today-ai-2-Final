@@ -2438,65 +2438,155 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         {/* ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
-            {/* 1. Hero Welcome Banner */}
-            <div className="relative rounded-3xl bg-gradient-to-r from-[#ffeef2] via-[#fff5f6] to-[#fedfe7] border border-pink-100/90 p-6 sm:p-8 overflow-hidden shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6 w-full md:w-auto z-10">
-                <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden shrink-0 shadow-lg ring-4 ring-white/90">
-                  <img
-                    src={user?.profilePhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'}
-                    alt={user?.legalName}
-                    className="w-full h-full object-cover object-top"
-                  />
-                  <span className={`absolute bottom-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold shadow-md ${!isAvailabilityPaused ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-200'}`}>
-                    {!isAvailabilityPaused ? '🟢 LIVE' : '⚪ OFFLINE'}
-                  </span>
+            {/* 1. HERO WELCOME BANNER (3:1 Panoramic Couple Artwork + Round Profile + Spread Happiness) */}
+            <div className="w-full">
+              {/* DESKTOP & TABLET VIEW (sm and above): Full-width Panoramic with Text & Round Profile floating on right */}
+              <div 
+                className="hidden sm:flex relative w-full min-h-[290px] md:min-h-[310px] lg:min-h-[330px] rounded-3xl overflow-hidden shadow-xl border border-pink-200/80 items-center justify-end p-6 md:p-8 lg:p-10"
+                style={{
+                  backgroundImage: "url('/assets/companion_welcome_banner.jpg')",
+                  backgroundPosition: "left center",
+                  backgroundSize: "cover",
+                  backgroundRepeat: "no-repeat"
+                }}
+              >
+                {/* Subtle right-side gradient to ensure text readability while leaving couple 100% natural and unshaded */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-900/15 to-slate-950/75 pointer-events-none" />
+
+                {/* Right-Side "Spread Happiness ❤️🌹" Floating Badge */}
+                <div className="absolute top-4 right-4 sm:top-5 sm:right-6 z-20">
+                  <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-pink-500/85 backdrop-blur-md border border-white/40 text-white text-xs font-extrabold shadow-lg shadow-pink-500/30 animate-pulse">
+                    <span>Spread Happiness ❤️🌹</span>
+                  </div>
                 </div>
 
-                <div className="space-y-2 text-center sm:text-left">
-                  <h2 className="text-2xl sm:text-3xl font-extrabold text-[#191040] tracking-tight">
-                    Host Station, <span className="text-[#db2777]">{userFirstName}</span>!
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-600 max-w-md font-medium leading-relaxed">
-                    {!isAvailabilityPaused 
-                      ? 'Your profile is currently Live and receiving client booking requests in your city.' 
-                      : 'Your profile is currently Offline. Switch Online to start receiving client bookings.'}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3 pt-2 justify-center sm:justify-start">
-                    <button
-                      onClick={handleToggleAvailabilityPause}
-                      disabled={togglingOnline}
-                      className={`px-5 py-2.5 rounded-full font-bold text-xs shadow-md cursor-pointer transition-transform active:scale-95 flex items-center gap-2 ${
-                        !isAvailabilityPaused
-                          ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
-                          : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30'
-                      }`}
-                    >
-                      {!isAvailabilityPaused ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                      <span>{!isAvailabilityPaused ? 'Pause (Go Offline)' : 'Go Online (Live)'}</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('requests')}
-                      className="px-5 py-2.5 rounded-full bg-[#5038ee] hover:bg-[#432cc7] text-white font-bold text-xs shadow-md shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <span>Requests ({pendingBookings.length})</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                    {upcomingBookings.length > 0 && (
-                      <button
-                        onClick={() => setActiveTab('upcoming')}
-                        className="px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Navigation className="w-3.5 h-3.5 animate-pulse" />
-                        <span>Active Sessions ({upcomingBookings.length})</span>
-                      </button>
-                    )}
+                {/* Right-aligned Frosted Glass Card with Round Profile Photo on Left & Details on Right */}
+                <div className="relative z-10 w-full max-w-lg lg:max-w-xl bg-slate-950/75 sm:bg-slate-950/70 backdrop-blur-md border border-white/20 rounded-3xl p-5 sm:p-6 shadow-2xl flex items-center gap-4 sm:gap-5 text-left">
+                  
+                  {/* Left: User Round Profile Photo */}
+                  <div className="relative shrink-0">
+                    <img
+                      src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
+                      alt={user?.legalName}
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover ring-4 ring-pink-400/90 shadow-xl"
+                    />
+                    <span className={`absolute bottom-0 right-0 px-2 py-0.5 rounded-full text-[9px] font-extrabold shadow-md border-2 border-slate-900 ${!isAvailabilityPaused ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-slate-200'}`}>
+                      {!isAvailabilityPaused ? 'LIVE' : 'OFF'}
+                    </span>
                   </div>
+
+                  {/* Right: Text Details & Status */}
+                  <div className="flex-1 space-y-2">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pink-500/20 border border-pink-400/40 text-pink-200 text-[10px] font-bold tracking-wide">
+                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-ping" />
+                      <span>✨ Verified Companion Host</span>
+                    </div>
+
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight leading-snug flex items-center gap-1.5">
+                      <span>Welcome Back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-rose-300 to-amber-300">{userFirstName}!</span></span>
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-black shadow-sm" title="Verified Companion">✓</span>
+                    </h1>
+
+                    <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
+                      You're an amazing companion. Keep spreading positivity!
+                    </p>
+
+                    {/* Status & Buttons */}
+                    <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-200 bg-white/10 px-2.5 py-1 rounded-xl border border-white/15">
+                        <span>My Status:</span>
+                        <span className={!isAvailabilityPaused ? 'text-emerald-400 font-extrabold' : 'text-slate-400 font-semibold'}>
+                          {!isAvailabilityPaused ? 'Online 🟢' : 'Offline ⚪'}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={handleToggleAvailabilityPause}
+                        disabled={togglingOnline}
+                        className={`px-3 py-1 rounded-xl text-xs font-extrabold shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1 ${
+                          !isAvailabilityPaused
+                            ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+                            : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/30'
+                        }`}
+                      >
+                        {!isAvailabilityPaused ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                        <span>{!isAvailabilityPaused ? 'Go Offline' : 'Go Online (Live)'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab('requests')}
+                        className="px-3 py-1 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs font-extrabold shadow-md shadow-pink-500/25 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                      >
+                        <span>Requests ({pendingBookings.length})</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
-              <div className="hidden lg:flex items-center gap-3 opacity-25 select-none pointer-events-none pr-4">
-                <Sparkles className="w-10 h-10 text-pink-500" />
-                <Heart className="w-14 h-14 text-rose-400 fill-rose-400" />
+              {/* MOBILE VIEW (< sm): Clean Stack so the Artwork is 100% visible & faces are NEVER covered */}
+              <div className="sm:hidden space-y-3">
+                <div className="relative w-full rounded-2xl overflow-hidden shadow-md border border-pink-200/60 bg-pink-50">
+                  <img
+                    src="/assets/companion_welcome_banner.jpg"
+                    alt="Companion Welcome Artwork"
+                    className="w-full aspect-[3/1] object-cover object-left"
+                  />
+                  <div className="absolute top-2 right-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-pink-500/90 text-white text-[10px] font-extrabold shadow">
+                      Spread Happiness ❤️🌹
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white/95 backdrop-blur-md border border-purple-100/80 rounded-2xl p-4 shadow-sm space-y-3 text-left">
+                  <div className="flex items-center gap-3">
+                    <div className="relative shrink-0">
+                      <img
+                        src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
+                        alt={user?.legalName}
+                        className="w-14 h-14 rounded-full object-cover ring-2 ring-pink-400 shadow-md"
+                      />
+                      <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white ${!isAvailabilityPaused ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-base font-extrabold text-[#191040] flex items-center gap-1 truncate">
+                        <span>Welcome Back, <span className="text-pink-600">{userFirstName}!</span></span>
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-sky-500 text-white text-[9px] font-bold">✓</span>
+                      </h2>
+                      <p className="text-[11px] text-slate-500 line-clamp-1">
+                        You're an amazing companion. Keep spreading positivity!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-between gap-2 border-t border-purple-50">
+                    <div className="text-[11px] font-bold text-slate-600">
+                      My Status: <span className={!isAvailabilityPaused ? 'text-emerald-600 font-bold' : 'text-slate-500'}>{!isAvailabilityPaused ? 'Online 🟢' : 'Offline ⚪'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={handleToggleAvailabilityPause}
+                        disabled={togglingOnline}
+                        className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold shadow-sm ${
+                          !isAvailabilityPaused
+                            ? 'bg-amber-500 text-slate-950'
+                            : 'bg-emerald-600 text-white'
+                        }`}
+                      >
+                        {!isAvailabilityPaused ? 'Offline' : 'Online'}
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('requests')}
+                        className="px-3 py-1.5 rounded-xl bg-purple-700 text-white text-[11px] font-bold"
+                      >
+                        Requests ({pendingBookings.length})
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2505,7 +2595,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               {/* 1. Settled Earnings */}
               <div 
                 onClick={() => setActiveTab('wallet')}
-                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
+                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer min-h-[120px]"
               >
                 <div className="space-y-1">
                   <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1">
@@ -2527,7 +2617,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               {/* 2. Locked Escrow */}
               <div 
                 onClick={() => setActiveTab('locked-earnings')}
-                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
+                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer min-h-[120px]"
               >
                 <div className="space-y-1">
                   <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-1">
@@ -2549,7 +2639,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               {/* 3. Completed Sessions */}
               <div 
                 onClick={() => setActiveTab('history')}
-                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-300 hover:shadow-md transition-all group"
+                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-purple-300 hover:shadow-md transition-all group min-h-[120px]"
               >
                 <div className="space-y-1">
                   <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-1">
@@ -2572,7 +2662,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               {/* 4. 3-Gate Activation */}
               <div 
                 onClick={() => setActiveTab(!conditions.kycApproved ? 'kyc-status' : !conditions.membershipValid ? 'membership' : 'bank')}
-                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group"
+                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group min-h-[120px]"
               >
                 <div className="space-y-1">
                   <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1">
