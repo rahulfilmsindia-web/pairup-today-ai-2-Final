@@ -942,14 +942,22 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       
       {/* ─── DESKTOP LEFT FIXED SIDEBAR (Docked strictly on lg+ screens >= 1024px) ─── */}
       <aside className="hidden lg:flex lg:w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white flex-col justify-between min-h-screen sticky top-0 h-screen z-30 shrink-0 shadow-2xl p-5 overflow-y-auto scrollbar-none">
-        <div className="space-y-6">
-          {/* Top Logo Branding: Identical to Home Page (Click to go Home) */}
-          <button
-            type="button"
-            onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
-            className="w-full flex flex-col items-center gap-1.5 py-2 group cursor-pointer"
-            title="Return to PairUpToday Home"
-          >
+        <div className="space-y-4">
+          {/* Top-Left: Dedicated Desktop Home Navigation Button */}
+          <div className="flex items-center justify-start pb-1">
+            <button
+              type="button"
+              onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all shadow-sm cursor-pointer group"
+              title="Return to Home"
+            >
+              <Home className="w-3.5 h-3.5 text-pink-300 group-hover:text-white" />
+              <span>← Home</span>
+            </button>
+          </div>
+
+          {/* Top Logo Branding: Identical to Home Page */}
+          <div className="w-full flex flex-col items-center gap-1.5 py-1 select-none">
             <div className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-amber-400/80 shadow-lg shadow-pink-500/30 transition-transform group-hover:scale-105">
               <img
                 src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
@@ -965,7 +973,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                 Connect · Match · Belong
               </span>
             </div>
-          </button>
+          </div>
 
           {/* Navigation Items */}
           <nav className="space-y-1">
@@ -1257,17 +1265,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
         {/* ─── DESKTOP TOPBAR HEADER (Active strictly on screens >= lg) ─── */}
         <header className="hidden lg:flex items-center justify-between px-6 lg:px-8 py-3.5 bg-white/95 backdrop-blur-md border-b border-purple-100/90 sticky top-0 z-20 shadow-sm shrink-0">
-          {/* Left: Home Button + Search input + Search & Filters Button */}
+          {/* Left: Search input + Search & Filters Button */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
-              className="px-3.5 py-2 rounded-full bg-purple-50 hover:bg-purple-100 text-[#1A135E] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm shrink-0 cursor-pointer"
-              title="Return to PairUpToday Home"
-            >
-              <Home className="w-3.5 h-3.5 text-purple-700" />
-              <span>Home</span>
-            </button>
-
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
               <input
@@ -1521,21 +1520,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
             </div>
           )}
 
-          {/* Back button breadcrumb when outside overview */}
-          {activeTab !== 'overview' && (
-            <div className="flex items-center justify-between pb-1">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-purple-200 text-[#4C1D95] hover:bg-purple-50 text-xs font-bold shadow-sm transition-colors cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span>← Back to Dashboard Overview</span>
-              </button>
-              <span className="text-xs font-bold text-purple-900/60 uppercase tracking-wider">
-                {activeTab.replace('-', ' ')}
-              </span>
-            </div>
-          )}
+
 
           {/* ═══════════════════════════════════════════════════════════ */}
           {/* TAB 1: OVERVIEW (MODERN UNIFIED DASHBOARD PER REFERENCE)   */}
@@ -1549,7 +1534,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                 <div 
                   className="hidden sm:flex relative w-full min-h-[280px] md:min-h-[300px] lg:min-h-[320px] rounded-3xl overflow-hidden shadow-lg border border-pink-200/60 items-center justify-end p-6 md:p-8 lg:p-10"
                   style={{
-                    backgroundImage: "url('/assets/client_welcome_banner.jpg')",
+                    backgroundImage: "url('/assets/client_welcome_banner.png')",
                     backgroundPosition: "left center",
                     backgroundSize: "cover",
                     backgroundRepeat: "no-repeat"
@@ -1593,7 +1578,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                 <div className="sm:hidden space-y-3">
                   <div className="w-full rounded-2xl overflow-hidden shadow-md border border-pink-200/60 bg-pink-50">
                     <img
-                      src="/assets/client_welcome_banner.jpg"
+                      src="/assets/client_welcome_banner.png"
                       alt="PairUp Welcome Artwork"
                       className="w-full aspect-[3/1] object-cover object-left"
                     />

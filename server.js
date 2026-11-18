@@ -5925,6 +5925,14 @@ app.post("/api/companion/membership/subscribe", async (req, res) => {
   try {
     const user = await databaseAdapter.getUser(userId);
     if (!user) return res.status(401).json({ error: "Authenticated Companion account was not found." });
+
+    // Strict Rule: Companion Govt ID KYC Name must match Bank Account Beneficiary Name
+    const companionGovtName = (user.legalName || user.name || '').trim();
+    if (companionGovtName && !compareLegalAndBankNames(companionGovtName, accountHolderName)) {
+      return res.status(400).json({
+        error: `Bank beneficiary name ("${accountHolderName}") must strictly match your Government ID KYC name ("${companionGovtName}"). Third-party bank accounts are strictly prohibited.`
+      });
+    }
     if (user.role === "CLIENT") {
       await databaseAdapter.updateUser(userId, { role: "DUAL", activeRole: "COMPANION" }).catch(() => null);
       if (db2.users && db2.users[userId]) {

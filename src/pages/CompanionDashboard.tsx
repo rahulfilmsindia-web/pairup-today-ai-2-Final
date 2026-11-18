@@ -1399,6 +1399,20 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
   const handleVerifyBank = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    // Strict Rule: Companion Govt ID KYC Name must match Bank Beneficiary Name
+    const legalGovtName = (user.legalName || user.name || '').trim();
+    if (legalGovtName) {
+      const clean = (str: string) => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+      const kTokens = clean(legalGovtName);
+      const bTokens = clean(accountHolderName);
+      const matched = kTokens.filter(t => bTokens.includes(t));
+      if (matched.length === 0) {
+        setBankMsg(`Bank beneficiary name ("${accountHolderName}") must strictly match your Government ID KYC legal name ("${legalGovtName}"). Third-party bank accounts are strictly prohibited.`);
+        return;
+      }
+    }
+
     setBankSubmitting(true);
     setBankMsg(null);
     try {
@@ -2072,14 +2086,22 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         {/* 1. DESKTOP / TABLET DOCKED SIDEBAR (ROYAL INDIGO GRADIENT)     */}
         {/* ============================================================== */}
         <aside className="w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white shrink-0 min-h-screen border-r border-[#261b5c]/50 hidden lg:flex flex-col select-none relative overflow-hidden z-20 shadow-2xl p-4 justify-between">
-          <div className="space-y-5 overflow-y-auto scrollbar-none pr-1">
+          <div className="space-y-4 overflow-y-auto scrollbar-none pr-1">
+            {/* Desktop Top-Left: Dedicated Home Navigation Button */}
+            <div className="flex items-center justify-start pb-1">
+              <button
+                type="button"
+                onClick={handleNavigateToHomeWithCheck}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all shadow-sm cursor-pointer group"
+                title="Return to Home"
+              >
+                <Home className="w-3.5 h-3.5 text-pink-300 group-hover:text-white" />
+                <span>← Home</span>
+              </button>
+            </div>
+
             {/* Brand Header: Official Home Page Logo */}
-            <button
-              type="button"
-              onClick={handleNavigateToHomeWithCheck}
-              className="w-full flex flex-col items-center gap-1.5 py-2 border-b border-white/10 group cursor-pointer"
-              title="Return to PairUpToday Home"
-            >
+            <div className="w-full flex flex-col items-center gap-1.5 py-1 border-b border-white/10 select-none">
               <div className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-amber-400/80 shadow-lg shadow-pink-500/30 transition-transform group-hover:scale-105">
                 <img
                   src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
@@ -2095,7 +2117,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   Companion Host Station
                 </span>
               </div>
-            </button>
+            </div>
 
             {/* Grouped Navigation Sections */}
             <nav className="space-y-4">
@@ -2292,16 +2314,6 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           {/* Topbar Header */}
           <header className="bg-white/90 backdrop-blur-md border-b border-purple-100/80 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
             <div className="flex items-center gap-3">
-              {/* Home button */}
-              <button
-                onClick={handleNavigateToHomeWithCheck}
-                className="px-3 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 text-[#1A135E] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm shrink-0 cursor-pointer"
-                title="Return to PairUpToday Home"
-              >
-                <Home className="w-3.5 h-3.5 text-purple-700" />
-                <span className="hidden sm:inline">Home</span>
-              </button>
-
               {/* Mobile Hamburger Button */}
               <button
                 onClick={() => setIsMobileSidebarOpen(true)}
@@ -2310,41 +2322,16 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                 <Menu className="w-5 h-5" />
               </button>
 
-              {/* Back to Overview button when on subtab */}
+              {/* Clean Single Back to Overview button when on subtab */}
               {activeTab !== 'overview' && (
                 <button
                   onClick={() => setActiveTab('overview')}
-                  className="px-3 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 text-[#4C1D95] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 text-[#4C1D95] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm cursor-pointer"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>Back to Overview</span>
                 </button>
               )}
-
-              {/* 3-Gate Verification Badges in Header */}
-              <div className="hidden sm:flex items-center gap-2">
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 border ${
-                  conditions.kycApproved 
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                    : 'bg-amber-50 text-amber-700 border-amber-200'
-                }`}>
-                  {conditions.kycApproved ? '✓ KYC APPROVED' : '⏳ KYC PENDING'}
-                </span>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 border ${
-                  conditions.membershipValid 
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                    : 'bg-rose-50 text-rose-700 border-rose-200'
-                }`}>
-                  {conditions.membershipValid ? '✓ MEMBERSHIP ACTIVE' : '✕ MEMBERSHIP'}
-                </span>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1 border ${
-                  conditions.bankVerified 
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                    : 'bg-rose-50 text-rose-700 border-rose-200'
-                }`}>
-                  {conditions.bankVerified ? '✓ BANK VERIFIED' : '✕ BANK'}
-                </span>
-              </div>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
@@ -2515,41 +2502,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           </div>
         )}
 
-        {/* Instant Alert Permissions Banner */}
-        {notificationPermission !== 'granted' && (
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-pink-500/15 border border-amber-500/40 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <Bell className="w-5 h-5 text-amber-500 shrink-0 animate-bounce" />
-              <div>
-                <span className="font-bold text-amber-900 block">Enable Instant Heads-Up Booking Alerts</span>
-                <span className="text-[11px] text-slate-600">Allow notifications to receive immediate overlay alerts & ringtone even when using WhatsApp, Facebook, or other apps.</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleRequestNotificationPermission}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold text-xs shadow-md shrink-0 cursor-pointer active:scale-95 transition-all"
-            >
-              🔔 Enable Alerts
-            </button>
-          </div>
-        )}
 
-        {/* Back breadcrumb bar when outside overview */}
-        {activeTab !== 'overview' && (
-          <div className="flex items-center justify-between pb-1">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-purple-200 text-[#4C1D95] hover:bg-purple-50 text-xs font-bold shadow-sm transition-colors cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>← Back to Host Overview</span>
-            </button>
-            <span className="text-xs font-bold text-purple-900/60 uppercase tracking-wider">
-              {activeTab.replace('-', ' ')}
-            </span>
-          </div>
-        )}
 
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* TAB 1: OVERVIEW (COMPANION HOST COMMAND STATION)           */}
@@ -2562,7 +2515,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               <div 
                 className="hidden sm:flex relative w-full min-h-[290px] md:min-h-[310px] lg:min-h-[330px] rounded-3xl overflow-hidden shadow-xl border border-pink-200/80 items-center justify-end p-6 md:p-8 lg:p-10"
                 style={{
-                  backgroundImage: "url('/assets/companion_welcome_banner.jpg')",
+                  backgroundImage: "url('/assets/companion_welcome_banner.png')",
                   backgroundPosition: "left center",
                   backgroundSize: "cover",
                   backgroundRepeat: "no-repeat"
@@ -2645,7 +2598,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               <div className="sm:hidden space-y-3">
                 <div className="relative w-full rounded-2xl overflow-hidden shadow-md border border-pink-200/60 bg-pink-50">
                   <img
-                    src="/assets/companion_welcome_banner.jpg"
+                    src="/assets/companion_welcome_banner.png"
                     alt="Companion Welcome Artwork"
                     className="w-full aspect-[3/1] object-cover object-left"
                   />
@@ -2777,24 +2730,40 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                 </div>
               </div>
 
-              {/* 4. 3-Gate Activation */}
+              {/* 4. 3-Gate Activation Status Card */}
               <div 
-                onClick={() => setActiveTab(!conditions.kycApproved ? 'kyc-status' : !conditions.membershipValid ? 'membership' : 'bank')}
-                className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group min-h-[120px]"
+                onClick={() => {
+                  if (!conditions.allSatisfied) {
+                    setActiveTab(!conditions.kycApproved ? 'kyc-status' : !conditions.membershipValid ? 'membership' : 'bank');
+                  }
+                }}
+                className={`p-4 sm:p-5 rounded-2xl bg-white border shadow-sm flex items-center justify-between cursor-pointer transition-all group min-h-[120px] ${
+                  conditions.allSatisfied 
+                    ? 'border-emerald-200 hover:border-emerald-300 hover:shadow-md' 
+                    : 'border-rose-200 hover:border-rose-300 hover:shadow-md'
+                }`}
               >
                 <div className="space-y-1">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-1">
-                    <ShieldCheck className="w-5 h-5" />
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-1 ${
+                    conditions.allSatisfied ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                  }`}>
+                    {conditions.allSatisfied ? <CheckCircle2 className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
                   </div>
                   <div className="text-sm sm:text-base font-extrabold text-[#191040]">
-                    {isLive ? '3-Gates Verified' : 'Gate Incomplete'}
+                    {conditions.allSatisfied ? '3-Gates Complete ✓' : 'Gate Incomplete'}
                   </div>
                   <div className="text-xs text-slate-600 font-medium line-clamp-1">
-                    {isLive ? 'Full Host Active' : 'Action Required'}
+                    {conditions.allSatisfied 
+                      ? 'Account Fully Verified' 
+                      : `Pending: ${!conditions.kycApproved ? 'KYC Approval' : !conditions.membershipValid ? 'Membership Plan' : 'Bank Verification'}`}
                   </div>
-                  <div className="text-[11px] font-bold text-blue-600">KYC · Plan · Bank</div>
+                  <div className={`text-[11px] font-bold ${conditions.allSatisfied ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {conditions.allSatisfied ? 'KYC · Plan · Bank Verified' : 'Click to Complete Required Gate'}
+                  </div>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 shadow-sm">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+                  conditions.allSatisfied ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                }`}>
                   <ChevronRight className="w-4 h-4" />
                 </div>
               </div>
@@ -2968,31 +2937,37 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               </div>
             </div>
 
-            {/* 6. Missing Condition Action Cards if not live */}
-            {!isLive && (
+            {/* 6. Missing Condition Action Cards: Strictly displayed only when ANY gate is incomplete */}
+            {!conditions.allSatisfied && (
               <div className="p-6 rounded-3xl bg-white border border-purple-100 shadow-sm space-y-4">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-amber-500" />
                   Action Required to Go LIVE
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className={`p-4 rounded-2xl border ${conditions.kycApproved ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50/60 border-amber-200'}`}>
-                    <span className="font-bold text-slate-800 block mb-1">Gate 1: KYC Approval</span>
-                    <p className="text-slate-600 mb-3">{conditions.kycApproved ? 'Approved by Admin ✓' : 'Govt ID & selfie currently in audit.'}</p>
-                    <button onClick={() => setActiveTab('kyc-status')} className="text-purple-700 font-semibold hover:underline cursor-pointer">View KYC Status →</button>
-                  </div>
+                  {!conditions.kycApproved && (
+                    <div className="p-4 rounded-2xl border bg-amber-50/60 border-amber-200">
+                      <span className="font-bold text-slate-800 block mb-1">Gate 1: KYC Approval</span>
+                      <p className="text-slate-600 mb-3">Govt ID & selfie currently in audit.</p>
+                      <button onClick={() => setActiveTab('kyc-status')} className="text-purple-700 font-semibold hover:underline cursor-pointer">View KYC Status →</button>
+                    </div>
+                  )}
 
-                  <div className={`p-4 rounded-2xl border ${conditions.membershipValid ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50/60 border-rose-200'}`}>
-                    <span className="font-bold text-slate-800 block mb-1">Gate 2: Active Membership</span>
-                    <p className="text-slate-600 mb-3">{conditions.membershipValid ? 'Membership active & valid ✓' : 'Subscribe to Starter, Pro, or Premium.'}</p>
-                    <button onClick={() => setActiveTab('membership')} className="text-purple-700 font-semibold hover:underline cursor-pointer">Choose Membership →</button>
-                  </div>
+                  {!conditions.membershipValid && (
+                    <div className="p-4 rounded-2xl border bg-rose-50/60 border-rose-200">
+                      <span className="font-bold text-slate-800 block mb-1">Gate 2: Active Membership</span>
+                      <p className="text-slate-600 mb-3">Subscribe to Starter, Pro, or Premium.</p>
+                      <button onClick={() => setActiveTab('membership')} className="text-purple-700 font-semibold hover:underline cursor-pointer">Choose Membership →</button>
+                    </div>
+                  )}
 
-                  <div className={`p-4 rounded-2xl border ${conditions.bankVerified ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50/60 border-rose-200'}`}>
-                    <span className="font-bold text-slate-800 block mb-1">Gate 3: Bank Verification</span>
-                    <p className="text-slate-600 mb-3">{conditions.bankVerified ? 'Bank verified & ready for payouts ✓' : 'Submit Account No & IFSC for verification.'}</p>
-                    <button onClick={() => setActiveTab('bank')} className="text-purple-700 font-semibold hover:underline cursor-pointer">Verify Bank Account →</button>
-                  </div>
+                  {!conditions.bankVerified && (
+                    <div className="p-4 rounded-2xl border bg-rose-50/60 border-rose-200">
+                      <span className="font-bold text-slate-800 block mb-1">Gate 3: Bank Verification</span>
+                      <p className="text-slate-600 mb-3">Submit Account No & IFSC for verification.</p>
+                      <button onClick={() => setActiveTab('bank')} className="text-purple-700 font-semibold hover:underline cursor-pointer">Verify Bank Account →</button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
