@@ -67,12 +67,11 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
   const ringtoneTimerRef = useRef<any>(null);
   const pulseTimerRef = useRef<any>(null);
 
-  // Reliable companion detection across ALL pages (Home, About, Dashboard, etc.)
+  // Reliable companion detection: Only active when user is logged in and active as a COMPANION
   const isCompanion = Boolean(
     user && (
-      user.role === 'COMPANION' ||
-      user.activeRole === 'COMPANION' ||
-      user.role === 'DUAL'
+      (user.role === 'COMPANION' && user.activeRole !== 'CLIENT') ||
+      (user.role === 'DUAL' && user.activeRole === 'COMPANION')
     )
   );
 
@@ -512,25 +511,6 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
 
   return (
     <>
-      {/* Background Alert Activation Banner (Shows across ALL pages if permission not yet granted) */}
-      {isCompanion && notificationPermission !== 'granted' && (
-        <div className="fixed top-0 left-0 right-0 z-[1100] px-4 py-2.5 bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 text-white shadow-2xl flex flex-wrap items-center justify-between gap-2 text-xs animate-fade-in">
-          <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 animate-bounce text-amber-200 shrink-0" />
-            <span>
-              <strong>Turn On Incoming Booking Calls:</strong> Enable alerts to receive loud ringing & popups even when minimized, screen is locked, or in other apps.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleEnableAlerts}
-            className="px-3.5 py-1.5 rounded-xl bg-slate-950 text-pink-300 hover:text-white font-black text-xs shadow-md border border-pink-400/50 cursor-pointer active:scale-95 transition-all"
-          >
-            Enable Instant Alerts
-          </button>
-        </div>
-      )}
-
       {/* Toast Alert Banner */}
       {actionMsg && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] px-5 py-3 rounded-2xl bg-slate-900/95 border border-pink-500/60 text-slate-100 text-xs shadow-2xl flex items-center gap-2.5 animate-bounce">
