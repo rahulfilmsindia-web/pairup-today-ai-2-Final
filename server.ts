@@ -2659,6 +2659,8 @@ app.post('/api/companion/services-rates', async (req: Request, res: Response) =>
     if (profile.isLive !== isLive) {
       profile = await databaseAdapter.updateCompanionProfile(userId, { isLive });
     }
+    invalidateEgressCache('search:');
+    invalidateEgressCache(`status:${userId}`);
     return res.json({
       success: true,
       profile: {
@@ -3398,10 +3400,54 @@ app.post('/api/payments/razorpay/webhook', async (req: Request, res: Response) =
   }
 });
 
+// -------------------------------------------------------------
+// High-Efficiency Server In-Memory Egress Protection Cache
+// -------------------------------------------------------------
+interface MemoryCacheItem<T> {
+  data: T;
+  expiresAt: number;
+}
+const serverEgressCache = new Map<string, MemoryCacheItem<any>>();
+
+function getEgressCache<T>(key: string): T | null {
+  const item = serverEgressCache.get(key);
+  if (!item) return null;
+  if (Date.now() > item.expiresAt) {
+    serverEgressCache.delete(key);
+    return null;
+  }
+  return item.data;
+}
+
+function setEgressCache<T>(key: string, data: T, ttlSeconds: number): void {
+  serverEgressCache.set(key, {
+    data,
+    expiresAt: Date.now() + ttlSeconds * 1000
+  });
+}
+
+function invalidateEgressCache(prefix?: string): void {
+  if (!prefix) {
+    serverEgressCache.clear();
+    return;
+  }
+  for (const key of Array.from(serverEgressCache.keys())) {
+    if (key.startsWith(prefix)) {
+      serverEgressCache.delete(key);
+    }
+  }
+}
+
 // Get companion profile & live status
 app.get('/api/companion/status/:userId', async (req: Request, res: Response) => {
   const userId = (req as AuthenticatedRequest).authUser.id;
   if (req.params.userId !== userId) return res.status(403).json({ error: 'You cannot access another user’s companion profile.' });
+
+  const statusCacheKey = `status:${userId}`;
+  const cachedStatus = getEgressCache<any>(statusCacheKey);
+  if (cachedStatus) {
+    return res.json(cachedStatus);
+  }
   if (getDatabaseType() === 'json') {
     const user = db.users[userId];
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -3466,7 +3512,7 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
       } : null
     } : null;
 
-    return res.json({
+    const statusResponsePayload = {
       kycStatus: companionKyc?.status || user.kycStatus || user.kyc_status || 'NOT_SUBMITTED',
       profile: responseProfile,
       wallet: {
@@ -3482,7 +3528,9 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
         membershipValid,
         bankVerified
       }
-    });
+    };
+    setEgressCache(statusCacheKey, statusResponsePayload, 10);
+    return res.json(statusResponsePayload);
   } catch (error) {
     console.error('Companion status could not be loaded.', error);
     return res.status(503).json({ error: 'Companion status is temporarily unavailable.' });
@@ -3494,6 +3542,12 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
 // -------------------------------------------------------------
 app.get('/api/companions/search', async (req: Request, res: Response) => {
   const { query, serviceId, city, lat, lng } = req.query;
+  const searchCacheKey = `search:${query || ''}:${serviceId || ''}:${city || ''}:${lat || ''}:${lng || ''}`;
+  const cachedSearchResult = getEgressCache<any>(searchCacheKey);
+  if (cachedSearchResult) {
+    return res.json(cachedSearchResult);
+  }
+
   const hasLatitude = lat !== undefined && lat !== '';
   const hasLongitude = lng !== undefined && lng !== '';
   let searchLocation: { lat: number; lng: number } | null = null;
@@ -3543,18 +3597,29 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
       );
       const checkedProfiles = await Promise.all(candidates.map(async (profile: any) => {
         const userRecord = usersById.get(profile.userId);
-        const [companionKyc, clientKyc, membership, bankVerification] = await Promise.all([
-          databaseAdapter.getUserKycSubmission(profile.userId, 'COMPANION'),
-          databaseAdapter.getUserKycSubmission(profile.userId, 'CLIENT').catch(() => null),
+        let kycApproved = Boolean(userRecord?.kycStatus === 'APPROVED' || userRecord?.kyc_status === 'APPROVED');
+        let effectiveKyc: any = null;
+
+        // Egress bandwidth shield: Only query kyc_submissions if userRecord doesn't already confirm approval
+        if (!kycApproved) {
+          const [companionKyc, clientKyc] = await Promise.all([
+            databaseAdapter.getUserKycSubmission(profile.userId, 'COMPANION'),
+            databaseAdapter.getUserKycSubmission(profile.userId, 'CLIENT').catch(() => null)
+          ]);
+          effectiveKyc = companionKyc || (clientKyc?.status === 'APPROVED' ? clientKyc : null);
+          kycApproved = Boolean(effectiveKyc?.status === 'APPROVED');
+        }
+
+        if (!kycApproved) return null;
+
+        const [membership, bankVerification] = await Promise.all([
           databaseAdapter.getActiveMembership(profile.userId),
-          databaseAdapter.getBankVerification(profile.userId)
+          profile.bankDetails?.isVerified ? Promise.resolve(profile.bankDetails) : databaseAdapter.getBankVerification(profile.userId)
         ]);
-        const effectiveKyc = companionKyc || (clientKyc?.status === 'APPROVED' ? clientKyc : null);
-        const kycApproved = Boolean(effectiveKyc?.status === 'APPROVED' || userRecord?.kycStatus === 'APPROVED' || userRecord?.kyc_status === 'APPROVED');
         const membershipValid = Boolean(membership && (membership.isActive || (membership.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date())));
         const bankVerified = Boolean(bankVerification?.verificationStatus === 'VERIFIED' || bankVerification?.isVerified === true || profile.bankDetails?.isVerified === true);
 
-        if (!kycApproved || !membershipValid || !bankVerified) return null;
+        if (!membershipValid || !bankVerified) return null;
 
         if (!profile.isLive) {
           databaseAdapter.updateCompanionProfile(profile.userId, { isLive: true }).catch(() => null);
@@ -3796,7 +3861,9 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
     }
   }
 
-  return res.json({ count: combined.length, companions: combined });
+  const searchResultPayload = { count: combined.length, companions: combined };
+  setEgressCache(searchCacheKey, searchResultPayload, 30);
+  return res.json(searchResultPayload);
 });
 
 // -------------------------------------------------------------
@@ -6233,6 +6300,8 @@ app.post('/api/companion/availability/toggle', async (req: Request, res: Respons
       db.companionProfiles[userId].isPaused = req.body.isPaused;
       db.companionProfiles[userId].isLive = isLive;
     }
+    invalidateEgressCache('search:');
+    invalidateEgressCache(`status:${userId}`);
     return res.json({ success: true, isPaused: updated.isPaused, isLive });
   } catch (error) {
     console.error('Companion availability could not be updated.', error);

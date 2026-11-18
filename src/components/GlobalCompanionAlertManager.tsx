@@ -412,11 +412,29 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
     };
 
     checkPendingBookings();
-    pollTimer = setInterval(checkPendingBookings, 2500);
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        checkPendingBookings();
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    // Smart background poll: 10s interval, pauses when tab is hidden to save database bandwidth
+    pollTimer = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        checkPendingBookings();
+      }
+    }, 10000);
 
     return () => {
       if (eventSource) eventSource.close();
       if (pollTimer) clearInterval(pollTimer);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
       }

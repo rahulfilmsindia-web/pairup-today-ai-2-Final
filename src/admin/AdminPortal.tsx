@@ -293,7 +293,11 @@ export const AdminPortal: React.FC = () => {
   useEffect(() => {
     if (isAdminAuthenticated) {
       loadAdminData();
-      const interval = setInterval(loadAdminData, 8000);
+      const interval = setInterval(() => {
+        if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          loadAdminData();
+        }
+      }, 25000);
       return () => clearInterval(interval);
     }
   }, [isAdminAuthenticated]);

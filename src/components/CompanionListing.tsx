@@ -171,11 +171,29 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
 
   useEffect(() => {
     fetchCompanions();
-    // Silent real-time polling every 4s so offline companions instantly disappear without manual page reload
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchCompanions(true);
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    // Smart visibility-aware polling every 20s (stops when tab is hidden to protect database bandwidth)
     const pollInterval = setInterval(() => {
-      fetchCompanions(true);
-    }, 4000);
-    return () => clearInterval(pollInterval);
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        fetchCompanions(true);
+      }
+    }, 20000);
+
+    return () => {
+      clearInterval(pollInterval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [selectedCity, selectedServiceId, clientCoords]);
 
   const handleBookNow = (companion: CompanionDiscoveryItem) => {
