@@ -13,7 +13,7 @@ import {
   CreditCard, KeyRound, AlertTriangle, ChevronRight, UserCheck, X,
   Bell, Settings, LifeBuoy, LogOut, Heart, Sparkles, User, FileText,
   DollarSign, Compass, CheckCircle2, Sliders, Shield, Eye, ChevronLeft,
-  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users, ChevronDown
+  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users, ChevronDown, Home
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -23,6 +23,20 @@ interface ClientDashboardProps {
 export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPage }) => {
   const { user, token, activeRole, selectActiveRole, logout, bookingContext, setBookingContext, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard, refreshUserData } = useAuth();
   const { t, language, setLanguage } = useLanguage();
+
+  // Role switch helper: smoothly switch to Companion Dashboard
+  const handleSwitchToCompanion = async () => {
+    try {
+      await selectActiveRole('COMPANION');
+      if (onNavigateToPage) {
+        onNavigateToPage('companion-dashboard');
+      } else {
+        window.location.href = '/companion-dashboard';
+      }
+    } catch (e) {
+      console.warn('Switch to companion error', e);
+    }
+  };
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
@@ -929,13 +943,18 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       {/* ─── DESKTOP & TABLET LEFT FIXED SIDEBAR ─── */}
       <aside className="hidden md:flex md:w-64 lg:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white flex-col justify-between min-h-screen sticky top-0 h-screen z-30 shrink-0 shadow-2xl p-5 overflow-y-auto scrollbar-none">
         <div className="space-y-6">
-          {/* Top Logo Branding */}
-          <div className="flex flex-col items-center gap-1.5 py-2">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
+          {/* Top Logo Branding (Click to go Home) */}
+          <button
+            type="button"
+            onClick={() => onNavigateToPage?.('home')}
+            className="w-full flex flex-col items-center gap-1.5 py-2 group cursor-pointer"
+            title="Return to PairUpToday Home"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center shadow-lg shadow-pink-500/30 group-hover:scale-105 transition-transform">
               <Heart className="w-7 h-7 text-white fill-white" />
             </div>
-            <span className="text-xl font-extrabold tracking-tight text-white">PairUpToday</span>
-          </div>
+            <span className="text-xl font-extrabold tracking-tight text-white group-hover:text-pink-300 transition-colors">PairUpToday</span>
+          </button>
 
           {/* Navigation Items */}
           <nav className="space-y-1">
@@ -1089,6 +1108,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
             >
               <Menu className="w-5 h-5" />
             </button>
+            <button
+              onClick={() => onNavigateToPage?.('home')}
+              className="p-2 rounded-xl text-purple-700 hover:bg-purple-50 transition-colors cursor-pointer"
+              title="Return to Home"
+            >
+              <Home className="w-5 h-5" />
+            </button>
             <div className="flex items-center gap-1.5">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center">
                 <Heart className="w-4 h-4 text-white fill-white" />
@@ -1151,9 +1177,18 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
         </div>
 
         {/* ─── DESKTOP TOPBAR HEADER ─── */}
-        <header className="hidden md:flex items-center justify-between px-6 lg:px-8 py-4 bg-white/80 backdrop-blur-md border-b border-purple-100/80 sticky top-0 z-20 shadow-sm">
-          {/* Left: Search input + Search & Filters Button */}
+        <header className="hidden md:flex items-center justify-between px-6 lg:px-8 py-3.5 bg-white/95 backdrop-blur-md border-b border-purple-100/90 sticky top-0 z-20 shadow-sm">
+          {/* Left: Home Button + Search input + Search & Filters Button */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => onNavigateToPage?.('home')}
+              className="px-3.5 py-2 rounded-full bg-purple-50 hover:bg-purple-100 text-[#1A135E] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm shrink-0 cursor-pointer"
+              title="Return to PairUpToday Home"
+            >
+              <Home className="w-3.5 h-3.5 text-purple-700" />
+              <span>Home</span>
+            </button>
+
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
               <input
@@ -1161,19 +1196,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Discover Companions..."
-                className="w-72 lg:w-96 pl-11 pr-4 py-2.5 rounded-full bg-white border border-purple-200 text-slate-800 placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm"
+                className="w-64 lg:w-80 pl-11 pr-4 py-2 rounded-full bg-slate-50 hover:bg-white border border-purple-200 text-slate-800 placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-inner focus:bg-white transition-all"
               />
             </div>
             <button
               onClick={() => setShowFilterDrawer(!showFilterDrawer)}
-              className="px-5 py-2.5 rounded-xl bg-[#4C1D95] hover:bg-[#5B21B6] text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-xl bg-[#4C1D95] hover:bg-[#5B21B6] text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-colors cursor-pointer shrink-0"
             >
               <Sliders className="w-4 h-4" />
               <span>Search & Filters</span>
             </button>
           </div>
 
-          {/* Right: Breadcrumb back + Language toggle + Bell badge + User chip */}
+          {/* Right: Companion Switcher + Language toggle + Bell badge + User chip */}
           <div className="flex items-center gap-3">
             {activeTab !== 'overview' && (
               <button
@@ -1181,7 +1216,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                 className="px-3.5 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 text-[#4C1D95] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
-                <span>Back to Overview</span>
+                <span>Overview</span>
+              </button>
+            )}
+
+            {/* Switch to Companion Mode (For DUAL or Companion Accounts) */}
+            {(user?.role === 'DUAL' || user?.role === 'COMPANION') && (
+              <button
+                onClick={handleSwitchToCompanion}
+                className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-pink-500/25 transition-all cursor-pointer active:scale-95 shrink-0"
+                title="Switch to Companion Portal"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+                <span>Companion Mode ⇄</span>
               </button>
             )}
 
@@ -1419,50 +1466,84 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           {activeTab === 'overview' && (
             <div className="space-y-6">
 
-              {/* 1. HERO WELCOME BANNER */}
-              <div className="rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-amber-100/90 via-pink-100/90 to-purple-100/90 border border-purple-100/80 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-                
-                {/* Left: Modern Friendly Companion Artwork */}
-                <div className="relative shrink-0 w-full md:w-auto flex justify-center">
-                  <img
-                    src="/assets/modern_companion_banner.jpg"
-                    alt="PairUp Companions"
-                    onError={(e: any) => {
-                      e.currentTarget.src = '/assets/companions/priya_main.jpg';
-                    }}
-                    className="w-full max-w-sm md:w-80 h-44 sm:h-52 object-cover rounded-2xl shadow-md border-2 border-white/80"
-                  />
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-pink-900/20 to-transparent pointer-events-none" />
-                </div>
+              {/* 1. HERO WELCOME BANNER (3:1 Panoramic Couple Artwork + Right-Aligned Frosted Glass Content) */}
+              <div className="w-full">
+                {/* DESKTOP & TABLET VIEW (sm and above): Full-width Panoramic with Text floating on right sky area */}
+                <div 
+                  className="hidden sm:flex relative w-full min-h-[280px] md:min-h-[300px] lg:min-h-[320px] rounded-3xl overflow-hidden shadow-lg border border-pink-200/60 items-center justify-end p-6 md:p-8 lg:p-10"
+                  style={{
+                    backgroundImage: "url('/assets/client_welcome_banner.jpg')",
+                    backgroundPosition: "left center",
+                    backgroundSize: "cover",
+                    backgroundRepeat: "no-repeat"
+                  }}
+                >
+                  {/* Subtle right-side gradient to ensure text readability while leaving couple 100% natural and unshaded */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-900/10 to-slate-950/70 pointer-events-none" />
 
-                {/* Right / Center Content */}
-                <div className="flex-1 space-y-3 text-center md:text-left z-10">
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-[#19125E] tracking-tight">
-                    Welcome Back, <span className="text-[#EC4899]">{userFirstName}</span>!
-                  </h1>
-                  <p className="text-xs sm:text-sm text-slate-600 max-w-md leading-relaxed">
-                    Let's find your perfect companion together... Explore verified companions across social, dining, events, and travel in your city.
-                  </p>
-                  <div className="pt-1 flex items-center justify-center md:justify-start gap-3">
-                    <button
-                      onClick={() => {
-                        const compSection = document.getElementById('nearby-companions-section');
-                        if (compSection) {
-                          compSection.scrollIntoView({ behavior: 'smooth' });
-                        }
-                      }}
-                      className="px-6 py-2.5 rounded-full bg-[#3B1D82] hover:bg-[#4C1D95] text-white text-xs font-bold shadow-md shadow-purple-900/30 flex items-center gap-2 cursor-pointer transition-transform active:scale-95"
-                    >
-                      <span>Explore Matches</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+                  {/* Right-aligned Frosted Glass Card (completely clear of the couple on left) */}
+                  <div className="relative z-10 w-full max-w-sm md:max-w-md lg:max-w-lg bg-slate-950/75 sm:bg-slate-950/65 backdrop-blur-md border border-white/20 rounded-3xl p-6 shadow-2xl space-y-3 text-left">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-pink-500/20 border border-pink-400/40 text-pink-200 text-[11px] font-bold tracking-wide">
+                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-ping" />
+                      <span>✨ Verified Social Companionship</span>
+                    </div>
+                    <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight leading-snug">
+                      Welcome Back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-rose-300 to-amber-300">{userFirstName}!</span>
+                    </h1>
+                    <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
+                      Let's find your perfect companion together... Explore verified companions across social, dining, events, and travel in your city.
+                    </p>
+                    <div className="pt-1 flex items-center gap-3">
+                      <button
+                        onClick={() => {
+                          const compSection = document.getElementById('nearby-companions-section');
+                          if (compSection) {
+                            compSection.scrollIntoView({ behavior: 'smooth' });
+                          }
+                        }}
+                        className="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs sm:text-sm font-extrabold shadow-lg shadow-pink-500/25 flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+                      >
+                        <span>Explore Matches</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Background Artwork Silhouette & Floating Hearts */}
-                <div className="absolute right-4 bottom-2 opacity-25 pointer-events-none hidden lg:block">
-                  <Heart className="w-6 h-6 text-pink-500 fill-pink-500 absolute -top-8 right-6 animate-pulse" />
-                  <Heart className="w-4 h-4 text-pink-400 fill-pink-400 absolute -top-3 right-1" />
+                {/* MOBILE VIEW (< sm): Clean Stack so the Artwork is 100% visible & faces are NEVER covered */}
+                <div className="sm:hidden space-y-3">
+                  <div className="w-full rounded-2xl overflow-hidden shadow-md border border-pink-200/60 bg-pink-50">
+                    <img
+                      src="/assets/client_welcome_banner.jpg"
+                      alt="PairUp Welcome Artwork"
+                      className="w-full aspect-[3/1] object-cover object-left"
+                    />
+                  </div>
+                  <div className="bg-white/95 backdrop-blur-md border border-purple-100/80 rounded-2xl p-4 shadow-sm space-y-2.5 text-left">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pink-50 border border-pink-200 text-pink-700 text-[10px] font-bold">
+                      <span>✨ Verified Social Companionship</span>
+                    </div>
+                    <h1 className="text-lg font-black text-[#19125E] tracking-tight">
+                      Welcome Back, <span className="text-pink-600">{userFirstName}!</span>
+                    </h1>
+                    <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                      Let's find your perfect companion together... Explore verified companions across social, dining, events, and travel in your city.
+                    </p>
+                    <div className="pt-1">
+                      <button
+                        onClick={() => {
+                          const compSection = document.getElementById('nearby-companions-section');
+                          if (compSection) {
+                            compSection.scrollIntoView({ behavior: 'smooth' });
+                          }
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-extrabold shadow-md shadow-pink-500/20 flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+                      >
+                        <span>Explore Matches</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

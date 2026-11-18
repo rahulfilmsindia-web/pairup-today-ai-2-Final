@@ -12,7 +12,7 @@ import {
   MessageSquare, Navigation, AlertTriangle, PhoneCall, RefreshCw, X,
   User, Calendar, DollarSign, Bell, Settings, LifeBuoy, LogOut,
   Pause, Power, Shield, FileText, CheckSquare, Star, ArrowLeft,
-  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound, Menu, Heart, UserCheck
+  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound, Menu, Heart, UserCheck, Home
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -2186,6 +2186,16 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           {/* Topbar Header */}
           <header className="bg-white/90 backdrop-blur-md border-b border-purple-100/80 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
             <div className="flex items-center gap-3">
+              {/* Home button */}
+              <button
+                onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
+                className="px-3 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 text-[#1A135E] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm shrink-0 cursor-pointer"
+                title="Return to PairUpToday Home"
+              >
+                <Home className="w-3.5 h-3.5 text-purple-700" />
+                <span className="hidden sm:inline">Home</span>
+              </button>
+
               {/* Mobile Hamburger Button */}
               <button
                 onClick={() => setIsMobileSidebarOpen(true)}

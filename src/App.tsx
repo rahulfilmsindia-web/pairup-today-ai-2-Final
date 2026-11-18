@@ -433,16 +433,20 @@ const MainAppContent: React.FC = () => {
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-start overflow-x-hidden selection:bg-pink-500 selection:text-white">
       <div className="w-full flex flex-col min-h-screen">
-        {/* Customer Header with back button & navigation */}
-        <Header currentPage={currentPage} setCurrentPage={navigateToPage} />
+        {/* Customer Header on public pages only (Dashboards have their own integrated workspace headers) */}
+        {!['client-dashboard', 'companion-dashboard'].includes(currentPage) && (
+          <Header currentPage={currentPage} setCurrentPage={navigateToPage} />
+        )}
 
         {/* Dynamic Page Content */}
         <main className="flex-1 w-full overflow-x-hidden">
           {renderCustomerPage()}
         </main>
 
-        {/* Footer */}
-        <Footer setCurrentPage={navigateToPage} />
+        {/* Footer on public pages only */}
+        {!['client-dashboard', 'companion-dashboard'].includes(currentPage) && (
+          <Footer setCurrentPage={navigateToPage} />
+        )}
 
         {/* Modals & Wizards */}
         <AuthGatewayModal
