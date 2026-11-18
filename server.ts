@@ -2060,6 +2060,12 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     if (!isSessionSecretConfigured()) {
       return res.status(503).json({ error: 'SESSION_SECRET must contain at least 32 characters on the backend.' });
     }
+    if (!user.passwordHash) {
+      return res.status(400).json({
+        error: 'No password is set for this account. Please sign in via OTP.',
+        noPasswordSet: true
+      });
+    }
     const passwordVerification = await verifyPassword(password, user.passwordHash);
     if (!passwordVerification.valid) {
       return res.status(401).json({

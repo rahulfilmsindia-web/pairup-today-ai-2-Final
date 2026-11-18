@@ -19,7 +19,10 @@ export async function hashPassword(password: string): Promise<string> {
   ].join('$');
 }
 
-export async function verifyPassword(password: string, storedHash: string): Promise<{ valid: boolean; upgradedHash?: string }> {
+export async function verifyPassword(password: string, storedHash?: string | null): Promise<{ valid: boolean; upgradedHash?: string }> {
+  if (!storedHash || typeof storedHash !== 'string' || !password || typeof password !== 'string') {
+    return { valid: false };
+  }
   if (storedHash.startsWith('scrypt$')) {
     const [algorithm, costText, blockSizeText, parallelizationText, saltText, keyText, extra] = storedHash.split('$');
     const cost = Number(costText);
