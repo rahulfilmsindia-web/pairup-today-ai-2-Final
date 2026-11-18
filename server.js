@@ -4864,6 +4864,7 @@ function rateLimitHash(value) {
 function isPublicApiRoute(req) {
   const route = `${req.method} ${req.originalUrl.split("?")[0]}`;
   return (/* @__PURE__ */ new Set([
+    "GET /api/health",
     "POST /api/auth/check-phone",
     "POST /api/auth/request-otp",
     "POST /api/auth/register-with-otp",
@@ -4883,6 +4884,7 @@ function isPublicApiRoute(req) {
 function isSupabaseBackedProductionRoute(req) {
   const route = `${req.method} ${req.originalUrl.split("?")[0]}`;
   return (/* @__PURE__ */ new Set([
+    "GET /api/health",
     "POST /api/auth/check-phone",
     "POST /api/auth/request-otp",
     "POST /api/auth/register-with-otp",
