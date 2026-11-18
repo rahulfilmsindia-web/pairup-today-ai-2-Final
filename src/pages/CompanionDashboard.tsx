@@ -18,6 +18,7 @@ import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
+  const alertedRef = useRef(false);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
     const started = new Date(booking?.startedAt || booking?.meetingStartedAt || booking?.updatedAt || Date.now()).getTime();
     const durationMs = (booking?.durationHours || 1) * 3600 * 1000;
@@ -32,6 +33,26 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
       const end = started + durationMs;
       const rem = Math.max(0, Math.floor((end - Date.now()) / 1000));
       setSecondsRemaining(rem);
+      if (rem === 0 && !alertedRef.current) {
+        alertedRef.current = true;
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+          osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.6);
+        } catch (e) {}
+        triggerSystemNotification('⏰ Session Completed! Ask Client for Ending OTP', {
+          body: 'Scheduled slot time finished. Collect the 6-digit Completion OTP from the client to claim your 85% earnings.'
+        });
+      }
     }, 1000);
     return () => clearInterval(timer);
   }, [booking?.startedAt, booking?.meetingStartedAt, booking?.updatedAt, booking?.durationHours]);
@@ -3781,39 +3802,55 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           <div className="space-y-6 text-xs">
             <h3 className="text-base font-bold text-slate-100">Live Meeting Execution & OTP Verification</h3>
 
-            {/* CELEBRATION EARNINGS CARD */}
+            {/* CELEBRATION EARNINGS MODAL OVERLAY */}
             {completedBookingEarned && (
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/60 to-slate-900 border-2 border-emerald-500/50 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-emerald-400" />
-                    <h4 className="text-base font-black text-emerald-300">
-                      Great! You Earned ₹{(completedBookingEarned.amountPaise / 100).toFixed(2)}
-                    </h4>
+              <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="max-w-md w-full p-6 sm:p-8 rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900 to-emerald-950/80 border-2 border-emerald-500/60 shadow-2xl shadow-emerald-500/20 text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/30">
+                    🎉
                   </div>
-                  <button 
-                    onClick={() => setCompletedBookingEarned(null)} 
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <p className="text-xs text-slate-300">
-                  Booking <strong>#{completedBookingEarned.code}</strong> completed successfully! Your 85% companion share has been calculated and locked in escrow. It will automatically settle to your bank account after 48 hours according to platform safety policy.
-                </p>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => setActiveTab('locked-earnings')}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400 text-xs transition-colors"
-                  >
-                    View Locked Escrow Balance
-                  </button>
-                  <button
-                    onClick={() => setCompletedBookingEarned(null)}
-                    className="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition-colors"
-                  >
-                    Dismiss
-                  </button>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-100">
+                      Congratulations, {user?.profileName || user?.legalName || 'Companion'}!
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Session Completed Successfully • Booking #{completedBookingEarned.code}
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-emerald-500/30">
+                    <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-semibold">
+                      Your Net Share (85%)
+                    </span>
+                    <span className="text-3xl font-black text-emerald-400 block my-1">
+                      ₹{(completedBookingEarned.amountPaise / 100).toFixed(2)}
+                    </span>
+                    <span className="text-[11px] text-emerald-300/90 font-medium">
+                      ✓ Credited to your Escrow / Wallet balance
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    According to platform safety policy, your earnings are secured in 48-hour UTC Escrow and will automatically settle to your verified bank account.
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                    <button
+                      onClick={() => {
+                        setCompletedBookingEarned(null);
+                        setActiveTab('wallet');
+                      }}
+                      className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black text-xs hover:from-emerald-400 hover:to-teal-400 transition-all shadow-lg shadow-emerald-500/25 cursor-pointer"
+                    >
+                      View Wallet Balance 💳
+                    </button>
+                    <button
+                      onClick={() => setCompletedBookingEarned(null)}
+                      className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      Done / Close
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

@@ -25,6 +25,8 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [bookingStatus, setBookingStatus] = useState<string>(booking.status || 'CONFIRMED');
   const [startOtp, setStartOtp] = useState<string>(booking.startOtp || '******');
+  const [endOtp, setEndOtp] = useState<string>(booking.endOtp || '');
+  const [meetingStartedAt, setMeetingStartedAt] = useState<string>(booking.meetingStartedAt || booking.startedAt || '');
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -41,6 +43,21 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
     /\b(Rahul|Amit|Rohit|Rohan|Vikram|Aditya|Suresh|Rajesh|Kunal|Abhishek|Rakesh|Deepak|Arjun|Dev|Subhash|Sanjay|Ajay|Anirban|Sourav|Arun|Vijay)\b/i.test(booking.companionName)
   );
   const isFemale = !isMale;
+
+  // Live Meeting Session Countdown (when IN_PROGRESS)
+  const sessionSecondsRemaining = React.useMemo(() => {
+    if (bookingStatus !== 'IN_PROGRESS') return 0;
+    const started = new Date(meetingStartedAt || booking.meetingStartedAt || booking.startedAt || booking.updatedAt || Date.now()).getTime();
+    const durationMs = (booking.durationHours || 1) * 3600 * 1000;
+    const end = started + durationMs;
+    return Math.max(0, Math.floor((end - currentTime) / 1000));
+  }, [bookingStatus, meetingStartedAt, booking.meetingStartedAt, booking.startedAt, booking.durationHours, currentTime]);
+
+  const sessionH = Math.floor(sessionSecondsRemaining / 3600);
+  const sessionM = Math.floor((sessionSecondsRemaining % 3600) / 60);
+  const sessionS = sessionSecondsRemaining % 60;
+  const sessionTimeFormatted = `${String(sessionH).padStart(2, '0')}:${String(sessionM).padStart(2, '0')}:${String(sessionS).padStart(2, '0')}`;
+  const isSessionFinished = bookingStatus === 'IN_PROGRESS' && sessionSecondsRemaining === 0;
 
   // 30-Minute Privacy Lock Calculation:
   // Companion's live GPS location only activates 30 mins before the scheduled start time
@@ -95,6 +112,8 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
           const data = await res.json();
           if (data.status) setBookingStatus(data.status);
           if (data.startOtp) setStartOtp(data.startOtp);
+          if (data.endOtp) setEndOtp(data.endOtp);
+          if (data.meetingStartedAt) setMeetingStartedAt(data.meetingStartedAt);
         }
       } catch (e) {
         console.warn('Failed to fetch booking status', e);
@@ -451,36 +470,79 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
               </div>
             </div>
 
-            {/* Start OTP Safety Card: Strictly locked until companion arrives at client location */}
-            <div className={`mt-4 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
-              bookingStatus === 'COMPANION_ARRIVED' || bookingStatus === 'IN_PROGRESS'
-                ? 'bg-gradient-to-r from-emerald-500/15 via-pink-500/15 to-teal-500/15 border-emerald-500/50 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-500/40'
-                : 'bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/20 border-slate-800'
-            }`}>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[11px] font-bold uppercase tracking-wider block ${
-                    bookingStatus === 'COMPANION_ARRIVED' || bookingStatus === 'IN_PROGRESS' ? 'text-emerald-300' : 'text-amber-400'
-                  }`}>
-                    {bookingStatus === 'COMPANION_ARRIVED' || bookingStatus === 'IN_PROGRESS' ? '🔓 Session Start OTP (Unlocked)' : '🔒 Session Start OTP (Locked)'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 mt-0.5">
-                  {bookingStatus === 'COMPANION_ARRIVED' || bookingStatus === 'IN_PROGRESS'
-                    ? '🎉 Your companion has arrived at your meeting location! Share this 6-digit PIN verbally to start the session:'
-                    : 'Start OTP is securely locked. It will automatically unlock as soon as your companion reaches your location and confirms arrival.'}
+            {/* DYNAMIC SESSION LIFECYCLE CARDS */}
+            {bookingStatus === 'COMPLETED' ? (
+              <div className="mt-4 p-5 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-teal-950/40 border-2 border-emerald-500/60 shadow-xl space-y-2 text-center animate-fade-in">
+                <span className="text-2xl block">🎉</span>
+                <h4 className="text-base font-black text-emerald-300">Session Completed Successfully!</h4>
+                <p className="text-xs text-slate-300">
+                  Thank you for booking with PairUpToday. We hope you had a safe, engaging, and pleasant companionship experience!
                 </p>
               </div>
-              <div className={`px-4 py-2.5 rounded-xl border-2 font-mono font-extrabold text-lg tracking-widest text-center shadow-lg whitespace-nowrap ${
-                bookingStatus === 'COMPANION_ARRIVED' || bookingStatus === 'IN_PROGRESS'
-                  ? 'bg-slate-900 border-emerald-500 text-emerald-400 animate-pulse'
-                  : 'bg-slate-950 border-slate-800 text-slate-500 text-sm'
-              }`}>
-                {bookingStatus === 'COMPANION_ARRIVED' || bookingStatus === 'IN_PROGRESS'
-                  ? (startOtp || '******')
-                  : '•••••• (Unlocks on Arrival)'}
+            ) : bookingStatus === 'IN_PROGRESS' ? (
+              <div className="mt-4 space-y-3 animate-fade-in">
+                {/* 1. Real-Time Session Countdown Card */}
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 via-slate-900 to-pink-950/50 border border-purple-500/40 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[11px] font-bold text-pink-300 uppercase tracking-wider block">
+                      {isSessionFinished ? '⏰ Scheduled Session Time Finished' : '⏱️ Meeting in Progress (Live Countdown)'}
+                    </span>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      {isSessionFinished
+                        ? 'Your booked session hours have completed. Please share the Completion OTP below with your companion.'
+                        : `Official booked duration: ${booking.durationHours || 1} Hour(s). Enjoy your companionship!`}
+                    </p>
+                  </div>
+                  <div className="px-5 py-2.5 rounded-xl bg-slate-950 border-2 border-pink-500/60 font-mono text-2xl font-black text-pink-400 text-center shadow-lg whitespace-nowrap">
+                    {sessionTimeFormatted}
+                  </div>
+                </div>
+
+                {/* 2. Completion OTP Card */}
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-950 border-2 border-emerald-500/50 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">
+                      🔑 Meeting Completion OTP
+                    </span>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      When your session finishes, share this 6-digit Completion OTP verbally with your companion to finalize the session:
+                    </p>
+                  </div>
+                  <div className="px-5 py-2.5 rounded-xl bg-slate-950 border-2 border-emerald-400 font-mono text-xl font-black text-emerald-300 tracking-widest text-center shadow-lg whitespace-nowrap animate-pulse">
+                    {endOtp || booking.endOtp || '••••••'}
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Start OTP Safety Card: Strictly locked until companion arrives at client location */
+              <div className={`mt-4 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                bookingStatus === 'COMPANION_ARRIVED'
+                  ? 'bg-gradient-to-r from-emerald-500/20 via-pink-500/15 to-teal-500/20 border-emerald-500/60 shadow-lg shadow-emerald-950/40 ring-2 ring-emerald-500/40 animate-pulse'
+                  : 'bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/20 border-slate-800'
+              }`}>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-bold uppercase tracking-wider block ${
+                      bookingStatus === 'COMPANION_ARRIVED' ? 'text-emerald-300' : 'text-amber-400'
+                    }`}>
+                      {bookingStatus === 'COMPANION_ARRIVED' ? '🔓 Session Start OTP (Unlocked — Companion Arrived!)' : '🔒 Session Start OTP (Locked)'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    {bookingStatus === 'COMPANION_ARRIVED'
+                      ? '🎉 Your companion has arrived at your meeting location! Share this 6-digit Start OTP verbally to begin the session:'
+                      : 'Start OTP is securely locked. It will automatically unlock as soon as your companion reaches your location and confirms arrival.'}
+                  </p>
+                </div>
+                <div className={`px-5 py-2.5 rounded-xl border-2 font-mono font-extrabold text-xl tracking-widest text-center shadow-lg whitespace-nowrap ${
+                  bookingStatus === 'COMPANION_ARRIVED'
+                    ? 'bg-slate-950 border-emerald-400 text-emerald-300 animate-pulse'
+                    : 'bg-slate-950 border-slate-800 text-slate-500 text-sm'
+                }`}>
+                  {bookingStatus === 'COMPANION_ARRIVED' ? (startOtp || '******') : '•••••• (Unlocks on Arrival)'}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

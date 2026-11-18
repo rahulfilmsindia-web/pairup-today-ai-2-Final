@@ -7381,6 +7381,16 @@ app.get("/api/bookings/:id/status", async (req, res) => {
     const sgstPaise = tracked?.sgstPaise || Math.round(baseAmountPaise * 0.09);
     const gstAmountPaise = tracked?.gstAmountPaise || cgstPaise + sgstPaise;
     const totalPayablePaise = tracked?.totalPayablePaise || baseAmountPaise + gstAmountPaise;
+    const isClient = booking.clientId === authUser.id;
+    let startOtp = undefined;
+    let endOtp = undefined;
+    if (isClient && (booking.paymentStatus === 'PAID' || ['CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS', 'COMPLETED'].includes(booking.status))) {
+      if (booking.startOtpEncrypted) startOtp = decryptBookingOtp(booking.startOtpEncrypted);
+      else if (booking.startOtp) startOtp = booking.startOtp;
+      if (booking.completionOtpEncrypted) endOtp = decryptBookingOtp(booking.completionOtpEncrypted);
+      else if (booking.completionOtp || booking.endOtp) endOtp = booking.completionOtp || booking.endOtp;
+    }
+
     return res.json({
       bookingId: booking.id,
       bookingCode: booking.bookingCode,
@@ -7388,6 +7398,12 @@ app.get("/api/bookings/:id/status", async (req, res) => {
       paymentStatus: booking.paymentStatus,
       companionAccepted,
       rejectionReason,
+      startOtpVerified: Boolean(booking.startOtpVerified),
+      endOtpVerified: Boolean(booking.endOtpVerified),
+      startOtp,
+      endOtp,
+      meetingStartedAt: booking.meetingStartedAt || booking.startedAt,
+      durationHours: booking.durationHours || 1,
       paymentOrderId: booking.paymentOrderId,
       payment: {
         orderId: booking.paymentOrderId || `ord_${booking.id.replace(/-/g, "").slice(0, 16)}`,
