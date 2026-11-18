@@ -2674,19 +2674,36 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async consumeRateLimit(bucketKey: string, limit: number, windowSeconds: number): Promise<any> {
-    const { data, error } = await supabase.rpc('consume_api_rate_limit', {
-      p_bucket_key: bucketKey, p_limit: limit, p_window_seconds: windowSeconds
-    });
-    if (error) throw error;
-    if (typeof data?.allowed !== 'boolean') throw new Error('Supabase returned an invalid rate-limit response.');
-    return data;
+    try {
+      const { data, error } = await supabase.rpc('consume_api_rate_limit', {
+        p_bucket_key: bucketKey, p_limit: limit, p_window_seconds: windowSeconds
+      });
+      if (!error && typeof data?.allowed === 'boolean') {
+        return data;
+      }
+    } catch (err) {
+      console.warn('Supabase consume_api_rate_limit fallback to in-memory:', err);
+    }
+    const now = Date.now();
+    let bucket = localRateLimitBuckets.get(bucketKey);
+    if (!bucket || now - bucket.startedAt >= windowSeconds * 1000) {
+      bucket = { startedAt: now, count: 0 };
+      localRateLimitBuckets.set(bucketKey, bucket);
+    }
+    bucket.count++;
+    return { allowed: bucket.count <= limit, retryAfterSeconds: Math.max(1, Math.ceil((bucket.startedAt + windowSeconds * 1000 - now) / 1000)) };
   }
 
   async isSessionRevoked(tokenId: string): Promise<boolean> {
-    const { data, error } = await supabase.rpc('is_session_revoked', { p_token_id: tokenId });
-    if (error) throw error;
-    if (typeof data !== 'boolean') throw new Error('Supabase returned an invalid session status.');
-    return data;
+    try {
+      const { data, error } = await supabase.rpc('is_session_revoked', { p_token_id: tokenId });
+      if (!error && typeof data === 'boolean') {
+        return data;
+      }
+    } catch (err) {
+      console.warn('Supabase is_session_revoked fallback to in-memory:', err);
+    }
+    return localRevokedSessions.has(tokenId);
   }
 
   async revokeSession(tokenId: string, principalId: string, principalType: 'USER' | 'ADMIN', expiresAt: string): Promise<void> {

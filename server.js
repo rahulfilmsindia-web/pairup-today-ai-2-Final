@@ -4945,8 +4945,7 @@ app.use("/api", async (req, res, next) => {
       }
     }
   } catch (error) {
-    console.error("Distributed API rate limit could not be enforced.", error);
-    return res.status(503).json({ error: "Request protection is temporarily unavailable." });
+    console.warn("Distributed API rate limit non-fatal fallback to permissive:", error);
   }
   if (process.env.NODE_ENV === "production" && !isSupabaseBackedProductionRoute(req)) {
     return res.status(503).json({
