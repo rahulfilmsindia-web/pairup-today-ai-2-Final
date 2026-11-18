@@ -66,7 +66,7 @@ const getInitialPage = (): string => {
 };
 
 const MainAppContent: React.FC = () => {
-  const { user, activeRole, openAuthModal, selectActiveRole } = useAuth();
+  const { user, activeRole, openAuthModal, selectActiveRole, logout } = useAuth();
   const { language, t } = useLanguage();
   
   const [currentPage, setCurrentPageState] = useState<string>(() => {
@@ -180,6 +180,50 @@ const MainAppContent: React.FC = () => {
         return;
       }
 
+      // User Requirement: If companion attempts to go to the HOME page:
+      if (targetPage === 'home') {
+        const isOnline = await checkIsCompanionOnline();
+        if (isOnline) {
+          const confirmOnlineExit = window.confirm(
+            language === 'bn'
+              ? '⚠️ আপনি বর্তমানে অনলাইনে আছেন!\n\nহোমপেজে যেতে হলে প্রথমে অফলাইন ও লগআউট করতে হবে।\n\nঅফলাইন ও লগআউট হয়ে হোমপেজে যেতে "OK" ক্লিক করুন, অথবা ড্যাশবোর্ডে থাকতে "Cancel" ক্লিক করুন।'
+              : language === 'hi'
+              ? '⚠️ आप वर्तमान में ऑनलाइन हैं!\n\nहोमपेज पर जाने के लिए पहले ऑफलाइन होना और लॉगआउट करना होगा।\n\nलॉगआउट होकर होमपेज पर जाने के लिए "OK" पर क्लिक करें या डैशबोर्ड पर बने रहने के लिए "Cancel" करें।'
+              : '⚠️ You are currently ONLINE.\n\nYou must go OFFLINE and LOG OUT before visiting the Home page.\n\nClick "OK" to go offline, log out, and return to Home; or click "Cancel" to stay on your Dashboard.'
+          );
+          if (!confirmOnlineExit) return;
+
+          try {
+            await apiFetch('/api/companion/availability/toggle', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: user.id, isPaused: true })
+            });
+            localStorage.setItem('pairup_companion_online', 'false');
+          } catch (e) {
+            console.warn('Auto offline error', e);
+          }
+
+          logout();
+          executeNavigation('home', options);
+          return;
+        } else {
+          // If companion is already OFFLINE:
+          const confirmOfflineExit = window.confirm(
+            language === 'bn'
+              ? 'বিজ্ঞপ্তি: আপনি কম্প্যানিয়ন অ্যাকাউন্টে লগইন অবস্থায় আছেন।\n\nহোমপেজে যেতে হলে প্রথমে লগআউট করতে হবে।\n\nলগআউট করে হোমপেজে যেতে "OK" ক্লিক করুন, অথবা ড্যাশবোর্ডে থাকতে "Cancel" ক্লিক করুন।'
+              : language === 'hi'
+              ? 'सूचना: आप अपने कंपैनियन खाते में लॉग इन हैं।\n\nहोमपेज पर जाने के लिए पहले लॉगआउट करना होगा।\n\nलॉगआउट करके होमपेज पर जाने के लिए "OK" पर क्लिक करें, या डैशबोर्ड पर बने रहने के लिए "Cancel" करें।'
+              : 'Notice: You are logged into your Companion account.\n\nYou must log out before visiting the Home page.\n\nClick "OK" to log out and go to Home, or click "Cancel" to stay on your Dashboard.'
+          );
+          if (!confirmOfflineExit) return;
+
+          logout();
+          executeNavigation('home', options);
+          return;
+        }
+      }
+
       const isOnline = await checkIsCompanionOnline();
       if (isOnline) {
         // ONLY prompt confirmation if companion is currently ONLINE!
@@ -189,7 +233,7 @@ const MainAppContent: React.FC = () => {
       }
 
       // If companion is already OFFLINE, directly switch role to CLIENT and navigate without popup!
-      if (targetPage === 'client-dashboard' || targetPage === 'home') {
+      if (targetPage === 'client-dashboard') {
         selectActiveRole('CLIENT').catch(() => {});
       }
     }
@@ -272,18 +316,62 @@ const MainAppContent: React.FC = () => {
           return;
         }
 
-        const isOnline = await checkIsCompanionOnline();
-        if (isOnline) {
-          // Hold companion on companion-dashboard URL ONLY if online
-          window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');
-          setPendingTargetPage(targetPage);
-          setShowExitConfirmModal(true);
-          return;
-        }
+        if (targetPage === 'home') {
+          const isOnline = await checkIsCompanionOnline();
+          if (isOnline) {
+            const confirmOnlineExit = window.confirm(
+              language === 'bn'
+                ? '⚠️ আপনি বর্তমানে অনলাইনে আছেন!\n\nহোমপেজে যেতে হলে প্রথমে অফলাইন ও লগআউট করতে হবে।\n\nঅফলাইন ও লগআউট হয়ে হোমপেজে যেতে "OK" ক্লিক করুন, অথবা ড্যাশবোর্ডে থাকতে "Cancel" ক্লিক করুন।'
+                : language === 'hi'
+                ? '⚠️ आप वर्तमान में ऑनलाइन हैं!\n\nहोमपेज पर जाने के लिए पहले ऑफलाइन होना और लॉगआउट करना होगा।\n\nलॉगआउट होकर होमपेज पर जाने के लिए "OK" पर क्लिक करें या डैशबोर्ड पर बने रहने के लिए "Cancel" करें।'
+                : '⚠️ You are currently ONLINE.\n\nYou must go OFFLINE and LOG OUT before visiting the Home page.\n\nClick "OK" to go offline, log out, and return to Home; or click "Cancel" to stay on your Dashboard.'
+            );
+            if (!confirmOnlineExit) {
+              window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');
+              return;
+            }
 
-        // Already offline: switch role to client and let back navigation proceed naturally
-        if (targetPage === 'client-dashboard' || targetPage === 'home') {
-          selectActiveRole('CLIENT').catch(() => {});
+            try {
+              await apiFetch('/api/companion/availability/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: userRef.current.id, isPaused: true })
+              });
+              localStorage.setItem('pairup_companion_online', 'false');
+            } catch (e) {
+              console.warn('Auto offline error', e);
+            }
+
+            logout();
+          } else {
+            const confirmOfflineExit = window.confirm(
+              language === 'bn'
+                ? 'বিজ্ঞপ্তি: আপনি কম্প্যানিয়ন অ্যাকাউন্টে লগইন অবস্থায় আছেন।\n\nহোমপেজে যেতে হলে প্রথমে লগআউট করতে হবে।\n\nলগআউট করে হোমপেজে যেতে "OK" ক্লিক করুন, অথবা ড্যাশবোর্ডে থাকতে "Cancel" ক্লিক করুন।'
+                : language === 'hi'
+                ? 'सूचना: आप अपने कंपैनियन खाते में लॉग इन हैं।\n\nहोमपेज पर जाने के लिए पहले लॉगआउट करना होगा।\n\nলগআউট করে হোমপেজে যেতে "OK" ক্লিক করুন, অথবা ড্যাশবোর্ডে থাকতে "Cancel" ক্লিক করুন।'
+                : 'Notice: You are logged into your Companion account.\n\nYou must log out before visiting the Home page.\n\nClick "OK" to log out and go to Home, or click "Cancel" to stay on your Dashboard.'
+            );
+            if (!confirmOfflineExit) {
+              window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');
+              return;
+            }
+
+            logout();
+          }
+        } else {
+          const isOnline = await checkIsCompanionOnline();
+          if (isOnline) {
+            // Hold companion on companion-dashboard URL ONLY if online
+            window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');
+            setPendingTargetPage(targetPage);
+            setShowExitConfirmModal(true);
+            return;
+          }
+
+          // Already offline: switch role to client and let back navigation proceed naturally
+          if (targetPage === 'client-dashboard') {
+            selectActiveRole('CLIENT').catch(() => {});
+          }
         }
       }
 

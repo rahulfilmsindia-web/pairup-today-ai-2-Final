@@ -1521,6 +1521,55 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     }
   };
 
+  // User Requirement: Companion cannot navigate to Home while logged in without logging out
+  // Case 2 (ONLINE): Alert to go offline and logout first. If OK -> offline, logout, redirect to home. If Cancel -> stay.
+  // Case 1 (OFFLINE): Alert that logout is required first. If OK -> logout, redirect to home. If Cancel -> stay.
+  const handleNavigateToHomeWithCheck = async () => {
+    const isOnline = !isAvailabilityPaused;
+
+    if (isOnline) {
+      const confirmOnlineExit = window.confirm(
+        language === 'bn'
+          ? '⚠️ আপনি বর্তমানে অনলাইনে আছেন!\n\nহোমপেজে যেতে হলে প্রথমে অফলাইন হতে হবে এবং লগআউট করতে হবে।\n\nঅফলাইন ও লগআউট হয়ে হোমপেজে যেতে "OK" ক্লিক করুন, অথবা ড্যাশবোর্ডে থাকতে "Cancel" ক্লিক করুন।'
+          : language === 'hi'
+          ? '⚠️ आप वर्तमान में ऑनलाइन हैं!\n\nहोमपेज पर जाने के लिए पहले ऑफलाइन होना और लॉगआउट करना होगा।\n\nलॉगआउट होकर होमपेज पर जाने के लिए "OK" पर क्लिक करें या डैशबोर्ड पर बने रहने के लिए "Cancel" करें।'
+          : '⚠️ You are currently ONLINE.\n\nYou must go OFFLINE and LOG OUT before visiting the Home page.\n\nClick "OK" to go offline, log out, and return to Home; or click "Cancel" to stay on your Dashboard.'
+      );
+      if (!confirmOnlineExit) return;
+
+      try {
+        await handleToggleAvailabilityPause();
+      } catch (e) {
+        console.warn('Auto offline error', e);
+      }
+
+      await logout();
+      if (onNavigateToPage) {
+        onNavigateToPage('home');
+      } else {
+        window.location.href = '/';
+      }
+      return;
+    }
+
+    // When companion is OFFLINE:
+    const confirmOfflineExit = window.confirm(
+      language === 'bn'
+        ? 'বিজ্ঞপ্তি: আপনি কম্প্যানিয়ন অ্যাকাউন্টে লগইন অবস্থায় আছেন।\n\nহোমপেজে যেতে হলে প্রথমে লগআউট করতে হবে।\n\nলগআউট করে হোমপেজে যেতে "OK" ক্লিক করুন, অথবা ড্যাশবোর্ডে থাকতে "Cancel" ক্লিক করুন।'
+        : language === 'hi'
+        ? 'सूचना: आप अपने कंपैनियन खाते में लॉग इन हैं।\n\nहोमपेज पर जाने के लिए पहले लॉगआउट करना होगा।\n\nलॉगआउट करके होमपेज पर जाने के लिए "OK" पर क्लिक करें, या डैशबोर्ड पर बने रहने के लिए "Cancel" करें।'
+        : 'Notice: You are logged into your Companion account.\n\nYou must log out before visiting the Home page.\n\nClick "OK" to log out and go to Home, or click "Cancel" to stay on your Dashboard.'
+    );
+    if (!confirmOfflineExit) return;
+
+    await logout();
+    if (onNavigateToPage) {
+      onNavigateToPage('home');
+    } else {
+      window.location.href = '/';
+    }
+  };
+
   // Point 9: Direct logout to home page
   const handleCompanionLogout = async () => {
     if (window.confirm(language === 'bn' ? 'আপনি কি PairUpToday থেকে লগআউট করতে চান?' : language === 'hi' ? 'क्या आप लॉगआउट करना चाहते हैं?' : 'Log out of PairUpToday Companion portal?')) {
@@ -2027,7 +2076,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
             {/* Brand Header: Official Home Page Logo */}
             <button
               type="button"
-              onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
+              onClick={handleNavigateToHomeWithCheck}
               className="w-full flex flex-col items-center gap-1.5 py-2 border-b border-white/10 group cursor-pointer"
               title="Return to PairUpToday Home"
             >
@@ -2136,7 +2185,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                     type="button"
                     onClick={() => {
                       setIsMobileSidebarOpen(false);
-                      onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/');
+                      handleNavigateToHomeWithCheck();
                     }}
                     className="flex items-center gap-2 cursor-pointer text-left"
                   >
@@ -2245,7 +2294,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
             <div className="flex items-center gap-3">
               {/* Home button */}
               <button
-                onClick={() => onNavigateToPage ? onNavigateToPage('home') : (window.location.href = '/')}
+                onClick={handleNavigateToHomeWithCheck}
                 className="px-3 py-1.5 rounded-full bg-purple-50 hover:bg-purple-100 text-[#1A135E] text-xs font-bold flex items-center gap-1.5 border border-purple-200 transition-colors shadow-sm shrink-0 cursor-pointer"
                 title="Return to PairUpToday Home"
               >
@@ -2559,9 +2608,9 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
 
                     {/* Status & Buttons */}
                     <div className="pt-1.5 flex flex-wrap items-center gap-2">
-                      <div className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-200 bg-white/10 px-2.5 py-1 rounded-xl border border-white/15">
-                        <span>{language === 'bn' ? 'আমার স্ট্যাটাস:' : language === 'hi' ? 'मेरी स्थिति:' : 'My Status:'}</span>
-                        <span className={!isAvailabilityPaused ? 'text-emerald-400 font-extrabold' : 'text-slate-400 font-semibold'}>
+                      <div className="inline-flex items-center gap-1.5 text-xs font-black text-white bg-slate-950/85 px-3 py-1.5 rounded-xl border border-slate-700/80 shadow-lg">
+                        <span className="text-slate-200">{language === 'bn' ? 'আমার স্ট্যাটাস:' : language === 'hi' ? 'मेरी स्थिति:' : 'My Status:'}</span>
+                        <span className={!isAvailabilityPaused ? 'text-emerald-400 font-black tracking-wide' : 'text-slate-200 font-bold'}>
                           {!isAvailabilityPaused ? (language === 'bn' ? 'অনলাইন 🟢' : language === 'hi' ? 'ऑनलाइन 🟢' : 'Online 🟢') : (language === 'bn' ? 'অফলাইন ⚪' : language === 'hi' ? 'ऑफलाइन ⚪' : 'Offline ⚪')}
                         </span>
                       </div>
@@ -2629,8 +2678,11 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   </div>
 
                   <div className="pt-1 flex items-center justify-between gap-2 border-t border-purple-50">
-                    <div className="text-[11px] font-bold text-slate-600">
-                      {language === 'bn' ? 'আমার স্ট্যাটাস:' : language === 'hi' ? 'मेरी स्थिति:' : 'My Status:'} <span className={!isAvailabilityPaused ? 'text-emerald-600 font-bold' : 'text-slate-500'}>{!isAvailabilityPaused ? (language === 'bn' ? 'অনলাইন 🟢' : 'Online 🟢') : (language === 'bn' ? 'অফলাইন ⚪' : 'Offline ⚪')}</span>
+                    <div className="inline-flex items-center gap-1.5 text-xs font-black text-white bg-slate-950/90 px-3 py-1.5 rounded-xl border border-slate-700 shadow-sm">
+                      <span className="text-slate-300">{language === 'bn' ? 'আমার স্ট্যাটাস:' : language === 'hi' ? 'मेरी स्थिति:' : 'My Status:'}</span>
+                      <span className={!isAvailabilityPaused ? 'text-emerald-400 font-black' : 'text-slate-300 font-bold'}>
+                        {!isAvailabilityPaused ? (language === 'bn' ? 'অনলাইন 🟢' : language === 'hi' ? 'ऑनलाइन 🟢' : 'Online 🟢') : (language === 'bn' ? 'অফলাইন ⚪' : language === 'hi' ? 'ऑफलाइन ⚪' : 'Offline ⚪')}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
