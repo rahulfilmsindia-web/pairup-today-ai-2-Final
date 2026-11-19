@@ -1274,6 +1274,9 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChatBooking || !newChatText.trim() || !user) return;
+    if (activeChatBooking.status === 'COMPLETED' || activeChatBooking.status === 'CANCELLED' || activeChatBooking.status === 'REJECTED') {
+      return;
+    }
 
     const messageText = newChatText.trim();
     const tempId = `temp_${Date.now()}`;
@@ -2101,12 +2104,12 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
 
   return (
     <ErrorBoundary fallbackTitle="Companion Dashboard">
-      <div className="min-h-screen max-w-full bg-[#F4F2FA] text-slate-800 flex overflow-x-hidden relative font-sans">
+      <div className="h-screen w-screen max-w-full bg-[#F4F2FA] text-slate-800 flex overflow-hidden relative font-sans">
         
         {/* ============================================================== */}
-        {/* 1. DESKTOP / TABLET DOCKED SIDEBAR (ROYAL INDIGO GRADIENT)     */}
+        {/* 1. DESKTOP / TABLET DOCKED SIDEBAR (LOCKED ROYAL INDIGO GRADIENT) */}
         {/* ============================================================== */}
-        <aside className="w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white shrink-0 min-h-screen border-r border-[#261b5c]/50 hidden lg:flex flex-col select-none relative overflow-hidden z-20 shadow-2xl p-4 justify-between">
+        <aside className="w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white shrink-0 h-screen border-r border-[#261b5c]/50 hidden lg:flex flex-col select-none relative overflow-y-auto scrollbar-none z-20 shadow-2xl p-4 justify-between">
           <div className="space-y-4 overflow-y-auto scrollbar-none pr-1">
             {/* Desktop Top-Left: Dedicated Home Navigation Button */}
             <div className="flex items-center justify-start pb-1">
@@ -2328,9 +2331,9 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         )}
 
         {/* ============================================================== */}
-        {/* 3. MAIN COMPANION DASHBOARD CONTENT AREA                       */}
+        {/* 3. MAIN COMPANION DASHBOARD CONTENT AREA (SCROLLS INDEPENDENTLY) */}
         {/* ============================================================== */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-[#F4F2FA]">
+        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto bg-[#F4F2FA]">
           
           {/* Topbar Header */}
           <header className="bg-white/90 backdrop-blur-md border-b border-purple-100/80 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-sm">
@@ -4087,26 +4090,53 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               <MessageSquare className="w-4 h-4 text-pink-400" />
               Secure Client Chat Channels
             </h3>
-            {bookings.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">No active client chats.</div>
-            ) : (
-              <div className="space-y-2">
-                {bookings.map(b => (
-                  <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-slate-200 block">{b.clientName}</span>
-                      <span className="text-slate-500">Booking {b.bookingCode} · {b.serviceName}</span>
-                    </div>
-                    <button
-                      onClick={() => setActiveChatBooking(b)}
-                      className="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-bold"
-                    >
-                      Open Chat
-                    </button>
+            <p className="text-slate-400 text-[11px]">
+              Encrypted chat is unlocked once the client completes session booking payment.
+            </p>
+            {(() => {
+              const paidBookings = bookings.filter(b =>
+                b.paymentStatus === 'PAID' || b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'COMPLETED'
+              );
+
+              if (paidBookings.length === 0) {
+                return (
+                  <div className="p-8 text-center text-slate-500 rounded-xl bg-slate-950 border border-slate-800">
+                    No active client chats. Incoming chats appear once clients complete booking payment.
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  {paidBookings.map(b => {
+                    const isCompleted = b.status === 'COMPLETED' || b.status === 'CANCELLED' || b.status === 'REJECTED';
+                    return (
+                      <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between transition-all hover:border-slate-700">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-200">{b.clientName || 'Client'}</span>
+                            {isCompleted ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-semibold">Session Ended (Read-Only)</span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 font-semibold">Active Chat</span>
+                            )}
+                          </div>
+                          <span className="text-slate-500 block text-[11px] mt-0.5">Booking {b.bookingCode} · {b.serviceName || 'Session'}</span>
+                        </div>
+                        <button
+                          onClick={() => setActiveChatBooking(b)}
+                          className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-all ${
+                            isCompleted ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-pink-600 hover:bg-pink-500 text-white'
+                          }`}
+                        >
+                          {isCompleted ? 'View History' : 'Open Chat'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -4656,6 +4686,11 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
             {user?.isSuspended ? (
               <div className="p-3 bg-slate-950 border-t border-slate-800 text-center text-xs text-rose-400 font-medium">
                 🚫 Your account is suspended. Messaging has been disabled.
+              </div>
+            ) : (activeChatBooking.status === 'COMPLETED' || activeChatBooking.status === 'CANCELLED' || activeChatBooking.status === 'REJECTED') ? (
+              <div className="p-3.5 bg-slate-950 border-t border-slate-800 text-center text-xs text-amber-400 font-semibold flex items-center justify-center gap-2">
+                <span>🔒</span>
+                <span>Meeting Completed (Session Ended) — Chat is read-only.</span>
               </div>
             ) : (
               <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">

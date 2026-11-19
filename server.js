@@ -8046,6 +8046,13 @@ app.post("/api/chat/:bookingId", async (req, res) => {
     if (booking.clientId !== senderId && booking.companionId !== senderId) {
       return res.status(403).json({ error: "Access denied to this booking chat." });
     }
+    const isPaid = booking.paymentStatus === "PAID" || booking.status === "CONFIRMED" || booking.status === "IN_PROGRESS" || booking.status === "COMPLETED";
+    if (!isPaid) {
+      return res.status(403).json({ error: "Chat is only unlocked after booking payment is completed." });
+    }
+    if (booking.status === "COMPLETED" || booking.status === "CANCELLED" || booking.status === "REJECTED") {
+      return res.status(400).json({ error: "This meeting session has ended. The chat is read-only." });
+    }
     const isClient = booking.clientId === senderId;
     const chatMsg = {
       id: `msg_${Date.now()}_${crypto4.randomUUID().slice(0, 6)}`,

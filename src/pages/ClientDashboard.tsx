@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { apiFetch } from '../utils/api';
 import { openRazorpayCheckout } from '../utils/razorpay';
 import { PAIRUP_SERVICES, ServiceItem } from '../constants/services';
+import { PAN_INDIA_CITIES } from '../constants/cities';
 import { compressImageFile, compressBase64 } from '../utils/image';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ClientLiveTrackingView } from '../components/ClientLiveTrackingView';
@@ -643,6 +644,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChatBooking || !newChatText.trim() || !user) return;
+    if (activeChatBooking.status === 'COMPLETED' || activeChatBooking.status === 'CANCELLED' || activeChatBooking.status === 'REJECTED') {
+      return;
+    }
 
     try {
       const res = await apiFetch(`/api/chat/${activeChatBooking.id}`, {
@@ -911,8 +915,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       const matchCity = c.city?.toLowerCase().includes(q);
       if (!matchName && !matchBio && !matchCity) return false;
     }
-    if (selectedCity !== 'all' && c.city?.toLowerCase() !== selectedCity.toLowerCase()) {
-      return false;
+    if (selectedCity !== 'all') {
+      const cCity = (c.city || '').toLowerCase();
+      const sCity = selectedCity.toLowerCase();
+      const match = cCity.includes(sCity) || sCity.includes(cCity) ||
+        (sCity === 'bengaluru' && cCity.includes('bangalore')) ||
+        (sCity === 'bangalore' && cCity.includes('bengaluru')) ||
+        (sCity === 'kolkata' && cCity.includes('calcutta')) ||
+        (sCity === 'mumbai' && cCity.includes('bombay')) ||
+        (sCity === 'gurugram' && cCity.includes('gurgaon')) ||
+        (sCity === 'gurgaon' && cCity.includes('gurugram')) ||
+        (sCity === 'prayagraj' && cCity.includes('allahabad')) ||
+        (sCity === 'chennai' && cCity.includes('madras'));
+      if (!match) return false;
     }
     if (smartFilter === 'online' && !c.isOnline) {
       return false;
@@ -947,10 +962,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   ];
 
   return (
-    <div className="min-h-screen max-w-full bg-[#F4F2FA] text-slate-800 flex overflow-x-hidden relative font-sans">
+    <div className="h-screen w-screen max-w-full bg-[#F4F2FA] text-slate-800 flex overflow-hidden relative font-sans">
       
-      {/* ─── DESKTOP LEFT FIXED SIDEBAR (Docked strictly on lg+ screens >= 1024px) ─── */}
-      <aside className="hidden lg:flex lg:w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white flex-col justify-between min-h-screen sticky top-0 h-screen z-30 shrink-0 shadow-2xl p-5 overflow-y-auto scrollbar-none">
+      {/* ─── DESKTOP LEFT FIXED SIDEBAR (Permanently locked on lg+ screens >= 1024px) ─── */}
+      <aside className="hidden lg:flex lg:w-64 xl:w-72 bg-gradient-to-b from-[#1A135E] via-[#241461] to-[#701A75] text-white flex-col justify-between h-screen shrink-0 z-30 shadow-2xl p-5 overflow-y-auto scrollbar-none select-none">
         <div className="space-y-4">
           {/* Top-Left: Dedicated Desktop Home Navigation Button */}
           <div className="flex items-center justify-start pb-1">
@@ -1170,8 +1185,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
         </div>
       )}
 
-      {/* ─── MAIN CONTENT AREA (RIGHT SIDE ON DESKTOP) ─── */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen max-w-full bg-[#F4F2FA]">
+      {/* ─── MAIN CONTENT AREA (RIGHT SIDE ON DESKTOP, SCROLLS INDEPENDENTLY) ─── */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto max-w-full bg-[#F4F2FA]">
         
         {/* Mobile Header Bar (Active on all screens < lg) */}
         <header className="lg:hidden flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-white/95 backdrop-blur-md border-b border-purple-100 sticky top-0 z-20 shadow-sm">
@@ -1384,13 +1399,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                     onChange={(e) => setSelectedCity(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-purple-200 text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
                   >
-                    <option value="all">All Cities (Pan-India)</option>
-                    <option value="Kolkata">Kolkata</option>
-                    <option value="Howrah">Howrah</option>
-                    <option value="Delhi">Delhi / NCR</option>
-                    <option value="Mumbai">Mumbai</option>
-                    <option value="Bangalore">Bangalore</option>
-                    <option value="Chennai">Chennai</option>
+                    <option value="all">🌐 All Cities (Pan-India)</option>
+                    {PAN_INDIA_CITIES.map(c => (
+                      <option key={c.value} value={c.value}>{c.label} ({c.state})</option>
+                    ))}
                   </select>
                 </div>
 
@@ -2585,18 +2597,29 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                 No completed bookings recorded yet.
               </div>
             ) : (
-              pastBookings.map(b => (
-                <div key={b.id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-slate-100 block">{b.serviceName} · {b.bookingCode}</span>
-                    <span className="text-slate-400">Completed on {b.date} with {b.companionName}</span>
+              pastBookings.map(b => {
+                const isCancelled = b.status === 'CANCELLED' || b.status === 'REJECTED';
+                const isSuccess = b.status === 'COMPLETED' || b.status === 'CONFIRMED' || b.paymentStatus === 'PAID';
+                const amountColor = isCancelled ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-amber-400';
+                const statusColor = isCancelled ? 'text-rose-400/90' : isSuccess ? 'text-emerald-400/90' : 'text-slate-400';
+                const actionLabel = isCancelled
+                  ? (b.status === 'REJECTED' ? 'Rejected on' : 'Cancelled on')
+                  : (b.status === 'COMPLETED' ? 'Completed on' : 'Booked for');
+                const amt = ((b.totalPayablePaise || b.bookingAmountPaise || b.amountPaise || 0) / 100).toFixed(2);
+
+                return (
+                  <div key={b.id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs transition-all hover:border-slate-700">
+                    <div>
+                      <span className="font-bold text-slate-100 block">{b.serviceName || 'Session'} · {b.bookingCode}</span>
+                      <span className="text-slate-400">{actionLabel} {b.date} with {b.companionName || 'Companion'}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className={`${amountColor} font-bold block text-sm`}>₹{amt}</span>
+                      <span className={`text-[10px] ${statusColor} font-mono font-semibold`}>Status: {b.status}</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-emerald-400 font-bold block">₹{(b.bookingAmountPaise / 100).toFixed(2)}</span>
-                    <span className="text-[10px] text-slate-500 font-mono">Status: {b.status}</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
@@ -2609,28 +2632,53 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               In-App Secure Chat Sessions
             </h3>
             <p className="text-xs text-slate-400">
-              Private chat channels are generated for confirmed bookings. Phone numbers and personal social handles are never revealed.
+              Private chat channels are generated automatically once booking payment is confirmed. Phone numbers and personal social handles are never revealed.
             </p>
-            {myBookings.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-500">No active bookings with open chat.</div>
-            ) : (
-              <div className="space-y-2">
-                {myBookings.map(b => (
-                  <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="font-bold text-slate-200 block">{b.companionName}</span>
-                      <span className="text-slate-500">Booking {b.bookingCode} · {b.serviceName}</span>
-                    </div>
-                    <button
-                      onClick={() => setActiveChatBooking(b)}
-                      className="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-bold"
-                    >
-                      Open Chat
-                    </button>
+            {(() => {
+              // Secure chat is strictly generated only after final booking payment is confirmed
+              const paidChatBookings = myBookings.filter(b =>
+                b.paymentStatus === 'PAID' || b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'COMPLETED'
+              );
+
+              if (paidChatBookings.length === 0) {
+                return (
+                  <div className="p-8 text-center text-xs text-slate-400 rounded-xl bg-slate-950 border border-slate-800">
+                    No active paid bookings. Complete your booking payment to unlock secure companion chat.
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  {paidChatBookings.map(b => {
+                    const isCompleted = b.status === 'COMPLETED' || b.status === 'CANCELLED' || b.status === 'REJECTED';
+                    return (
+                      <div key={b.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs transition-all hover:border-slate-700">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-200">{b.companionName || 'Companion'}</span>
+                            {isCompleted ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-semibold">Session Ended (Read-Only)</span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 font-semibold">Active Chat</span>
+                            )}
+                          </div>
+                          <span className="text-slate-500 block text-[11px] mt-0.5">Booking {b.bookingCode} · {b.serviceName || 'Session'}</span>
+                        </div>
+                        <button
+                          onClick={() => setActiveChatBooking(b)}
+                          className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-all ${
+                            isCompleted ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-pink-600 hover:bg-pink-500 text-white'
+                          }`}
+                        >
+                          {isCompleted ? 'View History' : 'Open Chat'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -2706,7 +2754,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           </div>
         )}
 
-        {/* TAB 13: PAYMENTS */}
+        {/* TAB 13: PAYMENTS (Only successful confirmed payments) */}
         {activeTab === 'payments' && (
           <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
             <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -2716,20 +2764,41 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
             <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300">
               <strong>Free Client Access Guarantee:</strong> Client registration, companion discovery, and membership are 100% free of charge. You only authorize payments for sessions you book.
             </div>
-            <div className="space-y-2 text-xs">
-              {myBookings.map(b => (
-                <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-200 block">Session Payment: {b.bookingCode}</span>
-                    <span className="text-slate-500">Transaction ID: {b.paymentId}</span>
+            {(() => {
+              // Only SUCCESSFUL payments are displayed (filter out pending, incomplete, cancelled, rejected)
+              const successfulPayments = myBookings.filter(b =>
+                (b.paymentStatus === 'PAID' || b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'COMPLETED') &&
+                b.status !== 'CANCELLED' &&
+                b.status !== 'REJECTED' &&
+                Boolean(b.paymentId)
+              );
+
+              if (successfulPayments.length === 0) {
+                return (
+                  <div className="p-8 text-center text-xs text-slate-400 rounded-xl bg-slate-950 border border-slate-800">
+                    No completed payments on record yet. Completed session receipts will be shown here.
                   </div>
-                  <div className="text-right">
-                    <span className="font-bold text-emerald-400">₹{(b.bookingAmountPaise / 100).toFixed(2)}</span>
-                    <span className="text-[10px] text-slate-500 block">100% Verified Escrow</span>
-                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2 text-xs">
+                  {successfulPayments.map(b => (
+                    <div key={b.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between transition-all hover:border-slate-700">
+                      <div>
+                        <span className="font-bold text-slate-200 block">Session Payment: {b.serviceName || 'Session'} · {b.bookingCode}</span>
+                        <span className="text-slate-400 block text-[11px] font-mono mt-0.5">Transaction ID: {b.paymentId}</span>
+                        <span className="text-slate-500 text-[10px] block mt-0.5">Date: {b.date} · Companion: {b.companionName || 'Companion'}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold text-emerald-400 text-sm block">₹{((b.totalPayablePaise || b.bookingAmountPaise || b.amountPaise || 0) / 100).toFixed(2)}</span>
+                        <span className="text-[10px] text-emerald-400/90 font-semibold block mt-0.5">✓ 100% Verified Escrow</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
         )}
 
@@ -3669,6 +3738,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
             {user?.isSuspended ? (
               <div className="p-3 bg-slate-950 border-t border-slate-800 text-center text-xs text-rose-400 font-medium">
                 🚫 Your account is suspended. Messaging has been disabled.
+              </div>
+            ) : (activeChatBooking.status === 'COMPLETED' || activeChatBooking.status === 'CANCELLED' || activeChatBooking.status === 'REJECTED') ? (
+              <div className="p-3.5 bg-slate-950 border-t border-slate-800 text-center text-xs text-amber-400 font-semibold flex items-center justify-center gap-2">
+                <span>🔒</span>
+                <span>Meeting Completed (Session Ended) — Chat is read-only.</span>
               </div>
             ) : (
               <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
