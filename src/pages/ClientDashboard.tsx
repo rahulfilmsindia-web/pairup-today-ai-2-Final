@@ -8,6 +8,7 @@ import { PAN_INDIA_CITIES } from '../constants/cities';
 import { compressImageFile, compressBase64 } from '../utils/image';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ClientLiveTrackingView } from '../components/ClientLiveTrackingView';
+import { TimeframeFilter, TimeframeFilterBar, matchesTimeframe, formatFullDateTime } from '../utils/timeframeFilters';
 import { 
   Search, MapPin, Filter, Star, Clock, Calendar, ShieldCheck, 
   AlertCircle, MessageSquare, PhoneCall, CheckCircle, Navigation, 
@@ -383,6 +384,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [newChatText, setNewChatText] = useState('');
   const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Date & Timeframe filters (All Time, Today, Last 7 Days, This Month)
+  const [historyTimeframe, setHistoryTimeframe] = useState<TimeframeFilter>('all');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<'all' | 'successful' | 'cancelled'>('all');
+  const [paymentsTimeframe, setPaymentsTimeframe] = useState<TimeframeFilter>('all');
 
   // Settings state
   const [notifSound, setNotifSound] = useState(true);
@@ -2684,39 +2690,155 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           </div>
         )}
 
-        {/* TAB 10: BOOKING HISTORY */}
+        {/* TAB 10: BOOKING HISTORY with DATE & TIME FILTERS */}
         {activeTab === 'history' && (
           <div className="space-y-4">
-            <h3 className="text-base font-bold text-slate-100">Completed & Past Sessions</h3>
-            {pastBookings.length === 0 ? (
-              <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-400">
-                No completed bookings recorded yet.
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <CalendarCheck className="w-5 h-5 text-emerald-400" />
+                  <span>Booking History & Past Sessions</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Filtered by date and time with full schedule records and transaction status.
+                </p>
               </div>
-            ) : (
-              pastBookings.map(b => {
-                const isCancelled = b.status === 'CANCELLED' || b.status === 'REJECTED';
-                const isSuccess = b.status === 'COMPLETED' || b.status === 'CONFIRMED' || b.paymentStatus === 'PAID';
-                const amountColor = isCancelled ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-amber-400';
-                const statusColor = isCancelled ? 'text-rose-400/90' : isSuccess ? 'text-emerald-400/90' : 'text-slate-400';
-                const actionLabel = isCancelled
-                  ? (b.status === 'REJECTED' ? 'Rejected on' : 'Cancelled on')
-                  : (b.status === 'COMPLETED' ? 'Completed on' : 'Booked for');
-                const amt = ((b.totalPayablePaise || b.bookingAmountPaise || b.amountPaise || 0) / 100).toFixed(2);
 
+              {/* Status Filter Pills */}
+              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setHistoryStatusFilter('all')}
+                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    historyStatusFilter === 'all'
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  All ({myBookings.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryStatusFilter('successful')}
+                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    historyStatusFilter === 'successful'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-emerald-400'
+                  }`}
+                >
+                  Successful ({successfulBookings.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryStatusFilter('cancelled')}
+                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    historyStatusFilter === 'cancelled'
+                      ? 'bg-rose-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-rose-400'
+                  }`}
+                >
+                  Cancelled ({myBookings.filter(b => b.status === 'CANCELLED' || b.status === 'REJECTED').length})
+                </button>
+              </div>
+            </div>
+
+            {/* Timeframe Filter Bar: All Time / Today / Last 7 Days / This Month */}
+            <TimeframeFilterBar
+              selected={historyTimeframe}
+              onChange={setHistoryTimeframe}
+              counts={{
+                all: myBookings.length,
+                today: myBookings.filter(b => matchesTimeframe(b.date || b.createdAt, 'today')).length,
+                '7days': myBookings.filter(b => matchesTimeframe(b.date || b.createdAt, '7days')).length,
+                monthly: myBookings.filter(b => matchesTimeframe(b.date || b.createdAt, 'monthly')).length,
+              }}
+              theme="purple"
+            />
+
+            {(() => {
+              const filteredHistory = myBookings.filter(b => {
+                const dateToCheck = b.date || b.createdAt || b.created_at;
+                if (!matchesTimeframe(dateToCheck, historyTimeframe)) return false;
+                if (historyStatusFilter === 'successful') {
+                  return (b.paymentStatus === 'PAID' || b.status === 'CONFIRMED' || b.status === 'COMPLETED' || b.status === 'IN_PROGRESS' || b.status === 'COMPANION_ARRIVED') && b.status !== 'CANCELLED' && b.status !== 'REJECTED';
+                }
+                if (historyStatusFilter === 'cancelled') {
+                  return b.status === 'CANCELLED' || b.status === 'REJECTED';
+                }
+                return true;
+              });
+
+              if (filteredHistory.length === 0) {
                 return (
-                  <div key={b.id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs transition-all hover:border-slate-700">
-                    <div>
-                      <span className="font-bold text-slate-100 block">{b.serviceName || 'Session'} · {b.bookingCode}</span>
-                      <span className="text-slate-400">{actionLabel} {b.date} with {b.companionName || 'Companion'}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className={`${amountColor} font-bold block text-sm`}>₹{amt}</span>
-                      <span className={`text-[10px] ${statusColor} font-mono font-semibold`}>Status: {b.status}</span>
-                    </div>
+                  <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-400 space-y-1">
+                    <p className="font-semibold text-slate-300">No bookings found for the selected timeframe.</p>
+                    <p className="text-[11px] text-slate-500">Try changing your filter to "All Time" to view your full history.</p>
                   </div>
                 );
-              })
-            )}
+              }
+
+              return (
+                <div className="space-y-3">
+                  {filteredHistory.map(b => {
+                    const isCancelled = b.status === 'CANCELLED' || b.status === 'REJECTED';
+                    const isSuccess = b.status === 'COMPLETED' || b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.paymentStatus === 'PAID';
+                    const amountColor = isCancelled ? 'text-rose-400' : isSuccess ? 'text-emerald-400' : 'text-amber-400';
+                    const statusBadgeClass = isCancelled 
+                      ? 'bg-rose-950/60 text-rose-300 border-rose-500/40' 
+                      : isSuccess 
+                      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40' 
+                      : 'bg-amber-950/60 text-amber-300 border-amber-500/40';
+
+                    const { formattedDate, formattedTime } = formatFullDateTime(b.date || b.createdAt, b.startTime);
+                    const amt = ((b.totalPayablePaise || b.bookingAmountPaise || b.amountPaise || 0) / 100).toFixed(2);
+
+                    return (
+                      <div key={b.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all hover:border-slate-700 shadow-sm">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-slate-100 text-sm">{b.serviceName || 'Session'}</span>
+                            <span className="font-mono text-[10px] text-slate-400">#{b.bookingCode || b.id?.slice(0, 8)}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadgeClass}`}>
+                              {b.status}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-400 text-[11px]">
+                            <span className="flex items-center gap-1 text-slate-300">
+                              <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                              <span>{formattedDate}</span>
+                            </span>
+                            {formattedTime && (
+                              <span className="flex items-center gap-1 text-slate-300">
+                                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                <span>{formattedTime} {b.endTime ? `- ${b.endTime}` : ''} ({b.durationHours || 1} hr)</span>
+                              </span>
+                            )}
+                            <span className="text-slate-400">
+                              Host: <strong className="text-slate-200">{b.companionName || 'Companion'}</strong>
+                            </span>
+                          </div>
+
+                          {b.meetingLocation && (
+                            <div className="flex items-center gap-1 text-[11px] text-slate-500 truncate max-w-md">
+                              <MapPin className="w-3 h-3 text-pink-400 shrink-0" />
+                              <span className="truncate">Venue: {b.meetingLocation}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800 flex sm:flex-col items-center sm:items-end justify-between">
+                          <span className={`${amountColor} font-black text-base`}>₹{amt}</span>
+                          <span className="text-[10px] text-slate-400 block font-mono mt-0.5">
+                            {isCancelled ? '✕ Cancelled' : b.paymentStatus === 'PAID' ? '✓ Paid' : 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -2850,48 +2972,101 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           </div>
         )}
 
-        {/* TAB 13: PAYMENTS (Only successful confirmed payments) */}
+        {/* TAB 13: PAYMENTS (Only successful confirmed payments with DATE & TIME FILTERS) */}
         {activeTab === 'payments' && (
-          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-emerald-400" />
-              Payments & Digital Receipts
-            </h3>
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-5 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-emerald-400" />
+                  Payments & Digital Receipts
+                </h3>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Verified receipts for sessions with timestamp tracking and transaction IDs.
+                </p>
+              </div>
+
+              {/* Timeframe Filter Bar */}
+              <TimeframeFilterBar
+                selected={paymentsTimeframe}
+                onChange={setPaymentsTimeframe}
+                counts={{
+                  all: successfulBookings.filter(b => Boolean(b.paymentId)).length,
+                  today: successfulBookings.filter(b => Boolean(b.paymentId) && matchesTimeframe(b.createdAt || b.date, 'today')).length,
+                  '7days': successfulBookings.filter(b => Boolean(b.paymentId) && matchesTimeframe(b.createdAt || b.date, '7days')).length,
+                  monthly: successfulBookings.filter(b => Boolean(b.paymentId) && matchesTimeframe(b.createdAt || b.date, 'monthly')).length,
+                }}
+                theme="emerald"
+              />
+            </div>
+
             <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300">
               <strong>Free Client Access Guarantee:</strong> Client registration, companion discovery, and membership are 100% free of charge. You only authorize payments for sessions you book.
             </div>
-            {(() => {
-              // Only SUCCESSFUL payments are displayed (filter out pending, incomplete, cancelled, rejected)
-              const successfulPayments = myBookings.filter(b =>
-                (b.paymentStatus === 'PAID' || b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'COMPLETED') &&
-                b.status !== 'CANCELLED' &&
-                b.status !== 'REJECTED' &&
-                Boolean(b.paymentId)
-              );
 
-              if (successfulPayments.length === 0) {
-                return (
-                  <div className="p-8 text-center text-xs text-slate-400 rounded-xl bg-slate-950 border border-slate-800">
-                    No completed payments on record yet. Completed session receipts will be shown here.
-                  </div>
-                );
-              }
+            {(() => {
+              const successfulPayments = successfulBookings.filter(b => Boolean(b.paymentId));
+              const filteredPayments = successfulPayments.filter(b => {
+                const dateToCheck = b.createdAt || b.created_at || b.date;
+                return matchesTimeframe(dateToCheck, paymentsTimeframe);
+              });
+
+              const totalPaidPaise = filteredPayments.reduce((acc, b) => acc + (b.totalPayablePaise || b.bookingAmountPaise || b.amountPaise || 0), 0);
 
               return (
-                <div className="space-y-2 text-xs">
-                  {successfulPayments.map(b => (
-                    <div key={b.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between transition-all hover:border-slate-700">
-                      <div>
-                        <span className="font-bold text-slate-200 block">Session Payment: {b.serviceName || 'Session'} · {b.bookingCode}</span>
-                        <span className="text-slate-400 block text-[11px] font-mono mt-0.5">Transaction ID: {b.paymentId}</span>
-                        <span className="text-slate-500 text-[10px] block mt-0.5">Date: {b.date} · Companion: {b.companionName || 'Companion'}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-bold text-emerald-400 text-sm block">₹{((b.totalPayablePaise || b.bookingAmountPaise || b.amountPaise || 0) / 100).toFixed(2)}</span>
-                        <span className="text-[10px] text-emerald-400/90 font-semibold block mt-0.5">✓ 100% Verified Escrow</span>
-                      </div>
+                <div className="space-y-4">
+                  {/* Summary Bar */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-950 to-teal-950/30 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider block">
+                        Total Spent ({paymentsTimeframe === 'all' ? 'All Time' : paymentsTimeframe === 'today' ? 'Today' : paymentsTimeframe === '7days' ? 'Last 7 Days' : 'This Month'})
+                      </span>
+                      <span className="text-2xl font-black text-emerald-300">
+                        ₹{(totalPaidPaise / 100).toFixed(2)}
+                      </span>
                     </div>
-                  ))}
+                    <div className="text-slate-400 sm:text-right">
+                      <span className="font-bold text-slate-200 block text-sm">{filteredPayments.length} Receipt{filteredPayments.length !== 1 ? 's' : ''}</span>
+                      <span className="text-[10px] text-emerald-400">100% Verified Escrow</span>
+                    </div>
+                  </div>
+
+                  {filteredPayments.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 rounded-xl bg-slate-950 border border-slate-800">
+                      No completed payments on record for the selected timeframe.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {filteredPayments.map(b => {
+                        const { formattedDate, formattedTime } = formatFullDateTime(b.createdAt || b.date, b.startTime);
+                        const amt = ((b.totalPayablePaise || b.bookingAmountPaise || b.amountPaise || 0) / 100).toFixed(2);
+
+                        return (
+                          <div key={b.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:border-slate-700">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-100 text-sm">Session Payment: {b.serviceName || 'Session'}</span>
+                                <span className="font-mono text-[10px] text-slate-400">#{b.bookingCode}</span>
+                              </div>
+                              <span className="text-slate-400 block text-[11px] font-mono">
+                                Transaction ID: <strong className="text-slate-300">{b.paymentId}</strong>
+                              </span>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-slate-500 text-[10px]">
+                                <span className="text-slate-400">📅 Paid: <strong className="text-slate-300">{formattedDate} {formattedTime ? `at ${formattedTime}` : ''}</strong></span>
+                                <span>Host: {b.companionName || 'Companion'}</span>
+                              </div>
+                            </div>
+                            <div className="sm:text-right shrink-0">
+                              <span className="font-black text-emerald-400 text-base block">₹{amt}</span>
+                              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 sm:justify-end mt-0.5">
+                                <span>✓</span> <span>Captured & Verified</span>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })()}

@@ -12,10 +12,12 @@ import {
   MessageSquare, Navigation, AlertTriangle, PhoneCall, RefreshCw, X,
   User, Calendar, DollarSign, Bell, Settings, LifeBuoy, LogOut,
   Pause, Power, Shield, FileText, CheckSquare, Star, ArrowLeft,
-  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound, Menu, Heart, UserCheck, Home
+  Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound, Menu, Heart, UserCheck, Home,
+  TrendingUp, CalendarCheck
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { TimeframeFilter, TimeframeFilterBar, matchesTimeframe, formatFullDateTime } from '../utils/timeframeFilters';
 
 const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
   const alertedRef = useRef(false);
@@ -703,6 +705,11 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
   const [endOtpInputs, setEndOtpInputs] = useState<Record<string, string>>({});
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Date & Timeframe filters (All Time, Today, Last 7 Days, This Month)
+  const [companionHistoryTimeframe, setCompanionHistoryTimeframe] = useState<TimeframeFilter>('all');
+  const [walletTimeframe, setWalletTimeframe] = useState<TimeframeFilter>('all');
+  const [lockedEarningsTimeframe, setLockedEarningsTimeframe] = useState<TimeframeFilter>('all');
   const [notificationPermission, setNotificationPermission] = useState<string>(() => {
     return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted';
   });
@@ -3800,7 +3807,25 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="font-bold text-sm text-slate-100 block">{b.serviceName} ({b.bookingCode})</span>
-                        <span className="text-slate-400">Client: <strong className="text-pink-300">{b.clientName}</strong> · Date: {b.date} ({b.startTime} - {b.endTime})</span>
+                        {(() => {
+                          const { formattedDate, formattedTime } = formatFullDateTime(b.date || b.createdAt, b.startTime);
+                          return (
+                            <div className="flex flex-wrap items-center gap-2 text-slate-400 text-xs mt-1">
+                              <span>Client: <strong className="text-pink-300">{b.clientName}</strong></span>
+                              <span>·</span>
+                              <span className="flex items-center gap-1 text-slate-300">
+                                <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                                <strong>{formattedDate}</strong>
+                              </span>
+                              {formattedTime && (
+                                <span className="flex items-center gap-1 text-amber-300">
+                                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                  <span>{formattedTime} {b.endTime ? `- ${b.endTime}` : ''} ({b.durationHours || 1} hr)</span>
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-bold animate-pulse">ACTION REQUIRED</span>
                     </div>
@@ -3844,7 +3869,25 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-bold text-sm text-slate-100 block">{b.serviceName} ({b.bookingCode})</span>
-                      <span className="text-slate-400">Client: {b.clientName} · Date: {b.date} ({b.startTime} - {b.endTime})</span>
+                      {(() => {
+                        const { formattedDate, formattedTime } = formatFullDateTime(b.date || b.createdAt, b.startTime);
+                        return (
+                          <div className="flex flex-wrap items-center gap-2 text-slate-400 text-xs mt-1">
+                            <span>Client: <strong className="text-pink-300">{b.clientName}</strong></span>
+                            <span>·</span>
+                            <span className="flex items-center gap-1 text-slate-300">
+                              <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                              <strong>{formattedDate}</strong>
+                            </span>
+                            {formattedTime && (
+                              <span className="flex items-center gap-1 text-amber-300">
+                                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                <span>{formattedTime} {b.endTime ? `- ${b.endTime}` : ''} ({b.durationHours || 1} hr)</span>
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="px-2.5 py-1 rounded bg-sky-500/20 text-sky-300 font-bold">{b.status}</span>
@@ -4152,28 +4195,125 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           </div>
         )}
 
-        {/* TAB 11: BOOKING HISTORY */}
+        {/* TAB 11: BOOKING HISTORY with DATE & TIME FILTERS */}
         {activeTab === 'history' && (
           <div className="space-y-4 text-xs">
-            <h3 className="text-base font-bold text-slate-100">Past Completed Sessions</h3>
-            {pastBookings.length === 0 ? (
-              <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400">
-                No past bookings found.
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <CalendarCheck className="w-5 h-5 text-emerald-400" />
+                  <span>Past Completed Sessions</span>
+                </h3>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Filtered by schedule date and completion timestamp with 85% companion payout breakdown.
+                </p>
               </div>
-            ) : (
-              pastBookings.map(b => (
-                <div key={b.id} className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-100 block">{b.serviceName} ({b.bookingCode})</span>
-                    <span className="text-slate-400">Client: {b.clientName} · {b.date}</span>
+
+              {/* Timeframe Filter Bar */}
+              <TimeframeFilterBar
+                selected={companionHistoryTimeframe}
+                onChange={setCompanionHistoryTimeframe}
+                counts={{
+                  all: pastBookings.length,
+                  today: pastBookings.filter(b => matchesTimeframe(b.date || b.createdAt, 'today')).length,
+                  '7days': pastBookings.filter(b => matchesTimeframe(b.date || b.createdAt, '7days')).length,
+                  monthly: pastBookings.filter(b => matchesTimeframe(b.date || b.createdAt, 'monthly')).length,
+                }}
+                theme="purple"
+              />
+            </div>
+
+            {(() => {
+              const filteredPastBookings = pastBookings.filter(b => {
+                const dateToCheck = b.date || b.createdAt || b.created_at;
+                return matchesTimeframe(dateToCheck, companionHistoryTimeframe);
+              });
+
+              const totalEarnedPeriodPaise = filteredPastBookings
+                .filter(b => b.status === 'COMPLETED')
+                .reduce((acc, b) => acc + (Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)), 0);
+
+              return (
+                <div className="space-y-4">
+                  {/* Summary Bar */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-950 to-pink-950/30 border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-purple-300 tracking-wider block">
+                        Net Earnings ({companionHistoryTimeframe === 'all' ? 'All Time' : companionHistoryTimeframe === 'today' ? 'Today' : companionHistoryTimeframe === '7days' ? 'Last 7 Days' : 'This Month'})
+                      </span>
+                      <span className="text-2xl font-black text-emerald-400">
+                        ₹{(totalEarnedPeriodPaise / 100).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="text-slate-400 sm:text-right">
+                      <span className="font-bold text-slate-200 block text-sm">{filteredPastBookings.length} Session{filteredPastBookings.length !== 1 ? 's' : ''} Handled</span>
+                      <span className="text-[10px] text-purple-300">85% Guaranteed Host Share</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-emerald-400 font-bold block">Earned: ₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}</span>
-                    <span className="text-[10px] text-slate-500">Status: {b.settlementStatus}</span>
-                  </div>
+
+                  {filteredPastBookings.length === 0 ? (
+                    <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 space-y-1">
+                      <p className="font-semibold text-slate-300">No past sessions found for the selected timeframe.</p>
+                      <p className="text-[11px] text-slate-500">Change filter to "All Time" to view your complete record.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredPastBookings.map(b => {
+                        const { formattedDate, formattedTime } = formatFullDateTime(b.date || b.createdAt, b.startTime);
+                        const netEarned = (((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2);
+                        const isCompleted = b.status === 'COMPLETED';
+
+                        return (
+                          <div key={b.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:border-slate-700 shadow-sm">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-slate-100 text-sm">{b.serviceName || 'Session'}</span>
+                                <span className="font-mono text-[10px] text-slate-400">#{b.bookingCode || b.id?.slice(0, 8)}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${isCompleted ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40' : 'bg-rose-950/60 text-rose-300 border-rose-500/40'}`}>
+                                  {b.status}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-400 text-[11px]">
+                                <span className="flex items-center gap-1 text-slate-300">
+                                  <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                                  <span>{formattedDate}</span>
+                                </span>
+                                {formattedTime && (
+                                  <span className="flex items-center gap-1 text-slate-300">
+                                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>{formattedTime} {b.endTime ? `- ${b.endTime}` : ''} ({b.durationHours || 1} hr)</span>
+                                  </span>
+                                )}
+                                <span className="text-slate-400">
+                                  Client: <strong className="text-pink-300">{b.clientName || 'Client'}</strong>
+                                </span>
+                              </div>
+
+                              {b.meetingLocation && (
+                                <div className="flex items-center gap-1 text-[11px] text-slate-500 truncate max-w-md">
+                                  <MapPin className="w-3 h-3 text-pink-400 shrink-0" />
+                                  <span className="truncate">Venue: {b.meetingLocation}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800 flex sm:flex-col items-center sm:items-end justify-between">
+                              <span className="text-emerald-400 font-black text-base block">
+                                Earned: ₹{netEarned}
+                              </span>
+                              <span className="text-[10px] text-slate-400 block font-mono mt-0.5">
+                                Settlement: <strong className={b.settlementStatus === 'SETTLED' ? 'text-emerald-400' : 'text-amber-400'}>{b.settlementStatus || '48h UTC Hold'}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              ))
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -4234,61 +4374,303 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           </div>
         )}
 
-        {/* TAB 13: SECURE WALLET */}
+        {/* TAB 13: SECURE WALLET with DATE & TIMEFRAME FILTERS */}
         {activeTab === 'wallet' && (
           <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6 text-xs">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-emerald-400" />
-              Companion Secure Wallet
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-emerald-400" />
+                  <span>Companion Secure Wallet & Payout Ledger</span>
+                </h3>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Track your period earnings, 48h safety escrow, and verified bank payouts.
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block mb-1">Locked Safety Escrow (48h UTC)</span>
-                <span className="text-xl font-bold text-amber-400">
-                  ₹{((statusData?.wallet?.lockedSettlementBalancePaise || 0) / 100).toFixed(2)}
-                </span>
-              </div>
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block mb-1">Total Payouts Settled</span>
-                <span className="text-xl font-bold text-emerald-400">
-                  ₹{((statusData?.wallet?.totalSettledPaise || 0) / 100).toFixed(2)}
-                </span>
-              </div>
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-slate-500 block mb-1">Platform Share</span>
-                <span className="text-xl font-bold text-slate-300">85% Net Share</span>
-              </div>
+              {/* Timeframe Filter Bar */}
+              {(() => {
+                const completedBookings = (Array.isArray(bookings) ? bookings : []).filter(b => b && b.status === 'COMPLETED');
+                return (
+                  <TimeframeFilterBar
+                    selected={walletTimeframe}
+                    onChange={setWalletTimeframe}
+                    counts={{
+                      all: completedBookings.length,
+                      today: completedBookings.filter(b => matchesTimeframe(b.date || b.createdAt || b.created_at, 'today')).length,
+                      '7days': completedBookings.filter(b => matchesTimeframe(b.date || b.createdAt || b.created_at, '7days')).length,
+                      monthly: completedBookings.filter(b => matchesTimeframe(b.date || b.createdAt || b.created_at, 'monthly')).length,
+                    }}
+                    theme="emerald"
+                  />
+                );
+              })()}
             </div>
 
-            <p className="text-slate-400 leading-relaxed">
-              Payouts are disbursed directly into your verified bank account by Finance Administration via bank transfer with UTR tracking after the 48-hour safety hold elapses.
-            </p>
+            {(() => {
+              const completedBookings = (Array.isArray(bookings) ? bookings : []).filter(b => b && b.status === 'COMPLETED');
+              const filteredWalletBookings = completedBookings.filter(b => {
+                const dateToCheck = b.date || b.createdAt || b.created_at;
+                return matchesTimeframe(dateToCheck, walletTimeframe);
+              });
+
+              const periodTotalEarnedPaise = filteredWalletBookings.reduce((acc, b) => {
+                const share = Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85);
+                return acc + share;
+              }, 0);
+
+              const periodTotalSettledPaise = filteredWalletBookings
+                .filter(b => b.settlementStatus === 'SETTLED')
+                .reduce((acc, b) => {
+                  const share = Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85);
+                  return acc + share;
+                }, 0);
+
+              const periodPendingEscrowPaise = filteredWalletBookings
+                .filter(b => b.settlementStatus !== 'SETTLED')
+                .reduce((acc, b) => {
+                  const share = Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85);
+                  return acc + share;
+                }, 0);
+
+              return (
+                <div className="space-y-6">
+                  {/* Period Stats Overview Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block mb-1 text-[11px]">Period Total Earnings</span>
+                      <span className="text-xl font-black text-emerald-400">
+                        ₹{(periodTotalEarnedPaise / 100).toFixed(2)}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block mt-0.5">85% Net Partner Share</span>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block mb-1 text-[11px]">In 48h UTC Safety Hold</span>
+                      <span className="text-xl font-bold text-amber-400">
+                        ₹{(periodPendingEscrowPaise / 100).toFixed(2)}
+                      </span>
+                      <span className="text-[10px] text-amber-500/80 block mt-0.5">Awaiting hold expiration</span>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block mb-1 text-[11px]">Period Settled Payouts</span>
+                      <span className="text-xl font-bold text-sky-400">
+                        ₹{(periodTotalSettledPaise / 100).toFixed(2)}
+                      </span>
+                      <span className="text-[10px] text-sky-500/80 block mt-0.5">Disbursed to Bank</span>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block mb-1 text-[11px]">Sessions in Filter</span>
+                      <span className="text-xl font-bold text-slate-100">
+                        {filteredWalletBookings.length}
+                      </span>
+                      <span className="text-[10px] text-purple-400 block mt-0.5">
+                        {walletTimeframe === 'all' ? 'All Time Total' : walletTimeframe === 'today' ? 'Today Only' : walletTimeframe === '7days' ? 'Past 7 Days' : 'This Month'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Itemized Session Earnings with Explicit Date & Time */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Itemized Session Earnings ({filteredWalletBookings.length})</span>
+                      </h4>
+                      <span className="text-[11px] text-slate-400">Calculated in real-time</span>
+                    </div>
+
+                    {filteredWalletBookings.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 rounded-xl bg-slate-950 border border-slate-800">
+                        No completed sessions found in this timeframe. Switch to "All Time" to view all records.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredWalletBookings.map(b => {
+                          const { formattedDate, formattedTime } = formatFullDateTime(b.date || b.createdAt, b.startTime);
+                          const netShare = (((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2);
+                          const isSettled = b.settlementStatus === 'SETTLED';
+
+                          return (
+                            <div key={b.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-all hover:border-slate-700">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-200">{b.serviceName || 'Session'}</span>
+                                  <span className="font-mono text-[10px] text-slate-500">#{b.bookingCode}</span>
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isSettled ? 'bg-sky-500/20 text-sky-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                                    {isSettled ? 'BANK SETTLED' : '48H UTC ESCROW'}
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-400 text-[11px]">
+                                  <span className="flex items-center gap-1 text-slate-300">
+                                    <Calendar className="w-3 h-3 text-purple-400" />
+                                    <span>{formattedDate}</span>
+                                  </span>
+                                  {formattedTime && (
+                                    <span className="flex items-center gap-1 text-slate-300">
+                                      <Clock className="w-3 h-3 text-amber-400" />
+                                      <span>{formattedTime}</span>
+                                    </span>
+                                  )}
+                                  <span>Client: <strong className="text-pink-300">{b.clientName || 'Client'}</strong></span>
+                                </div>
+                              </div>
+
+                              <div className="sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800 flex sm:flex-col items-center sm:items-end justify-between">
+                                <span className="text-emerald-400 font-extrabold text-sm block">
+                                  +₹{netShare}
+                                </span>
+                                <span className="text-[10px] text-slate-500 block font-mono">
+                                  {isSettled ? 'Paid via Bank Transfer' : 'Auto-unlocks after 48h UTC'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payout Policy Explainer */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/80 text-slate-400 leading-relaxed text-[11px] flex items-start gap-2.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-slate-200 block mb-0.5">Automated Safety Escrow Protocol</strong>
+                      Payouts are held in 48-hour UTC escrow to ensure safety and dispute resolution for both parties. Upon lock expiration, the platform disburses 85% companion earnings directly into your verified bank account with automated UTR confirmation.
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
-        {/* TAB 14: LOCKED EARNINGS (48H UTC) */}
+        {/* TAB 14: LOCKED EARNINGS (48H UTC) with DATE & TIMEFRAME FILTERS */}
         {activeTab === 'locked-earnings' && (
           <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 text-xs">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-400" />
-              48-Hour UTC Settlement Safety Hold Ledger
-            </h3>
-            <p className="text-slate-400">
-              Each session's net earning is held securely under a 48-hour UTC lock to guarantee dispute-free settlement for both clients and companions.
-            </p>
-            {(Array.isArray(bookings) ? bookings : []).filter(b => b && b.status === 'COMPLETED').map(b => (
-              <div key={b.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-slate-200 block">{b.bookingCode} · {b.serviceName}</span>
-                  <span className="text-slate-500 text-[11px]">Unlocks at: {b.settlementUnlockUtc ? new Date(b.settlementUnlockUtc).toUTCString() : 'Pending'}</span>
-                </div>
-                <div className="text-right">
-                  <span className="font-bold text-amber-400">₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}</span>
-                  <span className="text-[10px] text-slate-500 block">{b.settlementStatus}</span>
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-400" />
+                  <span>48-Hour UTC Settlement Safety Hold Ledger</span>
+                </h3>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Each session's net earning is held securely under a 48-hour UTC lock to guarantee dispute-free settlement.
+                </p>
               </div>
-            ))}
+
+              {/* Timeframe Filter Bar */}
+              {(() => {
+                const completedBookings = (Array.isArray(bookings) ? bookings : []).filter(b => b && b.status === 'COMPLETED');
+                return (
+                  <TimeframeFilterBar
+                    selected={lockedEarningsTimeframe}
+                    onChange={setLockedEarningsTimeframe}
+                    counts={{
+                      all: completedBookings.length,
+                      today: completedBookings.filter(b => matchesTimeframe(b.date || b.createdAt || b.created_at, 'today')).length,
+                      '7days': completedBookings.filter(b => matchesTimeframe(b.date || b.createdAt || b.created_at, '7days')).length,
+                      monthly: completedBookings.filter(b => matchesTimeframe(b.date || b.createdAt || b.created_at, 'monthly')).length,
+                    }}
+                    theme="dark"
+                  />
+                );
+              })()}
+            </div>
+
+            {(() => {
+              const completedBookings = (Array.isArray(bookings) ? bookings : []).filter(b => b && b.status === 'COMPLETED');
+              const filteredLockedBookings = completedBookings.filter(b => {
+                const dateToCheck = b.date || b.createdAt || b.created_at;
+                return matchesTimeframe(dateToCheck, lockedEarningsTimeframe);
+              });
+
+              const totalLockedPeriodPaise = filteredLockedBookings
+                .filter(b => b.settlementStatus !== 'SETTLED')
+                .reduce((acc, b) => acc + (Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)), 0);
+
+              return (
+                <div className="space-y-4">
+                  {/* Summary Banner */}
+                  <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 flex items-center justify-between">
+                    <div>
+                      <span className="text-amber-300 font-bold block text-sm">Escrow Hold Balance</span>
+                      <span className="text-[11px] text-amber-400/80">Pending completion of 48-hour UTC hold for selected timeframe</span>
+                    </div>
+                    <span className="text-xl font-black text-amber-400">
+                      ₹{(totalLockedPeriodPaise / 100).toFixed(2)}
+                    </span>
+                  </div>
+
+                  {filteredLockedBookings.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 rounded-xl bg-slate-950 border border-slate-800">
+                      No escrow records found for the selected timeframe.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredLockedBookings.map(b => {
+                        const { formattedDate, formattedTime } = formatFullDateTime(b.date || b.createdAt, b.startTime);
+                        const netAmount = (((Number(b.companionNetSharePaise) || Math.round((Number(b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2);
+                        const unlockUtcDate = b.settlementUnlockUtc ? new Date(b.settlementUnlockUtc) : null;
+                        const isUnlocked = unlockUtcDate ? unlockUtcDate.getTime() <= Date.now() : false;
+                        const localUnlockStr = unlockUtcDate ? unlockUtcDate.toLocaleString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        }) : 'Pending Verification';
+
+                        return (
+                          <div key={b.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:border-slate-700">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-200">{b.serviceName}</span>
+                                <span className="font-mono text-[10px] text-slate-500">#{b.bookingCode}</span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  b.settlementStatus === 'SETTLED'
+                                    ? 'bg-sky-500/20 text-sky-300'
+                                    : isUnlocked
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-amber-500/20 text-amber-300'
+                                }`}>
+                                  {b.settlementStatus === 'SETTLED' ? 'SETTLED TO BANK' : isUnlocked ? 'HOLD ELAPSED (READY FOR DISBURSAL)' : 'UNDER 48H UTC HOLD'}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-400 text-[11px]">
+                                <span className="flex items-center gap-1 text-slate-300">
+                                  <Calendar className="w-3 h-3 text-purple-400" />
+                                  <span>Session: {formattedDate} {formattedTime ? `(${formattedTime})` : ''}</span>
+                                </span>
+                                <span>Client: <strong className="text-pink-300">{b.clientName || 'Client'}</strong></span>
+                              </div>
+
+                              <div className="flex items-center gap-1 text-[11px] text-amber-300/90 font-mono">
+                                <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>Unlocks: {localUnlockStr} (UTC: {unlockUtcDate ? unlockUtcDate.toUTCString().slice(0, 22) : 'Pending'})</span>
+                              </div>
+                            </div>
+
+                            <div className="sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800 flex sm:flex-col items-center sm:items-end justify-between">
+                              <span className="font-extrabold text-amber-400 text-sm block">
+                                ₹{netAmount}
+                              </span>
+                              <span className="text-[10px] text-slate-500 block font-mono">
+                                Status: {b.settlementStatus || '48h Hold'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
