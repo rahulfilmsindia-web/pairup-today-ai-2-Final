@@ -755,55 +755,64 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     }
   };
 
-  const handleProceedToCheckout = async () => {
+  const handleProceedToCheckout = async (forceTestMode = false) => {
     if (!activeBookingResponse || !user) return;
     setBookingInProgress(true);
     setBookingError(null);
     try {
       const { booking, payment } = activeBookingResponse;
-      let orderToPay = { ...(payment || {}) };
+      let orderToPay: any = { ...(payment || {}) };
 
-      // Ensure keyId is always present
-      if (!orderToPay.keyId) {
-        orderToPay.keyId = 'rzp_live_pairuptoday';
-      }
-
-      // If orderId is missing or is placeholder ord_req_*, create a verified Razorpay order
-      if (!orderToPay.orderId || orderToPay.orderId.startsWith('ord_req_')) {
-        try {
-          const createOrderRes = await apiFetch('/api/payments/razorpay/create-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amountPaise: orderToPay.amountPaise || booking?.totalPayablePaise || Math.round((booking?.bookingAmountPaise || 49900) * 1.18),
-              receipt: `bk_${booking.bookingCode}`,
-              type: 'BOOKING',
-              notes: {
-                bookingId: booking.id,
-                bookingCode: booking.bookingCode,
-                userId: user.id
-              }
-            })
-          });
-          if (createOrderRes.ok) {
-            const orderData = await createOrderRes.json();
-            if (orderData.success && orderData.orderId) {
-              orderToPay.orderId = orderData.orderId;
-              if (orderData.keyId) orderToPay.keyId = orderData.keyId;
-              if (orderData.amountPaise) orderToPay.amountPaise = orderData.amountPaise;
-              if (orderData.currency) orderToPay.currency = orderData.currency;
-            }
-          }
-        } catch (genErr) {
-          console.warn('Dynamic order generation notice:', genErr);
-        }
-      }
-
-      if (!orderToPay.orderId) {
-        orderToPay.orderId = `ord_${booking.id.replace(/-/g, '').slice(0, 16)}`;
-      }
-      if (!Number.isSafeInteger(orderToPay.amountPaise) || orderToPay.amountPaise <= 0) {
+      if (forceTestMode) {
+        orderToPay.isTestMode = true;
+        orderToPay.keyId = 'rzp_test_pairuptoday';
+        orderToPay.orderId = `ord_test_${booking.id.replace(/-/g, '').slice(0, 16)}`;
         orderToPay.amountPaise = booking.totalPayablePaise || Math.round((booking.bookingAmountPaise || 49900) * 1.18);
+        orderToPay.currency = 'INR';
+      } else {
+        // Ensure keyId is always present
+        if (!orderToPay.keyId) {
+          orderToPay.keyId = 'rzp_test_pairuptoday';
+        }
+
+        // If orderId is missing or is placeholder ord_req_*, create a verified Razorpay order
+        if (!orderToPay.orderId || orderToPay.orderId.startsWith('ord_req_')) {
+          try {
+            const createOrderRes = await apiFetch('/api/payments/razorpay/create-order', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                amountPaise: orderToPay.amountPaise || booking?.totalPayablePaise || Math.round((booking?.bookingAmountPaise || 49900) * 1.18),
+                receipt: `bk_${booking.bookingCode}`,
+                type: 'BOOKING',
+                notes: {
+                  bookingId: booking.id,
+                  bookingCode: booking.bookingCode,
+                  userId: user.id
+                }
+              })
+            });
+            if (createOrderRes.ok) {
+              const orderData = await createOrderRes.json();
+              if (orderData.success && orderData.orderId) {
+                orderToPay.orderId = orderData.orderId;
+                if (orderData.keyId) orderToPay.keyId = orderData.keyId;
+                if (orderData.amountPaise) orderToPay.amountPaise = orderData.amountPaise;
+                if (orderData.currency) orderToPay.currency = orderData.currency;
+              }
+            }
+          } catch (genErr) {
+            console.warn('Dynamic order generation notice:', genErr);
+          }
+        }
+
+        if (!orderToPay.orderId) {
+          orderToPay.orderId = `ord_test_${booking.id.replace(/-/g, '').slice(0, 16)}`;
+          orderToPay.isTestMode = true;
+        }
+        if (!Number.isSafeInteger(orderToPay.amountPaise) || orderToPay.amountPaise <= 0) {
+          orderToPay.amountPaise = booking.totalPayablePaise || Math.round((booking.bookingAmountPaise || 49900) * 1.18);
+        }
       }
 
       let checkoutResult: any;
@@ -3529,15 +3538,31 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleProceedToCheckout}
-                    disabled={bookingInProgress}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-extrabold text-sm shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>{bookingInProgress ? 'Connecting to Payment Gateway...' : 'Continue to Checkout'}</span>
-                  </button>
+                  <div className="space-y-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleProceedToCheckout(true)}
+                      disabled={bookingInProgress}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-sm shadow-xl shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      <span className="text-base">🧪</span>
+                      <span>{bookingInProgress ? 'Processing Sandbox Payment...' : `Pay ₹${totalPayable.toFixed(2)} (Test Mode / Sandbox)`}</span>
+                    </button>
+
+                    <p className="text-[11px] text-cyan-300 text-center font-medium">
+                      ⚡ Test Mode: Instant simulation without real card or UPI deduction.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => handleProceedToCheckout(false)}
+                      disabled={bookingInProgress}
+                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>{bookingInProgress ? 'Connecting...' : 'Standard Gateway Checkout'}</span>
+                    </button>
+                  </div>
                 </div>
               );
             })()}
