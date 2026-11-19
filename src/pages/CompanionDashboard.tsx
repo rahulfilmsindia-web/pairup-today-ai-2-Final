@@ -779,6 +779,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
   activeChatBookingRef.current = activeChatBooking;
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [newChatText, setNewChatText] = useState('');
+  const [confirmedBookingAlert, setConfirmedBookingAlert] = useState<any | null>(null);
 
   // Profile editing state
   const [profileNameInput, setProfileNameInput] = useState(user?.profileName || user?.legalName || '');
@@ -1017,6 +1018,23 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           setIncomingBookingRequest(null);
           stopRingtone();
         }
+
+        // Detect newly confirmed/paid booking to surface active alert if companion hasn't acknowledged it yet
+        const unhandledConfirmed = list.find((b: any) =>
+          b.companionId === user.id &&
+          (b.status === 'CONFIRMED' || b.paymentStatus === 'PAID') &&
+          b.status !== 'COMPLETED' &&
+          b.status !== 'CANCELLED' &&
+          b.status !== 'REJECTED' &&
+          !b.companionArrivedAt &&
+          !b.startOtpVerified
+        );
+        if (unhandledConfirmed) {
+          setConfirmedBookingAlert((prev: any) => {
+            if (!prev) return unhandledConfirmed;
+            return prev;
+          });
+        }
       }
     } catch (err) {
       console.error('Failed to load bookings', err);
@@ -1169,6 +1187,9 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           } else if (data.type === 'BOOKING_CONFIRMED' || data.type === 'BOOKING_PAID') {
             stopRingtone();
             setIncomingBookingRequest(null);
+            if (data.booking) {
+              setConfirmedBookingAlert(data.booking);
+            }
             triggerSystemNotification('🎉 Payment Confirmed! New Session Ready', {
               body: `${data.booking?.clientName || 'Client'} has paid for ${data.booking?.serviceName || 'Session'}. Tap to chat and view meeting venue!`,
               icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
@@ -1780,7 +1801,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
   const completedBookings = safeBookings.filter(b => b && b.status === 'COMPLETED');
   const pendingRequests = safeBookings.filter(b => b && b.status === 'PENDING' && !b.companionAccepted && b.cancellationReason !== 'COMPANION_BUSY');
   const pendingBookings = pendingRequests;
-  const upcomingBookings = safeBookings.filter(b => b && (b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS'));
+  const upcomingBookings = safeBookings.filter(b => b && (b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS' || (b.paymentStatus === 'PAID' && b.status !== 'COMPLETED' && b.status !== 'CANCELLED' && b.status !== 'REJECTED')));
   const pastBookings = safeBookings.filter(b => b && (b.status === 'COMPLETED' || b.status === 'CANCELLED' || b.status === 'REJECTED'));
 
   if (loading && !statusData) {
@@ -5398,6 +5419,124 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMED BOOKING PAYMENT INSTANT ALERT MODAL */}
+      {confirmedBookingAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-lg bg-slate-900 border-2 border-emerald-500/60 rounded-3xl p-6 text-slate-100 space-y-4 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                  <CheckCircle2 className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-1.5">
+                    <span>🎉</span>
+                    <span>Booking Confirmed & Paid!</span>
+                  </h3>
+                  <p className="text-[11px] text-emerald-400 font-semibold">
+                    Client payment is confirmed. Secure chat and venue are unlocked.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmedBookingAlert(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Client Profile & Service Card */}
+            <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
+              <img
+                src={confirmedBookingAlert.clientPhoto || '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png'}
+                alt={confirmedBookingAlert.clientName || 'Client'}
+                className="w-14 h-14 rounded-full object-cover border-2 border-pink-500 shadow-md shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-extrabold text-slate-100 text-sm truncate">{confirmedBookingAlert.clientName || 'Client'}</h4>
+                  <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold text-[10px] border border-pink-500/30 shrink-0">
+                    {confirmedBookingAlert.serviceName || 'Social Companionship'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Booking Code: <strong className="text-pink-400 font-mono font-bold">#{confirmedBookingAlert.bookingCode}</strong>
+                </p>
+              </div>
+              <div className="bg-emerald-950/60 border border-emerald-800/80 px-3 py-1.5 rounded-xl text-right shrink-0">
+                <span className="text-[9px] uppercase font-bold text-emerald-400 block">Your 85% Earning</span>
+                <span className="text-sm font-black text-emerald-300">
+                  ₹{(((Number(confirmedBookingAlert.companionNetSharePaise) || Math.round((Number(confirmedBookingAlert.bookingAmountPaise || confirmedBookingAlert.amountPaise || confirmedBookingAlert.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            {/* Schedule Slot & Meeting Venue */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-purple-400 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Scheduled Time</span>
+                  <span className="font-bold text-slate-200">
+                    {confirmedBookingAlert.date || 'Today'} • {confirmedBookingAlert.startTime || 'Scheduled'} - {confirmedBookingAlert.endTime || ''} ({confirmedBookingAlert.durationHours || 1} hr)
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-rose-400 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Booking Location Venue</span>
+                  <span className="font-bold text-slate-200 truncate block">
+                    {confirmedBookingAlert.meetingLocation || 'Specified Meeting Venue'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Direct Action Buttons: Chat & Get Location */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveChatBooking(confirmedBookingAlert);
+                  setConfirmedBookingAlert(null);
+                }}
+                className="py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 via-rose-600 to-pink-500 hover:from-pink-500 hover:to-rose-400 text-white font-extrabold text-xs shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>💬 Chat with {(confirmedBookingAlert.clientName || 'Client').split(' ')[0]}</span>
+              </button>
+
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(confirmedBookingAlert.meetingLocation || 'Meeting Venue')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all text-center"
+              >
+                <Navigation className="w-4 h-4" />
+                <span>📍 Get Booking Location</span>
+              </a>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('upcoming');
+                setConfirmedBookingAlert(null);
+              }}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Navigation className="w-3.5 h-3.5 text-purple-400" />
+              <span>Go to Active Session Tracker (Arrival & OTP) →</span>
+            </button>
           </div>
         </div>
       )}

@@ -3279,15 +3279,29 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
           data: { type: 'BOOKING', bookingId: finalizedBooking.id }
         });
 
+        // Retrieve client profile metadata so companion immediately sees client details
+        let clientUser: any = null;
+        try {
+          clientUser = await databaseAdapter.getUser(finalizedBooking.clientId);
+        } catch (_) {}
+        const clientName = clientUser?.profileName || clientUser?.legalName || 'Client';
+        const clientPhoto = clientUser?.photo || clientUser?.profilePhoto || '';
+
         // Send high-urgency Web Push & SSE alert so companion receives instant confirmation
         pushCompanionAlert(finalizedBooking.companionId, {
           type: 'BOOKING_CONFIRMED',
           booking: {
             ...safeBooking,
+            clientName,
+            clientPhoto,
             status: 'CONFIRMED',
             paymentStatus: 'PAID',
-            startOtp: verifiedStartOtp,
-            endOtp: verifiedCompletionOtp
+            meetingLocation: finalizedBooking.meetingLocation || safeBooking.meetingLocation || '',
+            durationHours: finalizedBooking.durationHours || safeBooking.durationHours || 1,
+            date: finalizedBooking.date || finalizedBooking.bookingDate || safeBooking.date,
+            startTime: finalizedBooking.startTime || safeBooking.startTime,
+            endTime: finalizedBooking.endTime || safeBooking.endTime,
+            companionNetSharePaise: finalizedBooking.companionNetSharePaise || safeBooking.companionNetSharePaise
           }
         });
       } catch (nErr) {
@@ -4695,7 +4709,7 @@ app.get('/api/bookings/my/:userId', async (req: Request, res: Response) => {
       ? await databaseAdapter.listBookings({ clientId: userId, participantId: userId })
       : Object.values(db.bookings).filter((b: any) => b.clientId === userId || b.companionId === userId);
     const participatingBookings = bookings.filter((b: any) => b.clientId === userId || b.companionId === userId);
-    const sanitized = participatingBookings.map((booking: any) => {
+    const sanitized = await Promise.all(participatingBookings.map(async (booking: any) => {
       const copy = { ...booking };
       const encryptedStartOtp = copy.startOtpEncrypted;
       const encryptedCompletionOtp = copy.completionOtpEncrypted;
@@ -4725,14 +4739,33 @@ app.get('/api/bookings/my/:userId', async (req: Request, res: Response) => {
       copy.gstAmountPaise = tracked?.gstAmountPaise || (copy.cgstPaise + copy.sgstPaise);
       copy.totalPayablePaise = tracked?.totalPayablePaise || (baseAmt + copy.gstAmountPaise);
 
-      const clientUser = db.users[copy.clientId];
-      const companionUser = db.users[copy.companionId];
+      let clientUser = db.users[copy.clientId];
+      let companionUser = db.users[copy.companionId];
+      if (!clientUser && getDatabaseType() === 'supabase' && copy.clientId) {
+        try {
+          clientUser = await databaseAdapter.getUser(copy.clientId);
+        } catch (_) {}
+      }
+      if (!companionUser && getDatabaseType() === 'supabase' && copy.companionId) {
+        try {
+          companionUser = await databaseAdapter.getUser(copy.companionId);
+        } catch (_) {}
+      }
       if (clientUser) {
-        copy.clientName = clientUser.profileName || clientUser.legalName || 'Client';
+        copy.clientName = clientUser.profileName || clientUser.legalName || copy.clientName || 'Client';
+        copy.clientPhoto = clientUser.photo || clientUser.profilePhoto || copy.clientPhoto || '';
+        copy.clientPhone = clientUser.phone || copy.clientPhone || '';
+      } else if (!copy.clientName) {
+        copy.clientName = 'Client';
       }
       if (companionUser) {
-        copy.companionName = companionUser.profileName || companionUser.legalName || 'Companion';
+        copy.companionName = companionUser.profileName || companionUser.legalName || copy.companionName || 'Companion';
+        copy.companionPhoto = companionUser.photo || companionUser.profilePhoto || copy.companionPhoto || '';
+      } else if (!copy.companionName) {
+        copy.companionName = 'Companion';
       }
+
+      copy.meetingLocation = copy.meetingLocation || copy.meeting_location || copy.meetingAddress || '';
 
       if (!copy.clientReview && typeof copy.notes === 'string' && copy.notes.includes('[CLIENT_REVIEW]:')) {
         try {
@@ -4742,7 +4775,7 @@ app.get('/api/bookings/my/:userId', async (req: Request, res: Response) => {
       }
 
       return copy;
-    });
+    }));
     return res.json({ bookings: sanitized });
   } catch (error) {
     console.error('Booking list retrieval failed.', error);
