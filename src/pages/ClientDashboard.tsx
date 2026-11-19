@@ -129,6 +129,49 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [timeConflictError, setTimeConflictError] = useState<string | null>(null);
 
+  // Review & Rating Modal state
+  const [reviewingBooking, setReviewingBooking] = useState<any | null>(null);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewHoverRating, setReviewHoverRating] = useState<number>(0);
+  const [reviewComment, setReviewComment] = useState<string>('');
+  const [submittingReview, setSubmittingReview] = useState<boolean>(false);
+  const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
+  const [reviewErrorMsg, setReviewErrorMsg] = useState<string | null>(null);
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewingBooking) return;
+    setSubmittingReview(true);
+    setReviewErrorMsg(null);
+    setReviewSuccessMsg(null);
+    try {
+      const res = await apiFetch(`/api/bookings/${reviewingBooking.id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating: reviewRating,
+          comment: reviewComment
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setReviewErrorMsg(data.error || 'Failed to submit review.');
+        setSubmittingReview(false);
+        return;
+      }
+      setReviewSuccessMsg('Thank you! Your feedback and rating have been recorded.');
+      setMyBookings(prev => prev.map(b => b.id === reviewingBooking.id ? { ...b, clientReview: data.review } : b));
+      setTimeout(() => {
+        setReviewingBooking(null);
+        setReviewSuccessMsg(null);
+      }, 1500);
+    } catch (err: any) {
+      setReviewErrorMsg(err.message || 'Error submitting review.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   // Fetch companion schedule when modal opens or bookingDate changes
   useEffect(() => {
     if (!selectedCompanion?.id || !bookingDate) {
@@ -2825,6 +2868,40 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                               <span className="truncate">Venue: {b.meetingLocation}</span>
                             </div>
                           )}
+
+                          {b.status === 'COMPLETED' && (
+                            <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                              {b.clientReview ? (
+                                <div className="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                                  <div className="flex items-center text-amber-400">
+                                    {Array.from({ length: 5 }).map((_, i) => (
+                                      <Star key={i} className={`w-3 h-3 ${i < b.clientReview.rating ? 'fill-amber-400' : 'text-slate-600'}`} />
+                                    ))}
+                                  </div>
+                                  <span className="font-bold text-[11px]">You rated {b.clientReview.rating}.0★</span>
+                                  {b.clientReview.comment && (
+                                    <span className="text-slate-300 italic text-[11px] truncate max-w-xs">"{b.clientReview.comment}"</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReviewingBooking(b);
+                                    setReviewRating(5);
+                                    setReviewHoverRating(0);
+                                    setReviewComment('');
+                                    setReviewErrorMsg(null);
+                                    setReviewSuccessMsg(null);
+                                  }}
+                                  className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 font-bold text-[11px] border border-amber-500/40 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                                >
+                                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                  <span>Rate & Review Companion</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <div className="sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800 flex sm:flex-col items-center sm:items-end justify-between">
@@ -3631,6 +3708,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               const totalGst = cgst + sgst;
               const totalPayable = baseAmount + totalGst;
 
+              const isDateUnavailable = companionSchedule?.isAvailableOnDate === false;
+              const isOutsideWorkingHours = (() => {
+                if (!companionSchedule?.availabilitySchedule?.startTime || !companionSchedule?.availabilitySchedule?.endTime || !bookingTime) return false;
+                const startMin = Number(bookingTime.slice(0, 2)) * 60 + Number(bookingTime.slice(3, 5));
+                const endMin = startMin + bookingDurationHours * 60;
+                const availStart = Number(companionSchedule.availabilitySchedule.startTime.slice(0, 2)) * 60 + Number(companionSchedule.availabilitySchedule.startTime.slice(3, 5));
+                const availEnd = Number(companionSchedule.availabilitySchedule.endTime.slice(0, 2)) * 60 + Number(companionSchedule.availabilitySchedule.endTime.slice(3, 5));
+                return startMin < availStart || endMin > availEnd;
+              })();
+
               return (
                 <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
                   <div>
@@ -3647,8 +3734,21 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                     />
                   </div>
 
-                  {/* Companion Real-Time Schedule & 1-Hour Buffer Window Banner */}
-                  {companionSchedule && (
+                  {/* Companion Real-Time Schedule & Availability Enforcement */}
+                  {companionSchedule?.isAvailableOnDate === false ? (
+                    <div className="p-3.5 rounded-xl bg-rose-950/70 border border-rose-500/50 text-xs text-rose-200 space-y-1 shadow-lg shadow-rose-950/50 animate-fade-in">
+                      <div className="font-extrabold flex items-center gap-1.5 text-rose-300">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>Companion Unavailable on {companionSchedule.dayName || 'Selected Date'}</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">
+                        {companionSchedule.summary || 'This companion is not scheduled to work on this day.'}
+                      </p>
+                      <p className="text-[10px] text-rose-400 font-medium">
+                        Please pick an active scheduled day from the companion's profile to book.
+                      </p>
+                    </div>
+                  ) : companionSchedule ? (
                     <div className="p-3 rounded-xl bg-gradient-to-r from-sky-950/60 to-slate-900 border border-sky-500/30 text-xs space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-sky-300 flex items-center gap-1.5">
@@ -3664,7 +3764,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                         * Note: A 1-hour travel and rest buffer is strictly reserved before and after every meeting.
                       </p>
                     </div>
-                  )}
+                  ) : null}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -3710,6 +3810,22 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                       </p>
                       <p className="text-[10px] text-rose-400 font-medium">
                         Please select an available time slot before or after this window to proceed.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Outside Working Hours Alert */}
+                  {isOutsideWorkingHours && (
+                    <div className="p-3.5 rounded-xl bg-amber-950/70 border border-amber-500/50 text-xs text-amber-200 space-y-1 animate-fade-in">
+                      <div className="font-extrabold flex items-center gap-1.5 text-amber-300">
+                        <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Selected Time Outside Companion Working Hours</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">
+                        This companion is only available between {companionSchedule?.availabilitySchedule?.startTime || '09:00'} and {companionSchedule?.availabilitySchedule?.endTime || '21:00'}.
+                      </p>
+                      <p className="text-[10px] text-amber-400 font-medium">
+                        Please choose a start time that completes within their available working hours.
                       </p>
                     </div>
                   )}
@@ -3767,13 +3883,17 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
                   <button
                     type="submit"
-                    disabled={bookingInProgress || user?.isSuspended || Boolean(timeConflictError)}
+                    disabled={bookingInProgress || user?.isSuspended || Boolean(timeConflictError) || isDateUnavailable || isOutsideWorkingHours}
                     className="w-full py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-sm shadow-xl shadow-pink-500/20 transition-all hover:scale-[1.01] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <CalendarCheck className="w-4 h-4" />
                     <span>
                       {user?.isSuspended
                         ? 'Account Suspended - Booking Disabled'
+                        : isDateUnavailable
+                        ? `Unavailable on ${companionSchedule?.dayName || 'Selected Date'}`
+                        : isOutsideWorkingHours
+                        ? 'Time Outside Working Hours'
                         : timeConflictError
                         ? 'Time Conflict - Pick an Available Slot'
                         : (bookingInProgress ? 'Sending Request...' : 'Send Booking Request')}
@@ -3843,6 +3963,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               const sgst = baseAmount * 0.09;
               const totalGst = cgst + sgst;
               const totalPayable = baseAmount + totalGst;
+
+              const isDateUnavailable = companionSchedule?.isAvailableOnDate === false;
+              const isOutsideWorkingHours = (() => {
+                if (!companionSchedule?.availabilitySchedule?.startTime || !companionSchedule?.availabilitySchedule?.endTime || !bookingTime) return false;
+                const startMin = Number(bookingTime.slice(0, 2)) * 60 + Number(bookingTime.slice(3, 5));
+                const endMin = startMin + bookingDurationHours * 60;
+                const availStart = Number(companionSchedule.availabilitySchedule.startTime.slice(0, 2)) * 60 + Number(companionSchedule.availabilitySchedule.startTime.slice(3, 5));
+                const availEnd = Number(companionSchedule.availabilitySchedule.endTime.slice(0, 2)) * 60 + Number(companionSchedule.availabilitySchedule.endTime.slice(3, 5));
+                return startMin < availStart || endMin > availEnd;
+              })();
 
               return (
                 <div className="py-6 px-2 text-center space-y-4 animate-fade-in">
@@ -4033,6 +4163,113 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               </form>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* COMPANION REVIEW & RATING MODAL */}
+      {reviewingBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 text-slate-100 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                <h3 className="text-sm font-bold text-slate-100">
+                  Rate Your Experience with {reviewingBooking.companionName || 'Companion'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewingBooking(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+              <div>Booking Code: <strong className="text-amber-400">#{reviewingBooking.bookingCode}</strong></div>
+              <div>Service: <strong className="text-slate-200">{reviewingBooking.serviceName || 'Session'}</strong></div>
+              <p className="text-[11px] text-slate-400 pt-1">
+                Your genuine feedback helps companions build their real rating and ensures high quality for all clients.
+              </p>
+            </div>
+
+            {reviewSuccessMsg && (
+              <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>{reviewSuccessMsg}</span>
+              </div>
+            )}
+
+            {reviewErrorMsg && (
+              <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{reviewErrorMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitReview} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2 text-center">
+                  Select Rating (1 to 5 Stars)
+                </label>
+                <div className="flex items-center justify-center gap-2 py-2">
+                  {[1, 2, 3, 4, 5].map(star => {
+                    const isFilled = star <= (reviewHoverRating || reviewRating);
+                    return (
+                      <button
+                        type="button"
+                        key={star}
+                        onClick={() => setReviewRating(star)}
+                        onMouseEnter={() => setReviewHoverRating(star)}
+                        onMouseLeave={() => setReviewHoverRating(0)}
+                        className="p-1 text-2xl transition-transform hover:scale-125 focus:outline-none cursor-pointer"
+                      >
+                        <Star className={`w-8 h-8 ${isFilled ? 'fill-amber-400 text-amber-400' : 'text-slate-600'}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="text-center font-bold text-amber-400 text-xs">
+                  {reviewRating === 5 ? '⭐⭐⭐⭐⭐ 5.0 - Exceptional Experience!' :
+                   reviewRating === 4 ? '⭐⭐⭐⭐ 4.0 - Very Good & Polite' :
+                   reviewRating === 3 ? '⭐⭐⭐ 3.0 - Good Session' :
+                   reviewRating === 2 ? '⭐⭐ 2.0 - Fair, Room for Improvement' :
+                   '⭐ 1.0 - Poor Experience'}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Written Feedback / Compliments (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={reviewComment}
+                  onChange={e => setReviewComment(e.target.value)}
+                  placeholder="Share details about punctuality, friendliness, communication..."
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-amber-400 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setReviewingBooking(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReview}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 font-extrabold text-xs transition disabled:opacity-50 cursor-pointer shadow-md shadow-pink-500/20 active:scale-95"
+                >
+                  {submittingReview ? 'Submitting...' : 'Submit Official Review'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

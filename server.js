@@ -5011,7 +5011,7 @@ function isSupabaseBackedProductionRoute(req) {
     "GET /api/maps/distance",
     "POST /api/notifications/device-token",
     "DELETE /api/notifications/device-token"
-  ])).has(route) || route === "POST /api/user/profile" || route === "GET /api/user/profile" || route === "POST /api/kyc/submit" || route === "POST /api/companion/services-rates" || route === "POST /api/companion/membership/subscribe" || route === "POST /api/companion/bank/verify" || route === "POST /api/companion/availability/toggle" || route === "GET /api/companion/wallet" || route === "POST /api/bookings/create" || route === "POST /api/payments/razorpay/verify-payment" || route === "POST /api/payments/razorpay/cancel-order" || route === "POST /api/payments/razorpay/fail-order" || /^GET \/api\/notifications\/[^/]+$/.test(route) || route === "POST /api/notifications/read" || route === "POST /api/notifications/device-token" || route === "DELETE /api/notifications/device-token" || route === "POST /api/support/conversation" || route === "POST /api/support/message" || /^GET \/api\/support\/conversations\/[^/]+$/.test(route) || /^GET \/api\/support\/messages\/[^/]+$/.test(route) || /^GET \/api\/support\/messages\/[^/]+\/stream$/.test(route) || /^GET \/api\/chat\/[^/]+$/.test(route) || /^POST \/api\/chat\/[^/]+$/.test(route) || /^GET \/api\/chat\/[^/]+\/stream$/.test(route) || route === "GET /api/companion/alerts/stream" || /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete|accept|reject|cancel)$/.test(route) || /^GET \/api\/bookings\/[^/]+\/status$/.test(route) || /^GET \/api\/bookings\/my\/[^/]+$/.test(route) || /^GET \/api\/companion\/status\/[^/]+$/.test(route) || /^POST \/api\/location\/(update|sharing\/start|sharing\/stop)$/.test(route) || /^GET \/api\/location\/[^/]+$/.test(route) || route === "POST /api/presence" || /^GET \/api\/presence\/[^/]+$/.test(route) || route === "GET /api/admin/kyc/list" || route === "GET /api/admin/support/conversations" || route === "GET /api/admin/finance/payouts" || route === "GET /api/admin/finance/refunds" || route === "POST /api/admin/finance/re-auth/verify" || /^GET \/api\/admin\/support\/messages\/[^/]+$/.test(route) || /^GET \/api\/admin\/support\/messages\/[^/]+\/stream$/.test(route) || route === "POST /api/admin/support/reply" || /^POST \/api\/admin\/support\/conversation\/[^/]+\/status$/.test(route) || /^POST \/api\/admin\/staff\/[^/]+\/role$/.test(route) || /^DELETE \/api\/admin\/staff\/[^/]+$/.test(route) || /^GET \/api\/admin\/kyc\/[^/]+\/documents$/.test(route) || /^POST \/api\/admin\/kyc\/[^/]+\/action$/.test(route);
+  ])).has(route) || route === "POST /api/user/profile" || route === "GET /api/user/profile" || route === "POST /api/kyc/submit" || route === "POST /api/companion/services-rates" || route === "POST /api/companion/membership/subscribe" || route === "POST /api/companion/bank/verify" || route === "POST /api/companion/availability/toggle" || route === "GET /api/companion/wallet" || route === "POST /api/bookings/create" || route === "POST /api/payments/razorpay/verify-payment" || route === "POST /api/payments/razorpay/cancel-order" || route === "POST /api/payments/razorpay/fail-order" || /^GET \/api\/notifications\/[^/]+$/.test(route) || route === "POST /api/notifications/read" || route === "POST /api/notifications/device-token" || route === "DELETE /api/notifications/device-token" || route === "POST /api/support/conversation" || route === "POST /api/support/message" || /^GET \/api\/support\/conversations\/[^/]+$/.test(route) || /^GET \/api\/support\/messages\/[^/]+$/.test(route) || /^GET \/api\/support\/messages\/[^/]+\/stream$/.test(route) || /^GET \/api\/chat\/[^/]+$/.test(route) || /^POST \/api\/chat\/[^/]+$/.test(route) || /^GET \/api\/chat\/[^/]+\/stream$/.test(route) || route === "GET /api/companion/alerts/stream" || /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete|accept|reject|cancel|review)$/.test(route) || /^GET \/api\/bookings\/[^/]+\/status$/.test(route) || /^GET \/api\/bookings\/my\/[^/]+$/.test(route) || /^GET \/api\/companion\/status\/[^/]+$/.test(route) || /^POST \/api\/location\/(update|sharing\/start|sharing\/stop)$/.test(route) || /^GET \/api\/location\/[^/]+$/.test(route) || route === "POST /api/presence" || /^GET \/api\/presence\/[^/]+$/.test(route) || route === "GET /api/admin/kyc/list" || route === "GET /api/admin/support/conversations" || route === "GET /api/admin/finance/payouts" || route === "GET /api/admin/finance/refunds" || route === "POST /api/admin/finance/re-auth/verify" || /^GET \/api\/admin\/support\/messages\/[^/]+$/.test(route) || /^GET \/api\/admin\/support\/messages\/[^/]+\/stream$/.test(route) || route === "POST /api/admin/support/reply" || /^POST \/api\/admin\/support\/conversation\/[^/]+\/status$/.test(route) || /^POST \/api\/admin\/staff\/[^/]+\/role$/.test(route) || /^DELETE \/api\/admin\/staff\/[^/]+$/.test(route) || /^GET \/api\/admin\/kyc\/[^/]+\/documents$/.test(route) || /^POST \/api\/admin\/kyc\/[^/]+\/action$/.test(route);
 }
 app.use("/api", async (req, res, next) => {
   try {
@@ -6709,15 +6709,20 @@ app.get("/api/companion/status/:userId", async (req, res) => {
     const isLive = Boolean(
       user.kycStatus === "APPROVED" && profile && profile.membership?.isActive && new Date(profile.membership.expiryDate) > /* @__PURE__ */ new Date() && profile.bankDetails?.isVerified && !profile.isPaused
     );
+    const kycApproved = user.kycStatus === "APPROVED";
+    const membershipValid = Boolean(profile?.membership?.isActive && new Date(profile.membership.expiryDate) > /* @__PURE__ */ new Date());
+    const bankVerified = Boolean(profile?.bankDetails?.isVerified);
+    const allSatisfied = Boolean(kycApproved && membershipValid && bankVerified);
     return res.json({
       kycStatus: user.kycStatus,
       profile,
       wallet,
       isLive,
       conditions: {
-        kycApproved: user.kycStatus === "APPROVED",
-        membershipValid: Boolean(profile?.membership?.isActive && new Date(profile.membership.expiryDate) > /* @__PURE__ */ new Date()),
-        bankVerified: Boolean(profile?.bankDetails?.isVerified)
+        kycApproved,
+        membershipValid,
+        bankVerified,
+        allSatisfied
       }
     });
   }
@@ -6764,7 +6769,8 @@ app.get("/api/companion/status/:userId", async (req, res) => {
       conditions: {
         kycApproved,
         membershipValid,
-        bankVerified
+        bankVerified,
+        allSatisfied: Boolean(kycApproved && membershipValid && bankVerified)
       }
     };
     setEgressCache(statusCacheKey, statusResponsePayload, 10);
@@ -7075,9 +7081,28 @@ async function getCompanionActiveBookingsForDate(companionId, dateStr) {
     return isConfirmed || isAccepted;
   });
 }
-function computeCompanionSchedule(companionId, dateStr, activeBookings) {
-  const DAY_START = 7 * 60;
-  const DAY_END = 24 * 60;
+function computeCompanionSchedule(companionId, dateStr, activeBookings, profile) {
+  const availability = profile?.availability;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dayIndex = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const dayName = dayNames[dayIndex];
+  if (availability?.days && Array.isArray(availability.days) && availability.days.length > 0) {
+    if (!availability.days.includes(dayName)) {
+      return {
+        date: dateStr,
+        dayName,
+        isAvailableOnDate: false,
+        hasBookings: activeBookings.length > 0,
+        blockedWindows: [],
+        availableWindows: [],
+        summary: `Unavailable on ${dayName}s. Active schedule: ${availability.days.join(", ")}`,
+        availabilitySchedule: availability
+      };
+    }
+  }
+  const DAY_START = availability?.startTime ? timeToMinutes(availability.startTime) : 7 * 60;
+  const DAY_END = availability?.endTime ? timeToMinutes(availability.endTime) : 24 * 60;
   const rawBlocked = [];
   for (const b of activeBookings) {
     const sMin = timeToMinutes(b.startTime);
@@ -7119,27 +7144,33 @@ function computeCompanionSchedule(companionId, dateStr, activeBookings) {
   for (const b of mergedBlocked) {
     if (b.start > pointer) {
       const fTime = minutesToTime(pointer);
-      const tTime = minutesToTime(b.start);
-      availableWindows.push({
-        from: fTime,
-        to: tTime,
-        label: `${formatTimeAmPm(fTime)} - ${formatTimeAmPm(tTime)}`
-      });
+      const tTime = minutesToTime(Math.min(b.start, DAY_END));
+      if (timeToMinutes(tTime) > timeToMinutes(fTime)) {
+        availableWindows.push({
+          from: fTime,
+          to: tTime,
+          label: `${formatTimeAmPm(fTime)} - ${formatTimeAmPm(tTime)}`
+        });
+      }
     }
     pointer = Math.max(pointer, b.end);
   }
   if (pointer < DAY_END) {
     const fTime = minutesToTime(pointer);
     const tTime = minutesToTime(Math.min(1439, DAY_END));
-    availableWindows.push({
-      from: fTime,
-      to: tTime,
-      label: `${formatTimeAmPm(fTime)} - ${formatTimeAmPm(tTime)}`
-    });
+    if (timeToMinutes(tTime) > timeToMinutes(fTime)) {
+      availableWindows.push({
+        from: fTime,
+        to: tTime,
+        label: `${formatTimeAmPm(fTime)} - ${formatTimeAmPm(tTime)}`
+      });
+    }
   }
+  const startFmt = formatTimeAmPm(minutesToTime(DAY_START));
+  const endFmt = formatTimeAmPm(minutesToTime(Math.min(1439, DAY_END)));
   let summary = "";
   if (activeBookings.length === 0) {
-    summary = "Available 07:00 AM - 12:00 AM (Full Day)";
+    summary = `Available ${startFmt} - ${endFmt} (Full Schedule)`;
   } else if (availableWindows.length === 0) {
     summary = `Fully booked for ${dateStr}`;
   } else {
@@ -7147,18 +7178,24 @@ function computeCompanionSchedule(companionId, dateStr, activeBookings) {
   }
   return {
     date: dateStr,
+    dayName,
+    isAvailableOnDate: true,
     hasBookings: activeBookings.length > 0,
     blockedWindows,
     availableWindows,
-    summary
+    summary,
+    availabilitySchedule: availability || { days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], startTime: minutesToTime(DAY_START), endTime: minutesToTime(DAY_END) }
   };
 }
 app.get("/api/companion/:companionId/schedule", async (req, res) => {
   const { companionId } = req.params;
   const dateStr = typeof req.query?.date === "string" ? req.query.date : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   try {
-    const activeBookings = await getCompanionActiveBookingsForDate(companionId, dateStr);
-    const schedule = computeCompanionSchedule(companionId, dateStr, activeBookings);
+    const [activeBookings, profile] = await Promise.all([
+      getCompanionActiveBookingsForDate(companionId, dateStr),
+      getDatabaseType() === "supabase" ? databaseAdapter.getCompanionProfile(companionId).catch(() => null) : db2.companionProfiles ? db2.companionProfiles[companionId] : null
+    ]);
+    const schedule = computeCompanionSchedule(companionId, dateStr, activeBookings, profile);
     return res.json({ success: true, ...schedule });
   } catch (err) {
     console.warn("Schedule computation notice:", err);
@@ -7205,6 +7242,29 @@ app.post("/api/bookings/create", async (req, res) => {
     if (!profile.isLive && !profile.isPaused) {
       await databaseAdapter.updateCompanionProfile(companionId, { isLive: true }).catch(() => null);
       profile.isLive = true;
+    }
+    if (profile.availability) {
+      const { days, startTime: schedStart, endTime: schedEnd } = profile.availability;
+      if (Array.isArray(days) && days.length > 0) {
+        const [y, m, d] = date.split("-").map(Number);
+        const dayIndex = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+        const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        const dayName = dayNames[dayIndex];
+        if (!days.includes(dayName)) {
+          return res.status(400).json({
+            error: `This companion is not available on ${dayName}. Weekly availability schedule: ${days.join(", ")}.`
+          });
+        }
+      }
+      if (schedStart && schedEnd) {
+        const schedStartMin = timeToMinutes(schedStart);
+        const schedEndMin = timeToMinutes(schedEnd);
+        if (startMinuteOfDay < schedStartMin || endMinuteOfDay > schedEndMin) {
+          return res.status(400).json({
+            error: `This companion is available between ${formatTimeAmPm(schedStart)} and ${formatTimeAmPm(schedEnd)}. Selected time (${formatTimeAmPm(startTime)} - ${formatTimeAmPm(endTime)}) is outside working hours.`
+          });
+        }
+      }
     }
     const hourlyPaise = profile?.rates?.hourlyPaise || 49900;
     const calculatedBasePaise = hourlyPaise * durationHours;
@@ -7657,6 +7717,13 @@ app.get("/api/bookings/my/:userId", async (req, res) => {
       if (companionUser) {
         copy.companionName = companionUser.profileName || companionUser.legalName || "Companion";
       }
+      if (!copy.clientReview && typeof copy.notes === "string" && copy.notes.includes("[CLIENT_REVIEW]:")) {
+        try {
+          const raw = copy.notes.split("[CLIENT_REVIEW]:")[1]?.split("\n")[0]?.trim();
+          if (raw) copy.clientReview = JSON.parse(raw);
+        } catch (_) {
+        }
+      }
       return copy;
     });
     return res.json({ bookings: sanitized });
@@ -7896,6 +7963,100 @@ app.post("/api/bookings/:bookingId/complete", async (req, res) => {
     booking: sanitized,
     wallet
   });
+});
+app.post("/api/bookings/:bookingId/review", async (req, res) => {
+  const { bookingId } = req.params;
+  const authUser = req.authUser;
+  const rating = Number(req.body?.rating);
+  const comment = typeof req.body?.comment === "string" ? req.body.comment.trim().slice(0, 1e3) : "";
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: "Please provide a valid rating between 1 and 5 stars." });
+  }
+  try {
+    const booking = getDatabaseType() === "supabase" ? await databaseAdapter.getBooking(bookingId) : db2.bookings[bookingId];
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+    if (booking.clientId !== authUser.id) {
+      return res.status(403).json({ error: "Only the client who booked this session can submit a review." });
+    }
+    if (booking.status !== "COMPLETED") {
+      return res.status(400).json({ error: "Reviews can only be submitted for completed sessions." });
+    }
+    if (booking.clientReview || typeof booking.notes === "string" && booking.notes.includes("[CLIENT_REVIEW]:")) {
+      return res.status(400).json({ error: "You have already submitted a review for this session." });
+    }
+    const reviewData = {
+      rating,
+      comment,
+      clientName: authUser.name || "Client",
+      submittedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    const reviewMarker = `
+[CLIENT_REVIEW]: ${JSON.stringify(reviewData)}`;
+    const updatedNotes = ((booking.notes || "") + reviewMarker).trim();
+    if (getDatabaseType() === "supabase") {
+      await databaseAdapter.updateBooking(bookingId, { notes: updatedNotes });
+    }
+    booking.notes = updatedNotes;
+    booking.clientReview = reviewData;
+    if (db2.bookings && db2.bookings[bookingId]) {
+      db2.bookings[bookingId].notes = updatedNotes;
+      db2.bookings[bookingId].clientReview = reviewData;
+      saveDB(db2);
+    }
+    let companionRating = rating;
+    let reviewCount = 1;
+    try {
+      const allBookings = getDatabaseType() === "supabase" ? await databaseAdapter.listBookings({ companionId: booking.companionId }) : Object.values(db2.bookings).filter((b) => b.companionId === booking.companionId);
+      const ratings = [];
+      for (const b of allBookings) {
+        if (b.clientReview?.rating) {
+          ratings.push(Number(b.clientReview.rating));
+        } else if (typeof b.notes === "string" && b.notes.includes("[CLIENT_REVIEW]:")) {
+          try {
+            const raw = b.notes.split("[CLIENT_REVIEW]:")[1]?.split("\n")[0]?.trim();
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed?.rating) ratings.push(Number(parsed.rating));
+            }
+          } catch (_) {
+          }
+        }
+      }
+      if (ratings.length > 0) {
+        reviewCount = ratings.length;
+        const sum = ratings.reduce((a, b) => a + b, 0);
+        companionRating = Math.round(sum / reviewCount * 10) / 10;
+      }
+      if (getDatabaseType() === "supabase") {
+        await databaseAdapter.updateCompanionProfile(booking.companionId, { rating: companionRating });
+      }
+      if (db2.companionProfiles && db2.companionProfiles[booking.companionId]) {
+        db2.companionProfiles[booking.companionId].rating = companionRating;
+        saveDB(db2);
+      }
+    } catch (calcErr) {
+      console.warn("Companion rating recalculation notice:", calcErr);
+    }
+    invalidateEgressCache("search:");
+    invalidateEgressCache(`status:${booking.companionId}`);
+    createAndSendNotification({
+      userId: booking.companionId,
+      type: "BOOKING_COMPLETED",
+      title: `New ${rating}\u2605 Review Received! \u2B50`,
+      body: `${authUser.name || "Your client"} left a ${rating}-star review for booking #${booking.bookingCode || ""}.`,
+      data: { type: "BOOKING", bookingId }
+    }).catch(() => null);
+    return res.json({
+      success: true,
+      message: "Thank you! Your feedback and rating have been recorded.",
+      rating: companionRating,
+      reviewCount,
+      review: reviewData
+    });
+  } catch (err) {
+    console.error("Error submitting review:", err);
+    return res.status(500).json({ error: "Failed to record review." });
+  }
 });
 app.get("/api/chat/:bookingId/stream", async (req, res) => {
   const bookingId = req.params.bookingId;
@@ -9050,6 +9211,13 @@ app.get("/api/admin/bookings", requireAdminRoles("SUPER_ADMIN", "FINANCE_ADMIN",
       delete copy.completionOtpEncrypted;
       delete copy.startOtpHash;
       delete copy.completionOtpHash;
+      if (!copy.clientReview && typeof copy.notes === "string" && copy.notes.includes("[CLIENT_REVIEW]:")) {
+        try {
+          const raw = copy.notes.split("[CLIENT_REVIEW]:")[1]?.split("\n")[0]?.trim();
+          if (raw) copy.clientReview = JSON.parse(raw);
+        } catch (_) {
+        }
+      }
       return copy;
     });
     return res.json({ bookings });
