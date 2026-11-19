@@ -601,9 +601,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     fetchNotifications();
     refreshUserData();
     const interval = setInterval(() => {
+      fetchCompanions();
       fetchMyBookings();
       fetchNotifications();
-    }, 7000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [user?.id, selectedServiceId, selectedCity]);
 
@@ -892,8 +893,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const isKycApproved = user?.kycStatus === 'APPROVED';
 
   // Derived booking filters
-  const upcomingBookings = myBookings.filter(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS');
+  const successfulBookings = myBookings.filter(b => 
+    (b.paymentStatus === 'PAID' || b.status === 'CONFIRMED' || b.status === 'COMPLETED' || b.status === 'IN_PROGRESS' || b.status === 'COMPANION_ARRIVED') &&
+    b.status !== 'CANCELLED' && b.status !== 'REJECTED'
+  );
+  const upcomingBookings = myBookings.filter(b => 
+    (b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS' || (b.paymentStatus === 'PAID' && b.status !== 'COMPLETED')) &&
+    b.status !== 'CANCELLED' && b.status !== 'REJECTED'
+  );
   const pastBookings = myBookings.filter(b => b.status === 'COMPLETED' || b.status === 'CANCELLED');
+  const paidChatBookingsCount = myBookings.filter(b => 
+    (b.paymentStatus === 'PAID' || b.status === 'CONFIRMED' || b.status === 'IN_PROGRESS' || b.status === 'COMPLETED') &&
+    b.status !== 'CANCELLED' && b.status !== 'REJECTED'
+  ).length;
 
   // Budget and search filtered companions
   const filteredCompanions = companions.filter(c => {
@@ -907,7 +919,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   });
 
   // Unified companions filtering for search, category, city, budget, and smart filter
+  // Requirement 3: Strictly show ONLY active and online companions who are NOT busy
   const displayCompanions = companions.filter(c => {
+    // Companion must be active/online (not paused, not offline) and not currently busy
+    const isOnline = Boolean(c.isOnline || (c.isLive && !c.isPaused));
+    const isBusy = Boolean(c.isBusy) || c.status === 'busy';
+    if (!isOnline || isBusy) {
+      return false;
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = c.name?.toLowerCase().includes(q);
@@ -929,9 +949,6 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
         (sCity === 'chennai' && cCity.includes('madras'));
       if (!match) return false;
     }
-    if (smartFilter === 'online' && !c.isOnline) {
-      return false;
-    }
     if (smartFilter === 'suggested' && (c.rating || 0) < 4.8) {
       return false;
     }
@@ -944,7 +961,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     return true;
   });
 
-  const onlineCompanionsCount = companions.filter(c => c.isOnline).length;
+  const onlineCompanionsCount = companions.filter(c => Boolean(c.isOnline || (c.isLive && !c.isPaused)) && !c.isBusy).length;
   const userFirstName = user?.profileName?.trim()?.split(' ')[0] || user?.legalName?.trim()?.split(' ')[0] || 'Rahul';
   const visibleCompanions = showAllCompanions ? displayCompanions : displayCompanions.slice(0, 8);
 
@@ -953,8 +970,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     { id: 'profile', label: 'My Profile', icon: User },
     { id: 'kyc-status', label: 'My KYC Status', icon: ShieldCheck, badge: isKycApproved ? '✓' : 'Pending', badgeColor: isKycApproved ? 'bg-emerald-500' : 'bg-amber-500' },
     { id: 'services', label: '24 Services', icon: Sparkles },
-    { id: 'history', label: 'Booking History', icon: CalendarCheck },
-    { id: 'chat', label: 'Secure Chat', icon: MessageSquare, badge: '2', badgeColor: 'bg-pink-500' },
+    { id: 'upcoming', label: 'Upcoming Plans', icon: CalendarCheck, badge: upcomingBookings.length > 0 ? upcomingBookings.length : undefined, badgeColor: 'bg-violet-600' },
+    { id: 'history', label: 'Booking History', icon: Calendar, badge: successfulBookings.length > 0 ? successfulBookings.length : undefined, badgeColor: 'bg-emerald-500' },
+    { id: 'chat', label: 'Secure Chat', icon: MessageSquare, badge: paidChatBookingsCount > 0 ? (paidChatBookingsCount > 9 ? '9+' : paidChatBookingsCount) : undefined, badgeColor: 'bg-pink-500' },
     { id: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.length > 0 ? (notifications.length > 9 ? '9+' : notifications.length) : undefined, badgeColor: 'bg-rose-500' },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'help-safety', label: 'Help & Safety', icon: ShieldAlert },
@@ -1660,16 +1678,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                   </div>
                 </div>
 
-                {/* Card 2: Bookings */}
-                <div className="bg-white/95 border border-emerald-100 rounded-2xl p-4 sm:p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+                {/* Card 2: Bookings (Requirement 1: ONLY successful bookings count) */}
+                <div 
+                  onClick={() => setActiveTab('history')}
+                  className="bg-white/95 border border-emerald-100 rounded-2xl p-4 sm:p-5 shadow-sm flex items-center justify-between hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer"
+                >
                   <div className="space-y-1">
                     <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
                       <Calendar className="w-5 h-5" />
                     </div>
-                    <div className="text-2xl font-extrabold text-[#19125E]">{myBookings.length || 3}</div>
-                    <div className="text-xs font-bold text-slate-700">Bookings</div>
+                    <div className="text-2xl font-extrabold text-[#19125E]">{successfulBookings.length}</div>
+                    <div className="text-xs font-bold text-slate-700">Successful Bookings</div>
                     <div className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-                      <span>↑ +1 this month</span>
+                      <span>{successfulBookings.length > 0 ? '✓ Confirmed on record' : 'No confirmed sessions yet'}</span>
                     </div>
                   </div>
                   {/* Green Sparkline Wave */}
@@ -1680,7 +1701,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                   </div>
                 </div>
 
-                {/* Card 3: Upcoming */}
+                {/* Card 3: Upcoming (Requirement 2: Shows scheduled upcoming bookings) */}
                 <div 
                   onClick={() => setActiveTab('upcoming')}
                   className="bg-white/95 border border-purple-100 rounded-2xl p-4 sm:p-5 shadow-sm flex items-center justify-between hover:border-purple-300 hover:shadow-md transition-all cursor-pointer"
@@ -1689,8 +1710,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                     <div className="w-9 h-9 rounded-xl bg-violet-100 text-[#7C3AED] flex items-center justify-center mb-2">
                       <CalendarCheck className="w-5 h-5" />
                     </div>
-                    <div className="text-lg sm:text-xl font-extrabold text-[#19125E]">Upcoming</div>
-                    <div className="text-[11px] text-slate-500 line-clamp-1">View your upcoming plans</div>
+                    <div className="text-2xl font-extrabold text-[#19125E]">{upcomingBookings.length}</div>
+                    <div className="text-xs font-bold text-slate-700">Upcoming {upcomingBookings.length === 1 ? 'Session' : 'Sessions'}</div>
+                    <div className="text-[11px] font-bold text-[#7C3AED] truncate max-w-[130px] sm:max-w-[170px]">
+                      {upcomingBookings.length > 0 ? `${upcomingBookings[0].serviceName} · ${upcomingBookings[0].date}` : 'No upcoming plans'}
+                    </div>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-purple-50 text-[#6D28D9] flex items-center justify-center shrink-0 shadow-sm">
                     <ChevronRight className="w-4 h-4" />
@@ -1716,6 +1740,78 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                 </div>
 
               </div>
+
+              {/* 2.5 UPCOMING SCHEDULED SESSIONS BANNER (Requirement 2) */}
+              {upcomingBookings.length > 0 && (
+                <div className="bg-gradient-to-r from-[#241461] to-[#701A75] text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-purple-400/30 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/15 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-white/10 text-pink-300">
+                        <CalendarCheck className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-extrabold text-white">Upcoming Confirmed Session</h3>
+                        <p className="text-xs text-purple-200">You have {upcomingBookings.length} scheduled session{upcomingBookings.length > 1 ? 's' : ''} ready to go</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('upcoming')}
+                      className="text-xs font-bold text-pink-200 hover:text-white underline cursor-pointer self-start sm:self-center"
+                    >
+                      View All Upcoming ({upcomingBookings.length}) →
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {upcomingBookings.slice(0, 2).map(b => (
+                      <div key={b.id} className="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={b.companionPhoto || '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png'}
+                            alt={b.companionName}
+                            className="w-12 h-12 rounded-full object-cover ring-2 ring-pink-400 shrink-0"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-sm text-white">{b.companionName}</span>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 text-[10px] font-bold border border-emerald-400/40">
+                                {b.status}
+                              </span>
+                            </div>
+                            <span className="text-xs text-purple-200 block">{b.serviceName} · Booking #{b.bookingCode || b.id?.slice(0, 8)}</span>
+                            <span className="text-[11px] text-pink-200 block mt-0.5">
+                              📅 {b.date} • {b.startTime} - {b.endTime} ({b.durationHours || 1} hr)
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTrackedBooking(b);
+                              setActiveTab('tracking');
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold text-xs shadow-md shadow-pink-500/30 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                          >
+                            <Navigation className="w-3.5 h-3.5" />
+                            <span>Track Arrival</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveChatBooking(b)}
+                            className="px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs border border-white/30 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>Chat</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 3. UNIFIED "NEARBY COMPANIONS" & DISCOVERY SECTION */}
               <div id="nearby-companions-section" className="space-y-4 pt-2">

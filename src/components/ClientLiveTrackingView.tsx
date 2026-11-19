@@ -28,7 +28,14 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
   const [endOtp, setEndOtp] = useState<string>(booking.endOtp || '');
   const [meetingStartedAt, setMeetingStartedAt] = useState<string>(booking.meetingStartedAt || booking.startedAt || '');
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const [mapMode, setMapMode] = useState<'street' | 'radar'>('street');
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<any>(null);
+  const companionMarkerRef = useRef<any>(null);
+  const venueMarkerRef = useRef<any>(null);
+  const polylineRef = useRef<any>(null);
 
   // Clock tick every second for real-time countdown
   useEffect(() => {
@@ -221,9 +228,180 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
   // Open native Google Maps directions
   const handleOpenGoogleMaps = () => {
     const venue = booking.meetingLocation || 'Central Kolkata';
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venue)}`;
+    const origin = `${liveCompanionCoords.lat},${liveCompanionCoords.lng}`;
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(venue)}&travelmode=walking`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
+
+  const venueCoords = React.useMemo(() => {
+    const loc = (booking.meetingLocation || '').toLowerCase();
+    if (loc.includes('kolkata') || loc.includes('calcutta') || loc.includes('park street') || loc.includes('salt lake') || loc.includes('new town') || loc.includes('esplanade')) {
+      return { lat: 22.5535, lng: 88.3518 };
+    }
+    if (loc.includes('delhi') || loc.includes('connaught') || loc.includes('noida') || loc.includes('gurgaon') || loc.includes('gurugram')) {
+      return { lat: 28.6315, lng: 77.2167 };
+    }
+    if (loc.includes('mumbai') || loc.includes('bombay') || loc.includes('bandra') || loc.includes('andheri')) {
+      return { lat: 19.0596, lng: 72.8295 };
+    }
+    if (loc.includes('bangalore') || loc.includes('bengaluru') || loc.includes('koramangala') || loc.includes('indiranagar')) {
+      return { lat: 12.9352, lng: 77.6245 };
+    }
+    if (loc.includes('hyderabad') || loc.includes('hitec') || loc.includes('banjara')) {
+      return { lat: 17.4399, lng: 78.3908 };
+    }
+    if (loc.includes('chennai') || loc.includes('madras')) {
+      return { lat: 13.0827, lng: 80.2707 };
+    }
+    if (loc.includes('pune')) {
+      return { lat: 18.5204, lng: 73.8567 };
+    }
+    if (loc.includes('ahmedabad')) {
+      return { lat: 23.0225, lng: 72.5714 };
+    }
+    if (loc.includes('jaipur')) {
+      return { lat: 26.9124, lng: 75.7873 };
+    }
+    if (loc.includes('burdwan') || loc.includes('bardhaman')) {
+      return { lat: 23.2324, lng: 87.8615 };
+    }
+    if (loc.includes('siliguri')) {
+      return { lat: 26.7271, lng: 88.3953 };
+    }
+    if (loc.includes('howrah')) {
+      return { lat: 22.5958, lng: 88.2636 };
+    }
+    if (loc.includes('durgapur')) {
+      return { lat: 23.5204, lng: 87.3119 };
+    }
+    if (loc.includes('asansol')) {
+      return { lat: 23.6739, lng: 86.9524 };
+    }
+    return { lat: 22.5535, lng: 88.3518 };
+  }, [booking.meetingLocation]);
+
+  const liveCompanionCoords = React.useMemo(() => {
+    if (companionLocation?.latitude && companionLocation?.longitude) {
+      return { lat: companionLocation.latitude, lng: companionLocation.longitude };
+    }
+    const distOffset = (1 - walkingProgress) * 0.007;
+    return {
+      lat: venueCoords.lat - distOffset,
+      lng: venueCoords.lng - (distOffset * 0.8)
+    };
+  }, [companionLocation, venueCoords, walkingProgress]);
+
+  // Real Street Map Leaflet Renderer
+  useEffect(() => {
+    if (mapMode !== 'street' || !mapContainerRef.current) return;
+    let isCancelled = false;
+
+    const loadLeaflet = () => {
+      return new Promise<any>((resolve, reject) => {
+        if ((window as any).L) return resolve((window as any).L);
+        const existing = document.querySelector('script[data-leaflet="true"]') as HTMLScriptElement;
+        if (existing) {
+          if ((window as any).L) return resolve((window as any).L);
+          existing.addEventListener('load', () => resolve((window as any).L));
+          return;
+        }
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.dataset.leaflet = 'true';
+        script.onload = () => resolve((window as any).L);
+        script.onerror = () => reject(new Error('Leaflet map failed to load'));
+        document.head.appendChild(script);
+      });
+    };
+
+    loadLeaflet()
+      .then((L) => {
+        if (isCancelled || !mapContainerRef.current) return;
+        setLeafletLoaded(true);
+
+        if (!leafletMapRef.current) {
+          const map = L.map(mapContainerRef.current, {
+            zoomControl: true,
+            attributionControl: false
+          }).setView([liveCompanionCoords.lat, liveCompanionCoords.lng], 15);
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+          }).addTo(map);
+
+          const venueIcon = L.divIcon({
+            className: 'custom-venue-pin',
+            html: `<div style="background:#10b981; color:#fff; border:2px solid #fff; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(16,185,129,0.5); font-weight:bold; font-size:16px;">📍</div><div style="background:#0f172a; color:#fff; padding:2px 8px; border-radius:6px; border:1px solid #10b981; font-size:10px; font-weight:bold; white-space:nowrap; margin-top:2px;">Venue: ${(booking.meetingLocation || '').split(',')[0] || 'Meeting Spot'}</div>`,
+            iconSize: [34, 50],
+            iconAnchor: [17, 25]
+          });
+          const vMarker = L.marker([venueCoords.lat, venueCoords.lng], { icon: venueIcon }).addTo(map);
+          vMarker.bindPopup(`<b>Meeting Venue</b><br/>${booking.meetingLocation || 'Agreed Spot'}`);
+          venueMarkerRef.current = vMarker;
+
+          const compAvatarUrl = booking.companionPhoto || (isMale ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80');
+          const compIcon = L.divIcon({
+            className: 'custom-companion-pin',
+            html: `<div style="position:relative; width:44px; height:44px;"><div style="position:absolute; inset:-4px; border-radius:50%; background:${isMale ? 'rgba(14,165,233,0.35)' : 'rgba(236,72,153,0.35)'}; animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div><img src="${compAvatarUrl}" style="width:44px; height:44px; border-radius:50%; border:3px solid ${isMale ? '#38bdf8' : '#ec4899'}; object-fit:cover; box-shadow:0 4px 14px rgba(0,0,0,0.4);" /><div style="position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); background:#0f172a; color:#fff; padding:1px 6px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap; border:1px solid ${isMale ? '#38bdf8' : '#ec4899'};">${isMale ? '🚶‍♂️' : '🚶‍♀️'} ${(booking.companionName || '').split(' ')[0] || 'Companion'}</div></div>`,
+            iconSize: [44, 44],
+            iconAnchor: [22, 22]
+          });
+          const cMarker = L.marker([liveCompanionCoords.lat, liveCompanionCoords.lng], { icon: compIcon }).addTo(map);
+          cMarker.bindPopup(`<b>${booking.companionName || 'Companion'}</b><br/>Live Walking GPS Location`);
+          companionMarkerRef.current = cMarker;
+
+          const poly = L.polyline([
+            [liveCompanionCoords.lat, liveCompanionCoords.lng],
+            [venueCoords.lat, venueCoords.lng]
+          ], {
+            color: isMale ? '#0284c7' : '#ec4899',
+            weight: 4,
+            opacity: 0.85,
+            dashArray: '6, 8'
+          }).addTo(map);
+          polylineRef.current = poly;
+
+          leafletMapRef.current = map;
+
+          const bounds = L.latLngBounds([
+            [liveCompanionCoords.lat, liveCompanionCoords.lng],
+            [venueCoords.lat, venueCoords.lng]
+          ]);
+          map.fitBounds(bounds, { padding: [50, 50] });
+        } else {
+          if (companionMarkerRef.current) {
+            companionMarkerRef.current.setLatLng([liveCompanionCoords.lat, liveCompanionCoords.lng]);
+          }
+          if (polylineRef.current) {
+            polylineRef.current.setLatLngs([
+              [liveCompanionCoords.lat, liveCompanionCoords.lng],
+              [venueCoords.lat, venueCoords.lng]
+            ]);
+          }
+        }
+      })
+      .catch((e) => {
+        console.warn('Leaflet load notice:', e);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [mapMode, liveCompanionCoords, venueCoords, isMale, booking]);
+
+  useEffect(() => {
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, []);
 
   // Calculate coordinates on the curved SVG path
   // Path start: (80, 260), Curve point: (220, 140), End: (360, 60)
@@ -320,108 +498,160 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleOpenGoogleMaps}
-                className="pointer-events-auto px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-amber-300 shadow-lg flex items-center gap-1.5 backdrop-blur-md transition cursor-pointer"
-              >
-                <MapPin className="w-3.5 h-3.5 text-rose-400" />
-                <span>Google Maps</span>
-              </button>
+              <div className="flex items-center gap-2 pointer-events-auto">
+                {/* View Switcher: Real Streets (OpenStreetMap) vs Neon Route */}
+                <div className="hidden sm:flex items-center bg-slate-900/95 border border-slate-700/80 rounded-xl p-1 shadow-lg backdrop-blur-md">
+                  <button
+                    type="button"
+                    onClick={() => setMapMode('street')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      mapMode === 'street'
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🗺️ Real Streets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapMode('radar')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      mapMode === 'radar'
+                        ? 'bg-gradient-to-r from-pink-500 to-rose-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    ⚡ Neon Route
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleOpenGoogleMaps}
+                  className="px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-amber-300 shadow-lg flex items-center gap-1.5 backdrop-blur-md transition cursor-pointer"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Google Maps</span>
+                </button>
+              </div>
             </div>
 
-            {/* Interactive SVG Road Map with Animated Walking Character */}
-            <div className="w-full h-72 sm:h-96 rounded-2xl bg-[#0b1324] relative overflow-hidden border border-slate-800/80">
-              {/* Background Street Grid & City Details */}
-              <svg className="w-full h-full" viewBox="0 0 440 300" preserveAspectRatio="xMidYMid slice">
-                <defs>
-                  <linearGradient id="routeGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor={isMale ? '#0284c7' : '#ec4899'} />
-                    <stop offset="50%" stopColor={isMale ? '#38bdf8' : '#f43f5e'} />
-                    <stop offset="100%" stopColor="#10b981" />
-                  </linearGradient>
-                  <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
-                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                  </filter>
-                </defs>
+            {/* REAL STREET MAP / NEON ROUTE VIEW (Requirement 4) */}
+            <div className="w-full h-80 sm:h-96 rounded-2xl bg-[#0b1324] relative overflow-hidden border border-slate-800/80">
+              {mapMode === 'street' ? (
+                /* 1. Real Street Map with Live Leaflet Tile Layer */
+                <div className="w-full h-full relative">
+                  <div
+                    ref={mapContainerRef}
+                    id="client-live-street-map"
+                    className="w-full h-full z-0"
+                    style={{ minHeight: '320px', width: '100%' }}
+                  />
 
-                {/* Grid roads */}
-                <path d="M 0 50 L 440 50 M 0 110 L 440 110 M 0 170 L 440 170 M 0 230 L 440 230" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
-                <path d="M 70 0 L 70 300 M 150 0 L 150 300 M 230 0 L 230 300 M 310 0 L 310 300 M 390 0 L 390 300" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
-
-                {/* Major streets */}
-                <path d="M 20 280 L 420 280" stroke="#334155" strokeWidth="10" strokeLinecap="round" />
-                <path d="M 120 20 L 120 280" stroke="#334155" strokeWidth="8" strokeLinecap="round" />
-                <path d="M 320 20 L 320 280" stroke="#334155" strokeWidth="8" strokeLinecap="round" />
-
-                {/* Active Walking Route Path (Curved road connecting companion to destination) */}
-                <path
-                  d="M 60 240 Q 220 150 380 70"
-                  fill="none"
-                  stroke="#1e293b"
-                  strokeWidth="12"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M 60 240 Q 220 150 380 70"
-                  fill="none"
-                  stroke="url(#routeGradient)"
-                  strokeWidth="5"
-                  strokeLinecap="round"
-                  filter="url(#neonGlow)"
-                  strokeDasharray="6 3"
-                />
-
-                {/* Client Destination Marker Pin (📍 Meeting Venue) */}
-                <g transform="translate(380, 70)">
-                  <circle r="18" fill="#10b981" fillOpacity="0.2" className="animate-ping" />
-                  <circle r="10" fill="#10b981" />
-                  <circle r="4" fill="#ffffff" />
-                  {/* Pin Flag */}
-                  <rect x="-35" y="-36" width="70" height="20" rx="6" fill="#0f172a" stroke="#10b981" strokeWidth="1.5" />
-                  <text x="0" y="-23" textAnchor="middle" fill="#ffffff" fontSize="9" fontWeight="bold">📍 Your Spot</text>
-                </g>
-
-                {/* Animated Walking Companion Avatar — Only rendered when within 30 mins to protect privacy */}
-                {isLocationUnlocked && (
-                  <g transform={`translate(${walkerX}, ${walkerY})`}>
-                    {/* GPS Accuracy Radar Wave (Male = Sky/Cyan, Female = Pink/Rose) */}
-                    <circle
-                      r="22"
-                      fill={isMale ? '#0284c7' : '#ec4899'}
-                      fillOpacity="0.25"
-                      className="animate-pulse"
+                  {/* Fallback real map if Leaflet JS is still loading */}
+                  {!leafletLoaded && (
+                    <iframe
+                      title="OpenStreetMap Real View"
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${liveCompanionCoords.lng - 0.008}%2C${liveCompanionCoords.lat - 0.008}%2C${venueCoords.lng + 0.008}%2C${venueCoords.lat + 0.008}&layer=mapnik&marker=${liveCompanionCoords.lat}%2C${liveCompanionCoords.lng}`}
+                      className="absolute inset-0 w-full h-full"
                     />
-                    <circle
-                      r="14"
-                      fill="#0f172a"
-                      stroke={isMale ? '#38bdf8' : '#ec4899'}
-                      strokeWidth="2"
-                    />
+                  )}
 
-                    {/* Gender-specific Walking Avatar: 🚶‍♂️ Male or 🚶‍♀️ Female */}
-                    <text x="0" y="6" textAnchor="middle" fontSize="18" className="select-none animate-bounce">
-                      {isMale ? '🚶‍♂️' : '🚶‍♀️'}
-                    </text>
+                  {/* Real Street Marker Overlay Pill */}
+                  <div className="absolute top-16 left-4 z-10 px-3 py-1.5 rounded-xl bg-slate-950/85 backdrop-blur-md border border-slate-700 text-[11px] font-mono text-emerald-400 shadow-lg flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>Real-Time Streets & GPS Syncing</span>
+                  </div>
+                </div>
+              ) : (
+                /* 2. Interactive SVG Road Map with Animated Walking Character */
+                <svg className="w-full h-full" viewBox="0 0 440 300" preserveAspectRatio="xMidYMid slice">
+                  <defs>
+                    <linearGradient id="routeGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor={isMale ? '#0284c7' : '#ec4899'} />
+                      <stop offset="50%" stopColor={isMale ? '#38bdf8' : '#f43f5e'} />
+                      <stop offset="100%" stopColor="#10b981" />
+                    </linearGradient>
+                    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                  </defs>
 
-                    {/* Companion ETA Tag above head */}
-                    <g transform="translate(0, -22)">
-                      <rect
-                        x="-44"
-                        y="-12"
-                        width="88"
-                        height="17"
-                        rx="5"
-                        fill={isMale ? '#0284c7' : '#ec4899'}
-                      />
-                      <text x="0" y="0" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
-                        {isMale ? '👨' : '👩'} {booking.companionName?.split(' ')[0] || 'Companion'} (~{etaMinutes}m)
-                      </text>
-                    </g>
+                  {/* Grid roads */}
+                  <path d="M 0 50 L 440 50 M 0 110 L 440 110 M 0 170 L 440 170 M 0 230 L 440 230" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+                  <path d="M 70 0 L 70 300 M 150 0 L 150 300 M 230 0 L 230 300 M 310 0 L 310 300 M 390 0 L 390 300" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+
+                  {/* Major streets */}
+                  <path d="M 20 280 L 420 280" stroke="#334155" strokeWidth="10" strokeLinecap="round" />
+                  <path d="M 120 20 L 120 280" stroke="#334155" strokeWidth="8" strokeLinecap="round" />
+                  <path d="M 320 20 L 320 280" stroke="#334155" strokeWidth="8" strokeLinecap="round" />
+
+                  {/* Active Walking Route Path */}
+                  <path
+                    d="M 60 240 Q 220 150 380 70"
+                    fill="none"
+                    stroke="#1e293b"
+                    strokeWidth="12"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M 60 240 Q 220 150 380 70"
+                    fill="none"
+                    stroke="url(#routeGradient)"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    filter="url(#neonGlow)"
+                    strokeDasharray="6 3"
+                  />
+
+                  {/* Client Destination Marker Pin (📍 Meeting Venue) */}
+                  <g transform="translate(380, 70)">
+                    <circle r="18" fill="#10b981" fillOpacity="0.2" className="animate-ping" />
+                    <circle r="10" fill="#10b981" />
+                    <circle r="4" fill="#ffffff" />
+                    <rect x="-35" y="-36" width="70" height="20" rx="6" fill="#0f172a" stroke="#10b981" strokeWidth="1.5" />
+                    <text x="0" y="-23" textAnchor="middle" fill="#ffffff" fontSize="9" fontWeight="bold">📍 Your Spot</text>
                   </g>
-                )}
-              </svg>
+
+                  {/* Animated Walking Companion Avatar */}
+                  {isLocationUnlocked && (
+                    <g transform={`translate(${walkerX}, ${walkerY})`}>
+                      <circle
+                        r="22"
+                        fill={isMale ? '#0284c7' : '#ec4899'}
+                        fillOpacity="0.25"
+                        className="animate-pulse"
+                      />
+                      <circle
+                        r="14"
+                        fill="#0f172a"
+                        stroke={isMale ? '#38bdf8' : '#ec4899'}
+                        strokeWidth="2"
+                      />
+                      <text x="0" y="6" textAnchor="middle" fontSize="18" className="select-none animate-bounce">
+                        {isMale ? '🚶‍♂️' : '🚶‍♀️'}
+                      </text>
+                      <g transform="translate(0, -22)">
+                        <rect
+                          x="-44"
+                          y="-12"
+                          width="88"
+                          height="17"
+                          rx="5"
+                          fill={isMale ? '#0284c7' : '#ec4899'}
+                        />
+                        <text x="0" y="0" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">
+                          {isMale ? '👨' : '👩'} {booking.companionName?.split(' ')[0] || 'Companion'} (~{etaMinutes}m)
+                        </text>
+                      </g>
+                    </g>
+                  )}
+                </svg>
+              )}
 
               {/* Privacy Protection Frosted Overlay (Active until 30 minutes before meeting) */}
               {!isLocationUnlocked && (

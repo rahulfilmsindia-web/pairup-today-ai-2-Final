@@ -3279,9 +3279,9 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
           data: { type: 'BOOKING', bookingId: finalizedBooking.id }
         });
 
-        // Send high-urgency Web Push & SSE alert so companion receives call-style notification even if app/browser is closed!
+        // Send high-urgency Web Push & SSE alert so companion receives instant confirmation
         pushCompanionAlert(finalizedBooking.companionId, {
-          type: 'NEW_BOOKING_REQUEST',
+          type: 'BOOKING_CONFIRMED',
           booking: {
             ...safeBooking,
             status: 'CONFIRMED',
@@ -3809,6 +3809,11 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
         profileLatitude >= -90 && profileLatitude <= 90 && profileLongitude >= -180 && profileLongitude <= 180) {
       coordinatesByUserId.set(userId, { lat: profileLatitude, lng: profileLongitude });
     }
+    const isOnline = !profile.isPaused && Boolean(isLive);
+    const isBusy = Boolean(profile.isBusy) || (
+      db.bookings ? Object.values(db.bookings).some((b: any) => b.companionId === user.id && ['CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status)) : false
+    );
+
     const companionRecord = {
       id: user.id,
       name: user.profileName || user.legalName,
@@ -3831,6 +3836,8 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
       rates: profile.rates,
       availability: profile.availability,
       isInitialListing: isInitial,
+      isOnline,
+      isBusy,
       isLive: true
     };
 

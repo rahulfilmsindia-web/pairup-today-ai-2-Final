@@ -1132,16 +1132,46 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'NEW_BOOKING_REQUEST' && data.booking) {
-            setIncomingBookingRequest(data.booking);
-            startRingtone();
-            triggerSystemNotification('🚨 URGENT: New Booking Request!', {
-              body: `${data.booking.clientName || 'A Client'} requested a ${data.booking.serviceName || 'Social'} session. Tap to review!`,
+            if (data.booking.status === 'CONFIRMED' || data.booking.paymentStatus === 'PAID') {
+              stopRingtone();
+              setIncomingBookingRequest(null);
+              triggerSystemNotification('🎉 Payment Confirmed! New Session Ready', {
+                body: `${data.booking.clientName || 'Client'} has paid for ${data.booking.serviceName || 'Session'}. Tap to chat and view meeting venue!`,
+                icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
+                tag: `confirmed-${data.booking.id}`,
+                requireInteraction: true,
+                data: { bookingId: data.booking.id, url: '/companion-dashboard' }
+              });
+              setActionMsg(`🎉 Booking payment confirmed by ${data.booking.clientName || 'Client'}! Chat and meeting venue are unlocked.`);
+              setTimeout(() => setActionMsg(null), 6000);
+              fetchBookings();
+              fetchCompanionStatus();
+            } else {
+              setIncomingBookingRequest(data.booking);
+              startRingtone();
+              triggerSystemNotification('🚨 URGENT: New Booking Request!', {
+                body: `${data.booking.clientName || 'A Client'} requested a ${data.booking.serviceName || 'Social'} session. Tap to review!`,
+                icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
+                tag: `booking-${data.booking.id}`,
+                requireInteraction: true,
+                data: { bookingId: data.booking.id, url: '/companion-dashboard' }
+              });
+              fetchBookings();
+            }
+          } else if (data.type === 'BOOKING_CONFIRMED' || data.type === 'BOOKING_PAID') {
+            stopRingtone();
+            setIncomingBookingRequest(null);
+            triggerSystemNotification('🎉 Payment Confirmed! New Session Ready', {
+              body: `${data.booking?.clientName || 'Client'} has paid for ${data.booking?.serviceName || 'Session'}. Tap to chat and view meeting venue!`,
               icon: '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png',
-              tag: `booking-${data.booking.id}`,
+              tag: `confirmed-${data.booking?.id || Date.now()}`,
               requireInteraction: true,
-              data: { bookingId: data.booking.id, url: '/companion-dashboard' }
+              data: { bookingId: data.booking?.id, url: '/companion-dashboard' }
             });
+            setActionMsg(`🎉 Booking payment confirmed by ${data.booking?.clientName || 'Client'}! Chat and meeting venue are unlocked.`);
+            setTimeout(() => setActionMsg(null), 6000);
             fetchBookings();
+            fetchCompanionStatus();
           } else if (data.type === 'BOOKING_CANCELLED') {
             stopRingtone();
             setIncomingBookingRequest((current: any) => {
@@ -1172,7 +1202,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         fetchBookings();
         fetchNotifications();
       }
-    }, 12000);
+    }, 3000);
 
     // Also listen for Service Worker postMessage actions (e.g. from notification clicks)
     const handleSwMessage = (e: MessageEvent) => {
@@ -1219,37 +1249,55 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     };
   }, [user?.id]);
 
-  // Live GPS broadcaster for active bookings (enables Rapido-style client live tracking)
+  // Live GPS broadcaster for active bookings (enables real street-level client live tracking)
   useEffect(() => {
     const activeBooking = bookings.find(b => ['CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status));
     if (!activeBooking || !user || typeof navigator === 'undefined' || !navigator.geolocation) return;
 
-    const broadcastGps = () => {
-      try {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            apiFetch('/api/location/update', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                latitude: pos.coords.latitude,
-                longitude: pos.coords.longitude,
-                accuracy: pos.coords.accuracy || 10,
-                bookingId: activeBooking.id
-              })
-            }).catch(() => {});
-          },
-          (err) => {
-            console.warn('Geolocation broadcast notice:', err.message);
-          },
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
-        );
-      } catch {}
+    let watchId: number | null = null;
+    const sendCoords = (lat: number, lng: number, acc: number = 8) => {
+      apiFetch('/api/location/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude: lat,
+          longitude: lng,
+          accuracy: acc,
+          bookingId: activeBooking.id
+        })
+      }).catch(() => {});
     };
 
-    broadcastGps();
-    const locInterval = setInterval(broadcastGps, 10000);
-    return () => clearInterval(locInterval);
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          sendCoords(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 6);
+        },
+        (err) => {
+          console.warn('Geolocation watch notice:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 3000 }
+      );
+    } catch {}
+
+    const locInterval = setInterval(() => {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => sendCoords(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 6),
+          () => {},
+          { enableHighAccuracy: true, timeout: 6000, maximumAge: 4000 }
+        );
+      } catch {}
+    }, 4000);
+
+    return () => {
+      if (watchId !== null) {
+        try {
+          navigator.geolocation.clearWatch(watchId);
+        } catch {}
+      }
+      clearInterval(locInterval);
+    };
   }, [bookings, user?.id]);
 
   // Handle chat messages polling
@@ -2879,41 +2927,87 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {upcomingBookings.slice(0, 2).map((b) => (
-                    <div key={b.id} className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div className="flex items-center gap-3">
+                <div className="space-y-4">
+                  {upcomingBookings.slice(0, 3).map((b) => (
+                    <div key={b.id} className="p-5 rounded-3xl bg-gradient-to-br from-purple-50/70 via-white to-pink-50/40 border-2 border-purple-200/80 shadow-md space-y-4">
+                      {/* Top Header: Client Info + Status */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-purple-100">
+                        <div className="flex items-center gap-3.5">
                           <img
                             src={b.clientPhoto || '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png'}
                             alt={b.clientName}
-                            className="w-10 h-10 rounded-full object-cover ring-2 ring-purple-300"
+                            className="w-12 h-12 rounded-full object-cover ring-2 ring-purple-400 shadow-sm shrink-0"
                           />
                           <div>
-                            <span className="font-extrabold text-sm text-[#191040] block">{b.clientName}</span>
-                            <span className="text-xs text-slate-500">{b.serviceName} · Booking #{b.bookingCode || b.id?.slice(0, 8)}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-sm sm:text-base text-[#191040]">{b.clientName || 'Client'}</span>
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px] border border-emerald-300">
+                                {b.status}
+                              </span>
+                            </div>
+                            <span className="text-xs text-purple-700 font-semibold">{b.serviceName} · Booking #{b.bookingCode || b.id?.slice(0, 8)}</span>
                           </div>
                         </div>
-                        <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs border border-emerald-200 self-start sm:self-center">
-                          {b.status}
-                        </span>
-                      </div>
 
-                      <div className="flex items-center justify-between text-xs text-slate-600 bg-white p-3 rounded-xl border border-purple-100">
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-pink-600 shrink-0" />
-                          <span className="truncate max-w-[200px] sm:max-w-md">{b.meetingLocation}</span>
+                        {/* 85% Guaranteed Payout */}
+                        <div className="bg-emerald-50 border border-emerald-200 px-3.5 py-1.5 rounded-2xl self-start sm:self-center text-right">
+                          <span className="text-[10px] uppercase font-bold text-emerald-700 block">Your Net Earnings (85%)</span>
+                          <span className="text-sm sm:text-base font-black text-emerald-600">
+                            ₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.bookingAmountPaise || b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}
+                          </span>
                         </div>
-                        <span className="font-bold text-[#6D28D9]">{b.date} • {b.startTime} - {b.endTime}</span>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-1">
+                      {/* Schedule and Venue Details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-700">
+                        <div className="p-3 rounded-2xl bg-white border border-purple-100 flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-purple-600 shrink-0" />
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase font-bold block">Scheduled Slot</span>
+                            <span className="font-bold text-[#191040]">{b.date} • {b.startTime} - {b.endTime} ({b.durationHours || 1} hr)</span>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-white border border-purple-100 flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-pink-600 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold block">Agreed Meeting Venue</span>
+                            <span className="font-bold text-[#191040] truncate block">{b.meetingLocation || 'Specified Meeting Venue'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3 Action Buttons (Chat with Client, Get Booking Location, Enter OTP) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                         <button
+                          type="button"
+                          onClick={() => {
+                            setActiveChatBooking(b);
+                            setActiveTab('chat');
+                          }}
+                          className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-xs shadow-md shadow-pink-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>💬 Chat with {(b.clientName || 'Client').split(' ')[0]}</span>
+                        </button>
+
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.meetingLocation || 'Meeting Venue')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 text-center"
+                        >
+                          <Navigation className="w-3.5 h-3.5" />
+                          <span>📍 Get Booking Location</span>
+                        </a>
+
+                        <button
+                          type="button"
                           onClick={() => setActiveTab('upcoming')}
-                          className="w-full py-2 rounded-xl bg-[#6D28D9] hover:bg-purple-800 text-white font-bold text-xs shadow-md shadow-purple-900/20 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                          className="py-2.5 px-3 rounded-xl bg-[#6D28D9] hover:bg-purple-800 text-white font-extrabold text-xs shadow-md shadow-purple-900/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                         >
                           <Play className="w-3.5 h-3.5" />
-                          <span>Enter OTP & Manage Meeting Live →</span>
+                          <span>🚶 Enter OTP & Start</span>
                         </button>
                       </div>
                     </div>

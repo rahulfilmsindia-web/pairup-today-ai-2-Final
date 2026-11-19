@@ -6490,7 +6490,7 @@ app.post("/api/payments/razorpay/verify-payment", async (req, res) => {
           data: { type: "BOOKING", bookingId: finalizedBooking.id }
         });
         pushCompanionAlert(finalizedBooking.companionId, {
-          type: "NEW_BOOKING_REQUEST",
+          type: "BOOKING_CONFIRMED",
           booking: {
             ...safeBooking,
             status: "CONFIRMED",
@@ -6926,6 +6926,8 @@ app.get("/api/companions/search", async (req, res) => {
     if (Number.isFinite(profileLatitude) && Number.isFinite(profileLongitude) && profileLatitude >= -90 && profileLatitude <= 90 && profileLongitude >= -180 && profileLongitude <= 180) {
       coordinatesByUserId.set(userId, { lat: profileLatitude, lng: profileLongitude });
     }
+    const isOnline = !profile.isPaused && Boolean(isLive);
+    const isBusy = Boolean(profile.isBusy) || (db2.bookings ? Object.values(db2.bookings).some((b) => b.companionId === user.id && ["CONFIRMED", "COMPANION_ARRIVED", "IN_PROGRESS"].includes(b.status)) : false);
     const companionRecord = {
       id: user.id,
       name: user.profileName || user.legalName,
@@ -6946,6 +6948,8 @@ app.get("/api/companions/search", async (req, res) => {
       rates: profile.rates,
       availability: profile.availability,
       isInitialListing: isInitial,
+      isOnline,
+      isBusy,
       isLive: true
     };
     if (isInitial) {
