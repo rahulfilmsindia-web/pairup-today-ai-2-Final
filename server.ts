@@ -4605,6 +4605,11 @@ app.post('/api/bookings/:id/cancel', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'You are not authorized to cancel this booking.' });
     }
 
+    // Safety Lock: Never allow cancellation of an already paid or confirmed active session through this endpoint
+    if (booking.paymentStatus === 'PAID' || ['CONFIRMED', 'CONFIRMED_PAID', 'ONGOING', 'IN_PROGRESS', 'COMPLETED'].includes(booking.status)) {
+      return res.status(400).json({ error: 'Cannot cancel an already confirmed or paid booking through this endpoint.' });
+    }
+
     const cancelReason = req.body?.reason || (booking.clientId === authUser.id ? 'CLIENT_CANCELLED' : 'COMPANION_CANCELLED');
     const baseAmt = Number(booking.bookingAmountPaise || booking.amountPaise || 49900);
     const cgst = Math.round(baseAmt * 0.09);
@@ -4712,9 +4717,10 @@ app.get('/api/bookings/:id/status', async (req: Request, res: Response) => {
     const isClient = booking.clientId === authUser.id;
     let startOtp: string | undefined = undefined;
     let endOtp: string | undefined = undefined;
-    if (isClient && (booking.paymentStatus === 'PAID' || ['CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS', 'COMPLETED'].includes(booking.status))) {
+    if (isClient && (booking.paymentStatus === 'PAID' || ['CONFIRMED', 'CONFIRMED_PAID', 'COMPANION_ARRIVED', 'IN_PROGRESS', 'ONGOING', 'COMPLETED'].includes(booking.status))) {
       if (booking.startOtpEncrypted) startOtp = decryptBookingOtp(booking.startOtpEncrypted);
       else if (booking.startOtp) startOtp = booking.startOtp;
+      else if (booking.sessionOtp || booking.session_otp) startOtp = booking.sessionOtp || booking.session_otp;
       if (booking.completionOtpEncrypted) endOtp = decryptBookingOtp(booking.completionOtpEncrypted);
       else if (booking.completionOtp || booking.endOtp) endOtp = booking.completionOtp || booking.endOtp;
     }
@@ -4730,6 +4736,9 @@ app.get('/api/bookings/:id/status', async (req: Request, res: Response) => {
       endOtpVerified: Boolean(booking.endOtpVerified),
       startOtp,
       endOtp,
+      sessionOtp: booking.sessionOtp || booking.session_otp || startOtp,
+      companionCurrentArea: booking.companionCurrentArea || booking.companion_current_area || 'Near Meeting Venue',
+      companionEtaText: booking.companionEtaText || booking.companion_eta_text || 'Arriving in 10-15 mins',
       meetingStartedAt: booking.meetingStartedAt || booking.startedAt,
       durationHours: booking.durationHours || 1,
       paymentOrderId: booking.paymentOrderId,
@@ -7324,12 +7333,22 @@ app.post('/api/companion/live-coords', async (req: Request, res: Response) => {
       }
 
       // Persist privacy texts to bookings table
+      if (db.bookings && db.bookings[bookingId]) {
+        db.bookings[bookingId].companionCurrentArea = companionCurrentArea;
+        db.bookings[bookingId].companion_current_area = companionCurrentArea;
+        db.bookings[bookingId].companionEtaText = companionEtaText;
+        db.bookings[bookingId].companion_eta_text = companionEtaText;
+        db.bookings[bookingId].lastEtaUpdatedAt = new Date().toISOString();
+      }
+
       if (getDatabaseType() === 'supabase') {
         try {
           await databaseAdapter.updateBooking(bookingId, {
+            companionCurrentArea,
             companion_current_area: companionCurrentArea,
+            companionEtaText,
             companion_eta_text: companionEtaText,
-            last_eta_updated_at: new Date().toISOString()
+            lastEtaUpdatedAt: new Date().toISOString()
           });
         } catch (_) {}
       }

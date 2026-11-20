@@ -227,9 +227,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     setTimeConflictError(null);
   }, [companionSchedule, bookingTime, bookingDurationHours]);
 
-  const handleCloseBookingModal = () => {
-    // If client cancels or closes during waiting_acceptance, accepted (before checkout) or pending, notify server to immediately dismiss companion alert
-    if (activeBookingResponse?.booking?.id && (bookingStep === 'waiting_acceptance' || bookingStep === 'accepted' || (bookingStep as string) === 'pending')) {
+  const handleCloseBookingModal = (isConfirmedPaid = false) => {
+    // If client cancels or closes during waiting_acceptance or pending, notify server to immediately dismiss companion alert
+    // CRITICAL: NEVER cancel if booking is confirmed/paid or if client is just closing the modal after successful payment!
+    const isAlreadyPaidOrConfirmed = isConfirmedPaid || 
+      activeBookingResponse?.booking?.paymentStatus === 'PAID' ||
+      ['CONFIRMED', 'CONFIRMED_PAID', 'ONGOING', 'IN_PROGRESS', 'COMPLETED'].includes(activeBookingResponse?.booking?.status);
+
+    if (!isAlreadyPaidOrConfirmed && activeBookingResponse?.booking?.id && (bookingStep === 'waiting_acceptance' || (bookingStep as string) === 'pending')) {
       apiFetch(`/api/bookings/${activeBookingResponse.booking.id}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -590,8 +595,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   };
 
   // Fetch verified LIVE companions
-  const fetchCompanions = async () => {
-    setLoadingCompanions(true);
+  const fetchCompanions = async (silent = false) => {
+    if (!silent) setLoadingCompanions(true);
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.append('query', searchQuery);
@@ -606,7 +611,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     } catch (err) {
       console.error('Failed to load companions', err);
     } finally {
-      setLoadingCompanions(false);
+      if (!silent) setLoadingCompanions(false);
     }
   };
 
@@ -648,15 +653,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   };
 
   useEffect(() => {
-    fetchCompanions();
+    fetchCompanions(false);
     fetchMyBookings();
     fetchNotifications();
     refreshUserData();
     const interval = setInterval(() => {
-      fetchCompanions();
+      fetchCompanions(true);
       fetchMyBookings();
       fetchNotifications();
-    }, 3000);
+    }, 6000);
     return () => clearInterval(interval);
   }, [user?.id, selectedServiceId, selectedCity]);
 
@@ -927,7 +932,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       };
 
       setTimeout(() => {
-        handleCloseBookingModal();
+        handleCloseBookingModal(true);
         setTrackedBooking(activeBookingObj);
         setActiveChatBooking(activeBookingObj);
         setActiveTab('tracking');

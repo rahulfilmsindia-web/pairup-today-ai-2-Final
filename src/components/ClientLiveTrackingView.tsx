@@ -194,15 +194,24 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
   const sessionS = sessionSecondsRemaining % 60;
   const sessionTimeFormatted = `${String(sessionH).padStart(2, '0')}:${String(sessionM).padStart(2, '0')}:${String(sessionS).padStart(2, '0')}`;
 
-  const isCompleted = ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(bookingStatus);
+  const isCancelled = ['CANCELLED', 'REJECTED'].includes(bookingStatus);
+  const isCompleted = bookingStatus === 'COMPLETED';
 
   // Status Badge Helper
   const renderStatusBadge = () => {
     if (isCompleted) {
       return (
-        <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-300 font-extrabold text-xs border border-slate-700 flex items-center gap-1.5">
-          <span>🔒</span>
+        <span className="px-3 py-1 rounded-full bg-emerald-800 text-emerald-200 font-extrabold text-xs border border-emerald-700 flex items-center gap-1.5">
+          <span>✓</span>
           <span>SESSION COMPLETED</span>
+        </span>
+      );
+    }
+    if (isCancelled) {
+      return (
+        <span className="px-3 py-1 rounded-full bg-red-800 text-red-200 font-extrabold text-xs border border-red-700 flex items-center gap-1.5">
+          <span>✕</span>
+          <span>BOOKING CANCELLED</span>
         </span>
       );
     }
@@ -477,6 +486,10 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
         {isCompleted ? (
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-center text-xs text-slate-400 font-semibold">
             🔒 Meeting Completed (Session Ended) — Chat is read-only.
+          </div>
+        ) : isCancelled ? (
+          <div className="p-3 rounded-xl bg-slate-950 border border-red-900/50 text-center text-xs text-red-400 font-semibold">
+            🔒 Booking was cancelled — Chat is closed.
           </div>
         ) : (
           <form onSubmit={handleSendMessage} className="flex gap-2">

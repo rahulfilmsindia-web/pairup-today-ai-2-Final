@@ -2149,26 +2149,66 @@ var SupabaseDatabaseAdapter = class {
   async updateBooking(id, updates) {
     const fields = {
       bookingCode: "booking_code",
+      booking_code: "booking_code",
       status: "status",
       paymentOrderId: "payment_order_id",
+      payment_order_id: "payment_order_id",
       paymentId: "payment_id",
+      payment_id: "payment_id",
       paymentStatus: "payment_status",
+      payment_status: "payment_status",
       startOtpHmac: "start_otp_hash",
+      start_otp_hash: "start_otp_hash",
       endOtpHmac: "completion_otp_hash",
+      completion_otp_hash: "completion_otp_hash",
       startOtpAttempts: "start_otp_attempts",
+      start_otp_attempts: "start_otp_attempts",
       endOtpAttempts: "completion_otp_attempts",
+      completion_otp_attempts: "completion_otp_attempts",
       startOtpVerified: "start_otp_verified",
+      start_otp_verified: "start_otp_verified",
       endOtpVerified: "completion_otp_verified",
+      completion_otp_verified: "completion_otp_verified",
       companionArrivedAt: "companion_arrived_at",
+      companion_arrived_at: "companion_arrived_at",
       startedAt: "started_at",
+      started_at: "started_at",
+      meetingStartedAt: "meeting_started_at",
+      meeting_started_at: "meeting_started_at",
       completedAt: "completed_at",
+      completed_at: "completed_at",
       delayMinutes: "delay_minutes",
+      delay_minutes: "delay_minutes",
       latePenaltyPaise: "late_penalty_paise",
+      late_penalty_paise: "late_penalty_paise",
       companionNetSharePaise: "companion_net_share_paise",
+      companion_net_share_paise: "companion_net_share_paise",
       clientRefundPenaltyPaise: "client_refund_penalty_paise",
+      client_refund_penalty_paise: "client_refund_penalty_paise",
       settlementStatus: "settlement_status",
+      settlement_status: "settlement_status",
       settlementUnlockUtc: "settlement_unlock_at",
-      payoutId: "payout_id"
+      settlement_unlock_at: "settlement_unlock_at",
+      payoutId: "payout_id",
+      payout_id: "payout_id",
+      companionCurrentArea: "companion_current_area",
+      companion_current_area: "companion_current_area",
+      companionEtaText: "companion_eta_text",
+      companion_eta_text: "companion_eta_text",
+      lastEtaUpdatedAt: "last_eta_updated_at",
+      last_eta_updated_at: "last_eta_updated_at",
+      sessionOtp: "session_otp",
+      session_otp: "session_otp",
+      companionAccepted: "companion_accepted",
+      companion_accepted: "companion_accepted",
+      rejectionReason: "rejection_reason",
+      rejection_reason: "rejection_reason",
+      bookingLocationName: "booking_location_name",
+      booking_location_name: "booking_location_name",
+      bookingLat: "booking_lat",
+      booking_lat: "booking_lat",
+      bookingLng: "booking_lng",
+      booking_lng: "booking_lng"
     };
     const rowUpdates = Object.fromEntries(
       Object.entries(updates).filter(([key]) => fields[key]).map(([key, value]) => [fields[key], value])
@@ -7610,6 +7650,9 @@ app.post("/api/bookings/:id/cancel", async (req, res) => {
     if (booking.clientId !== authUser.id && booking.companionId !== authUser.id && authUser.role !== "ADMIN") {
       return res.status(403).json({ error: "You are not authorized to cancel this booking." });
     }
+    if (booking.paymentStatus === "PAID" || ["CONFIRMED", "CONFIRMED_PAID", "ONGOING", "IN_PROGRESS", "COMPLETED"].includes(booking.status)) {
+      return res.status(400).json({ error: "Cannot cancel an already confirmed or paid booking through this endpoint." });
+    }
     const cancelReason = req.body?.reason || (booking.clientId === authUser.id ? "CLIENT_CANCELLED" : "COMPANION_CANCELLED");
     const baseAmt = Number(booking.bookingAmountPaise || booking.amountPaise || 49900);
     const cgst = Math.round(baseAmt * 0.09);
@@ -7701,9 +7744,10 @@ app.get("/api/bookings/:id/status", async (req, res) => {
     const isClient = booking.clientId === authUser.id;
     let startOtp = void 0;
     let endOtp = void 0;
-    if (isClient && (booking.paymentStatus === "PAID" || ["CONFIRMED", "COMPANION_ARRIVED", "IN_PROGRESS", "COMPLETED"].includes(booking.status))) {
+    if (isClient && (booking.paymentStatus === "PAID" || ["CONFIRMED", "CONFIRMED_PAID", "COMPANION_ARRIVED", "IN_PROGRESS", "ONGOING", "COMPLETED"].includes(booking.status))) {
       if (booking.startOtpEncrypted) startOtp = decryptBookingOtp(booking.startOtpEncrypted);
       else if (booking.startOtp) startOtp = booking.startOtp;
+      else if (booking.sessionOtp || booking.session_otp) startOtp = booking.sessionOtp || booking.session_otp;
       if (booking.completionOtpEncrypted) endOtp = decryptBookingOtp(booking.completionOtpEncrypted);
       else if (booking.completionOtp || booking.endOtp) endOtp = booking.completionOtp || booking.endOtp;
     }
@@ -7718,6 +7762,9 @@ app.get("/api/bookings/:id/status", async (req, res) => {
       endOtpVerified: Boolean(booking.endOtpVerified),
       startOtp,
       endOtp,
+      sessionOtp: booking.sessionOtp || booking.session_otp || startOtp,
+      companionCurrentArea: booking.companionCurrentArea || booking.companion_current_area || "Near Meeting Venue",
+      companionEtaText: booking.companionEtaText || booking.companion_eta_text || "Arriving in 10-15 mins",
       meetingStartedAt: booking.meetingStartedAt || booking.startedAt,
       durationHours: booking.durationHours || 1,
       paymentOrderId: booking.paymentOrderId,
@@ -9953,12 +10000,21 @@ app.post("/api/companion/live-coords", async (req, res) => {
         companionCurrentArea = "Crossing city thoroughfare, en route";
         companionEtaText = "10-14 mins";
       }
+      if (db2.bookings && db2.bookings[bookingId]) {
+        db2.bookings[bookingId].companionCurrentArea = companionCurrentArea;
+        db2.bookings[bookingId].companion_current_area = companionCurrentArea;
+        db2.bookings[bookingId].companionEtaText = companionEtaText;
+        db2.bookings[bookingId].companion_eta_text = companionEtaText;
+        db2.bookings[bookingId].lastEtaUpdatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      }
       if (getDatabaseType() === "supabase") {
         try {
           await databaseAdapter.updateBooking(bookingId, {
+            companionCurrentArea,
             companion_current_area: companionCurrentArea,
+            companionEtaText,
             companion_eta_text: companionEtaText,
-            last_eta_updated_at: (/* @__PURE__ */ new Date()).toISOString()
+            lastEtaUpdatedAt: (/* @__PURE__ */ new Date()).toISOString()
           });
         } catch (_) {
         }
