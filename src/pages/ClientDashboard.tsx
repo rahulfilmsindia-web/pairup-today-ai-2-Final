@@ -112,15 +112,49 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     return () => cleanupPolling();
   }, []);
 
-  // Booking modal state
+  // Booking modal state & auto-date/time helpers
+  const getTodayDateStr = (): string => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const getInitialBookingDateTime = () => {
+    const future30 = new Date(Date.now() + 30 * 60 * 1000);
+    const yyyy = future30.getFullYear();
+    const mm = String(future30.getMonth() + 1).padStart(2, '0');
+    const dd = String(future30.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    const hours = String(future30.getHours()).padStart(2, '0');
+    const minutes = String(future30.getMinutes()).padStart(2, '0');
+    const timeStr = `${hours}:${minutes}`;
+    return { dateStr, timeStr };
+  };
+
+  const getMinAllowedTimeForToday = (): string => {
+    const future30 = new Date(Date.now() + 30 * 60 * 1000);
+    const hours = String(future30.getHours()).padStart(2, '0');
+    const minutes = String(future30.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const formatTimeAmPm = (timeStr: string): string => {
+    if (!timeStr || !timeStr.includes(':')) return timeStr;
+    const [hStr, mStr] = timeStr.split(':');
+    let h = parseInt(hStr, 10);
+    const m = mStr || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
+  };
+
   const [selectedCompanion, setSelectedCompanion] = useState<any | null>(null);
-  const [bookingDate, setBookingDate] = useState(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  });
-  const [bookingTime, setBookingTime] = useState('14:00');
-  const [bookingDurationHours, setBookingDurationHours] = useState(2);
+  const [bookingDate, setBookingDate] = useState(() => getTodayDateStr());
+  const [bookingTime, setBookingTime] = useState(() => getInitialBookingDateTime().timeStr);
+  const [bookingDurationHours, setBookingDurationHours] = useState(1);
   const [meetingLocation, setMeetingLocation] = useState('Central Public Cafe, MG Road');
   const [bookingNotes, setBookingNotes] = useState('');
   const [bookingInProgress, setBookingInProgress] = useState(false);
@@ -129,6 +163,44 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const [companionSchedule, setCompanionSchedule] = useState<any | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [timeConflictError, setTimeConflictError] = useState<string | null>(null);
+
+  const todayDateStr = getTodayDateStr();
+  const isBookingToday = bookingDate === todayDateStr;
+  const minAllowedTimeToday = getMinAllowedTimeForToday();
+  const isPastMinTimeToday = isBookingToday && bookingTime < minAllowedTimeToday;
+
+  const handleBookingDateChange = (newDate: string) => {
+    setBookingDate(newDate);
+    if (newDate === todayDateStr) {
+      const minTime = getMinAllowedTimeForToday();
+      if (bookingTime < minTime) {
+        setBookingTime(minTime);
+      }
+    }
+  };
+
+  const handleBookingTimeChange = (newTime: string) => {
+    if (isBookingToday) {
+      const minTime = getMinAllowedTimeForToday();
+      if (newTime < minTime) {
+        setBookingTime(minTime);
+        return;
+      }
+    }
+    setBookingTime(newTime);
+  };
+
+  // Automatically auto-select current date and (current time + 30 mins) whenever a companion is selected
+  useEffect(() => {
+    if (selectedCompanion?.id) {
+      const init = getInitialBookingDateTime();
+      setBookingDate(init.dateStr);
+      setBookingTime(init.timeStr);
+      setBookingDurationHours(1);
+      setBookingError(null);
+      setTimeConflictError(null);
+    }
+  }, [selectedCompanion?.id]);
 
   // Review & Rating Modal state
   const [reviewingBooking, setReviewingBooking] = useState<any | null>(null);
@@ -746,6 +818,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       return;
     }
 
+    // Minimum 30 minutes in advance enforcement for today's bookings
+    if (isBookingToday && bookingTime < minAllowedTimeToday) {
+      setBookingError(`For today's bookings, start time must be at least 30 minutes in advance (minimum: ${formatTimeAmPm(minAllowedTimeToday)}).`);
+      return;
+    }
+
     isSubmittingBookingRef.current = true;
     setBookingError(null);
     setBookingInProgress(true);
@@ -753,72 +831,92 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     const endH = parseInt(bookingTime.split(':')[0], 10) + bookingDurationHours;
     const formattedEndTime = `${String(endH % 24).padStart(2, '0')}:${bookingTime.split(':')[1]}`;
 
-    try {
-      const res = await apiFetch('/api/bookings/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: user.id,
-          companionId: selectedCompanion.id,
-          serviceId: selectedServiceId || selectedCompanion.services[0] || 1,
-          serviceName: PAIRUP_SERVICES.find(s => s.id === (selectedServiceId || selectedCompanion.services[0]))?.name || 'Social Companionship',
-          date: bookingDate,
-          startTime: bookingTime,
-          endTime: formattedEndTime,
-          durationHours: bookingDurationHours,
-          meetingLocation,
-          notes: bookingNotes
-        })
-      });
+    let lastErrorMsg = '';
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const res = await apiFetch('/api/bookings/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: user.id,
+            companionId: selectedCompanion.id,
+            serviceId: selectedServiceId || selectedCompanion.services[0] || 1,
+            serviceName: PAIRUP_SERVICES.find(s => s.id === (selectedServiceId || selectedCompanion.services[0]))?.name || 'Social Companionship',
+            date: bookingDate,
+            startTime: bookingTime,
+            endTime: formattedEndTime,
+            durationHours: bookingDurationHours,
+            meetingLocation,
+            notes: bookingNotes
+          })
+        });
 
-      const data = await res.json();
-      if (!res.ok) {
-        setBookingError(data.error || 'Failed to submit booking request.');
-        isSubmittingBookingRef.current = false;
-        setBookingInProgress(false);
-        return;
-      }
-
-      setActiveBookingResponse(data);
-      setBookingStep('waiting_acceptance');
-      setBookingInProgress(false);
-
-      // Start live polling for companion acceptance
-      cleanupPolling();
-      const bookingId = data.booking.id;
-      pollIntervalRef.current = setInterval(async () => {
+        let data: any = {};
         try {
-          const statusRes = await apiFetch(`/api/bookings/${bookingId}/status`);
-          if (statusRes.ok) {
-            const statusData = await statusRes.json();
-            if (statusData.companionAccepted) {
-              cleanupPolling();
-              setBookingStep('accepted');
-              if (statusData.payment) {
-                setActiveBookingResponse((prev: any) => ({
-                  ...prev,
-                  booking: { ...prev?.booking, ...statusData },
-                  payment: {
-                    ...prev?.payment,
-                    ...statusData.payment,
-                    keyId: statusData.payment.keyId || prev?.payment?.keyId || 'rzp_live_pairuptoday'
-                  }
-                }));
-              }
-            } else if (statusData.status === 'CANCELLED' || statusData.rejectionReason === 'COMPANION_BUSY') {
-              cleanupPolling();
-              setBookingStep('rejected');
-            }
-          }
-        } catch (pollErr) {
-          console.warn('Booking status polling error', pollErr);
+          data = await res.json();
+        } catch {
+          data = {};
         }
-      }, 2000);
-    } catch (err: any) {
-      setBookingError(err.message || 'Network error during booking confirmation.');
-      isSubmittingBookingRef.current = false;
-      setBookingInProgress(false);
+
+        if (!res.ok) {
+          setBookingError(data.error || 'Failed to submit booking request.');
+          isSubmittingBookingRef.current = false;
+          setBookingInProgress(false);
+          return;
+        }
+
+        setActiveBookingResponse(data);
+        setBookingStep('waiting_acceptance');
+        setBookingInProgress(false);
+
+        // Start live polling for companion acceptance
+        cleanupPolling();
+        const bookingId = data.booking.id;
+        pollIntervalRef.current = setInterval(async () => {
+          try {
+            const statusRes = await apiFetch(`/api/bookings/${bookingId}/status`);
+            if (statusRes.ok) {
+              const statusData = await statusRes.json();
+              if (statusData.companionAccepted) {
+                cleanupPolling();
+                setBookingStep('accepted');
+                if (statusData.payment) {
+                  setActiveBookingResponse((prev: any) => ({
+                    ...prev,
+                    booking: { ...prev?.booking, ...statusData },
+                    payment: {
+                      ...prev?.payment,
+                      ...statusData.payment,
+                      keyId: statusData.payment.keyId || prev?.payment?.keyId || 'rzp_live_pairuptoday'
+                    }
+                  }));
+                }
+              } else if (statusData.status === 'CANCELLED' || statusData.rejectionReason === 'COMPANION_BUSY') {
+                cleanupPolling();
+                setBookingStep('rejected');
+              }
+            }
+          } catch (pollErr) {
+            console.warn('Booking status polling error', pollErr);
+          }
+        }, 2000);
+        return; // Success!
+      } catch (err: any) {
+        lastErrorMsg = err?.message || 'Network error';
+        if (attempt === 1 && (lastErrorMsg === 'Failed to fetch' || /fetch/i.test(lastErrorMsg))) {
+          await new Promise(r => setTimeout(r, 800));
+          continue;
+        }
+      }
     }
+
+    if (lastErrorMsg === 'Failed to fetch' || /fetch/i.test(lastErrorMsg)) {
+      setBookingError('Unable to connect to server. Please check your internet connection and try sending the request again.');
+    } else {
+      setBookingError(lastErrorMsg || 'Network error during booking confirmation.');
+    }
+    isSubmittingBookingRef.current = false;
+    setBookingInProgress(false);
   };
 
   const handleProceedToCheckout = async (forceTestMode = false) => {
@@ -3726,14 +3824,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
               return (
                 <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
                   <div>
-                    <label className="block text-slate-300 font-semibold mb-1">
-                      Booking Date
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-slate-300 font-semibold">
+                        Booking Date
+                      </label>
+                      <span className="text-[10px] text-amber-400 font-medium">
+                        {isBookingToday ? 'Today (Auto Selected)' : ''}
+                      </span>
+                    </div>
                     <input
                       type="date"
                       value={bookingDate}
-                      min={new Date().toISOString().split('T')[0]}
-                      onChange={e => setBookingDate(e.target.value)}
+                      min={todayDateStr}
+                      onChange={e => handleBookingDateChange(e.target.value)}
                       className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:border-amber-400"
                       required
                     />
@@ -3773,16 +3876,33 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-slate-300 font-semibold mb-1">
-                        Start Time
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-slate-300 font-semibold">
+                          Start Time
+                        </label>
+                        {isBookingToday && (
+                          <span className="text-[10px] text-emerald-400 font-mono font-medium">
+                            Min: {formatTimeAmPm(minAllowedTimeToday)}
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="time"
                         value={bookingTime}
-                        onChange={e => setBookingTime(e.target.value)}
-                        className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl text-slate-100 focus:outline-none ${timeConflictError ? 'border-rose-500 text-rose-200' : 'border-slate-700 focus:border-amber-400'}`}
+                        min={isBookingToday ? minAllowedTimeToday : undefined}
+                        onChange={e => handleBookingTimeChange(e.target.value)}
+                        className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl text-slate-100 focus:outline-none ${
+                          timeConflictError || isPastMinTimeToday 
+                            ? 'border-rose-500 text-rose-200' 
+                            : 'border-slate-700 focus:border-amber-400'
+                        }`}
                         required
                       />
+                      {isPastMinTimeToday && (
+                        <p className="text-[10px] text-rose-400 mt-1 leading-tight">
+                          For today, start time must be at least 30 mins in advance (minimum: {formatTimeAmPm(minAllowedTimeToday)}).
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -3888,13 +4008,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
                   <button
                     type="submit"
-                    disabled={bookingInProgress || user?.isSuspended || Boolean(timeConflictError) || isDateUnavailable || isOutsideWorkingHours}
+                    disabled={bookingInProgress || user?.isSuspended || Boolean(timeConflictError) || isDateUnavailable || isOutsideWorkingHours || isPastMinTimeToday}
                     className="w-full py-3.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-sm shadow-xl shadow-pink-500/20 transition-all hover:scale-[1.01] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <CalendarCheck className="w-4 h-4" />
                     <span>
                       {user?.isSuspended
                         ? 'Account Suspended - Booking Disabled'
+                        : isPastMinTimeToday
+                        ? `Time Must Be After ${formatTimeAmPm(minAllowedTimeToday)}`
                         : isDateUnavailable
                         ? `Unavailable on ${companionSchedule?.dayName || 'Selected Date'}`
                         : isOutsideWorkingHours

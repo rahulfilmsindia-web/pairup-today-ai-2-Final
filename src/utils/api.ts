@@ -7,5 +7,5 @@ export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Prom
       : localStorage.getItem('pairup_token');
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
-  return fetch(input, { ...init, headers });
+  return fetch(input, { credentials: 'include', ...init, headers });
 }

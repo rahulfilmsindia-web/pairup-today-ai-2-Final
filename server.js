@@ -7300,7 +7300,9 @@ app.post("/api/bookings/create", async (req, res) => {
   const startMinuteOfDay = /^\d{2}:\d{2}$/.test(startTime) ? Number(startTime.slice(0, 2)) * 60 + Number(startTime.slice(3, 5)) : -1;
   const endMinuteOfDay = /^\d{2}:\d{2}$/.test(endTime) ? Number(endTime.slice(0, 2)) * 60 + Number(endTime.slice(3, 5)) : -1;
   const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? /* @__PURE__ */ new Date(`${date}T00:00:00.000Z`) : /* @__PURE__ */ new Date(NaN);
-  if (!authUser?.id || !companionId || !Number.isInteger(serviceId) || serviceId < 1 || !Number.isInteger(durationHours) || durationHours < 1 || durationHours > 24 || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(startTime) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(endTime) || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date || date < (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) || endMinuteOfDay - startMinuteOfDay !== durationHours * 60 || !meetingLocation || meetingLocation.length > 500 || !service) {
+  const diffMinutes = endMinuteOfDay >= startMinuteOfDay ? endMinuteOfDay - startMinuteOfDay : endMinuteOfDay + 1440 - startMinuteOfDay;
+  const yesterdayUtc = new Date(Date.now() - 24 * 60 * 60 * 1e3).toISOString().slice(0, 10);
+  if (!authUser?.id || !companionId || !Number.isInteger(serviceId) || serviceId < 1 || !Number.isInteger(durationHours) || durationHours < 1 || durationHours > 24 || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(startTime) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(endTime) || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date || date < yesterdayUtc || diffMinutes !== durationHours * 60 || !meetingLocation || meetingLocation.length > 500 || !service) {
     return res.status(400).json({ error: "Booking details are invalid." });
   }
   if (getDatabaseType() !== "supabase") {
