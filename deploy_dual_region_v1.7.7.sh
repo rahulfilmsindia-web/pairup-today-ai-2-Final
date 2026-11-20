@@ -60,58 +60,44 @@ if [ ${BUILD_SUCCESS} -ne 1 ]; then
   exit 1
 fi
 
-# Secret references
-SECRET_VARS="SUPABASE_URL=SUPABASE_URL:latest,\
-SUPABASE_ANON_KEY=SUPABASE_ANON_KEY:latest,\
-SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,\
-SESSION_SECRET=SESSION_SECRET:latest,\
-OTP_HMAC_SECRET=OTP_HMAC_SECRET:latest,\
-BANK_ACCOUNT_ENCRYPTION_KEY=BANK_ACCOUNT_ENCRYPTION_KEY:latest,\
-APITXT_API_KEY=APITXT_API_KEY:latest,\
-RAZORPAY_KEY_ID=RAZORPAY_KEY_ID:latest,\
-RAZORPAY_KEY_SECRET=RAZORPAY_KEY_SECRET:latest,\
-RAZORPAY_WEBHOOK_SECRET=RAZORPAY_WEBHOOK_SECRET:latest"
-
 # 4. Deploy to Primary Region (Mumbai: asia-south1)
 echo "------------------------------------------------------------------------------"
 echo "  Deploying to Primary Region: ${PRIMARY_REGION}..."
 echo "------------------------------------------------------------------------------"
-gcloud run deploy ${SERVICE_NAME} \
+gcloud run deploy "${SERVICE_NAME}" \
   --image "${IMAGE_TAG}" \
   --region "${PRIMARY_REGION}" \
   --project "${PROJECT_ID}" \
   --platform managed \
   --allow-unauthenticated \
-  --set-secrets="${SECRET_VARS}" \
-  --update-env-vars="NODE_ENV=production,PORT=8080" \
+  --port 8080 \
   --memory 1Gi \
   --cpu 1 \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 10 \
-  --timeout 300 \
-  --concurrency 80
+  --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
+  --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88"
 
-PRIMARY_URL=$(gcloud run services describe ${SERVICE_NAME} --region ${PRIMARY_REGION} --project ${PROJECT_ID} --format="value(status.url)")
+PRIMARY_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${PRIMARY_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
 echo "✅ Primary Region deployment successful: ${PRIMARY_URL}"
 
 # 5. Deploy to Failover Region (Singapore: asia-southeast1)
 echo "------------------------------------------------------------------------------"
 echo "  Deploying to Failover Region: ${FAILOVER_REGION}..."
 echo "------------------------------------------------------------------------------"
-gcloud run deploy ${SERVICE_NAME} \
+gcloud run deploy "${SERVICE_NAME}" \
   --image "${IMAGE_TAG}" \
   --region "${FAILOVER_REGION}" \
   --project "${PROJECT_ID}" \
   --platform managed \
   --allow-unauthenticated \
-  --set-secrets="${SECRET_VARS}" \
-  --update-env-vars="NODE_ENV=production,PORT=8080" \
+  --port 8080 \
   --memory 1Gi \
   --cpu 1 \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 10 \
-  --timeout 300 \
-  --concurrency 80
+  --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
+  --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88"
 
 FAILOVER_URL=$(gcloud run services describe ${SERVICE_NAME} --region ${FAILOVER_REGION} --project ${PROJECT_ID} --format="value(status.url)")
 echo "✅ Failover Region deployment successful: ${FAILOVER_URL}"
