@@ -7845,8 +7845,16 @@ async function startServer() {
     if (fs.existsSync(distAdminDir)) {
       app.use('/assets', express.static(path.join(distAdminDir, 'assets'), { fallthrough: true }));
     }
+    // Ensure all /api/* routes that are not handled return JSON 404, never index.html!
+    app.all('/api/*', (_req: Request, res: Response) => {
+      return res.status(404).json({ error: 'API endpoint not found.' });
+    });
+
     app.use(express.static(distDir));
     app.get('*', (req, res) => {
+      if (req.path.startsWith('/api') || req.originalUrl.startsWith('/api')) {
+        return res.status(404).json({ error: 'API endpoint not found.' });
+      }
       const host = req.headers.host || '';
       // HTML documents must never be cached so clients immediately get new deployment chunks
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -7865,6 +7873,17 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   }
+
+  // Global Express Error Handler (ALWAYS return JSON for /api/*, never HTML!)
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    console.error('Unhandled server error:', err);
+    if (req.path.startsWith('/api') || req.originalUrl.startsWith('/api')) {
+      return res.status(err.status || 500).json({
+        error: err.message || 'Internal server error.'
+      });
+    }
+    res.status(err.status || 500).send(`Server Error: ${err.message || 'Unknown error'}`);
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`PairUpToday Monolithic Engine running at http://0.0.0.0:${PORT}`);

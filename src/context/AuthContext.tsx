@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, KYCStatus, BookingContextData } from '../types';
-import { apiFetch } from '../utils/api';
+import { apiFetch, safeJsonParse } from '../utils/api';
 
 interface AuthContextType {
   user: User | null;
@@ -91,11 +91,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone })
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { registered: false, error: data.error };
+      const parsed = await safeJsonParse(res);
+      if (!parsed.ok) {
+        return { registered: false, error: parsed.error || parsed.data?.error };
       }
-      return { registered: Boolean(data.registered) };
+      return { registered: Boolean(parsed.data?.registered) };
     } catch (err: any) {
       return { registered: false, error: err.message };
     }
@@ -175,11 +175,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, purpose })
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Failed to send OTP' };
+      const parsed = await safeJsonParse(res);
+      if (!parsed.ok) {
+        return { success: false, error: parsed.error || parsed.data?.error || 'Failed to send OTP' };
       }
-      return { success: true, message: data.message, devCode: data.devCode };
+      return { success: true, message: parsed.data?.message, devCode: parsed.data?.devCode };
     } catch (err: any) {
       return { success: false, error: err.message || 'Network error requesting OTP' };
     }
@@ -192,10 +192,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, otp, password, role: selectedRole })
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Registration failed' };
+      const parsed = await safeJsonParse(res);
+      if (!parsed.ok) {
+        return { success: false, error: parsed.error || parsed.data?.error || 'Registration failed' };
       }
+      const data = parsed.data;
       setUser(data.user);
       setToken(data.token);
       localStorage.setItem('pairup_user', JSON.stringify(data.user));
@@ -215,58 +216,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithPassword = async (phone: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION', keepModalOpen?: boolean) => {
-    try {
-      const res = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, password })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        return {
-          success: false,
-          error: data.error,
-          isNotRegistered: data.isNotRegistered
-        };
-      }
-
-      setUser(data.user);
-      setToken(data.token);
-      localStorage.setItem('pairup_user', JSON.stringify(data.user));
-      localStorage.setItem('pairup_token', data.token);
-
-      // Determine active role based on explicit user choice, or user.activeRole
-      // When keepModalOpen is true, the user is directly selecting role on the next step; default to CLIENT temporarily
-      const effectiveRole = selectedRole || (keepModalOpen ? 'CLIENT' : (data.user?.activeRole || (data.user?.role === 'COMPANION' ? 'COMPANION' : 'CLIENT')));
-      setActiveRole(effectiveRole);
-      localStorage.setItem('pairup_active_role', effectiveRole);
-
-      // Seamlessly sync chosen role with backend
-      if (selectedRole) {
-        apiFetch('/api/auth/select-role', {
+    let lastError = '';
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const res = await apiFetch('/api/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.token}` },
-          body: JSON.stringify({ userId: data.user.id, role: selectedRole })
-        }).catch(err => console.warn('Role sync warning:', err));
-      }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, password })
+        });
+        const parsed = await safeJsonParse(res);
+        if (!parsed.ok) {
+          if (attempt === 1 && (parsed.status === 502 || parsed.status === 503 || parsed.status === 504)) {
+            await new Promise(r => setTimeout(r, 800));
+            continue;
+          }
+          return {
+            success: false,
+            error: parsed.error || parsed.data?.error || 'Invalid credentials. Please verify your phone and password.',
+            isNotRegistered: parsed.data?.isNotRegistered
+          };
+        }
 
-      if (!keepModalOpen) {
-        setShowAuthModal(false);
-      }
+        const data = parsed.data;
+        setUser(data.user);
+        setToken(data.token);
+        localStorage.setItem('pairup_user', JSON.stringify(data.user));
+        localStorage.setItem('pairup_token', data.token);
 
-      // Check if user still needs KYC
-      if (data.user.kycStatus === 'NOT_SUBMITTED') {
-        setShowKycWizard(true);
-      } else if (!selectedRole && data.user.role === 'DUAL' && !keepModalOpen) {
-        setShowRoleSelection(true);
-      } else {
-        setShowRoleSelection(false);
-      }
+        // Determine active role based on explicit user choice, or user.activeRole
+        // When keepModalOpen is true, the user is directly selecting role on the next step; default to CLIENT temporarily
+        const effectiveRole = selectedRole || (keepModalOpen ? 'CLIENT' : (data.user?.activeRole || (data.user?.role === 'COMPANION' ? 'COMPANION' : 'CLIENT')));
+        setActiveRole(effectiveRole);
+        localStorage.setItem('pairup_active_role', effectiveRole);
 
-      return { success: true, user: data.user };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Login failed' };
+        // Seamlessly sync chosen role with backend
+        if (selectedRole) {
+          apiFetch('/api/auth/select-role', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.token}` },
+            body: JSON.stringify({ userId: data.user.id, role: selectedRole })
+          }).catch(err => console.warn('Role sync warning:', err));
+        }
+
+        if (!keepModalOpen) {
+          setShowAuthModal(false);
+        }
+
+        // Check if user still needs KYC
+        if (data.user?.kycStatus === 'NOT_SUBMITTED') {
+          setShowKycWizard(true);
+        } else if (!selectedRole && data.user?.role === 'DUAL' && !keepModalOpen) {
+          setShowRoleSelection(true);
+        } else {
+          setShowRoleSelection(false);
+        }
+
+        return { success: true, user: data.user };
+      } catch (err: any) {
+        lastError = err?.message || 'Login failed';
+        if (attempt === 1) {
+          await new Promise(r => setTimeout(r, 800));
+          continue;
+        }
+      }
     }
+    return { success: false, error: lastError || 'Server connection issue. Please retry in a moment.' };
   };
 
   const selectActiveRole = async (role: 'CLIENT' | 'COMPANION') => {
@@ -413,11 +427,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, otp, newPassword })
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Failed to reset password' };
+      const parsed = await safeJsonParse(res);
+      if (!parsed.ok) {
+        return { success: false, error: parsed.error || parsed.data?.error || 'Failed to reset password' };
       }
-      return { success: true, message: data.message };
+      return { success: true, message: parsed.data?.message };
     } catch (err: any) {
       return { success: false, error: err.message || 'Network error resetting password' };
     }
@@ -433,12 +447,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify({ otp, newPassword })
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Failed to change password' };
+      const parsed = await safeJsonParse(res);
+      if (!parsed.ok) {
+        return { success: false, error: parsed.error || parsed.data?.error || 'Failed to change password' };
       }
       logout();
-      return { success: true, message: data.message };
+      return { success: true, message: parsed.data?.message };
     } catch (err: any) {
       return { success: false, error: err.message || 'Network error changing password' };
     }

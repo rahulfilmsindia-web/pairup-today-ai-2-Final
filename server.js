@@ -10408,8 +10408,14 @@ async function startServer() {
     if (fs2.existsSync(distAdminDir)) {
       app.use("/assets", express.static(path2.join(distAdminDir, "assets"), { fallthrough: true }));
     }
+    app.all("/api/*", (_req, res) => {
+      return res.status(404).json({ error: "API endpoint not found." });
+    });
     app.use(express.static(distDir));
     app.get("*", (req, res) => {
+      if (req.path.startsWith("/api") || req.originalUrl.startsWith("/api")) {
+        return res.status(404).json({ error: "API endpoint not found." });
+      }
       const host = req.headers.host || "";
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
@@ -10427,6 +10433,15 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   }
+  app.use((err, req, res, _next) => {
+    console.error("Unhandled server error:", err);
+    if (req.path.startsWith("/api") || req.originalUrl.startsWith("/api")) {
+      return res.status(err.status || 500).json({
+        error: err.message || "Internal server error."
+      });
+    }
+    res.status(err.status || 500).send(`Server Error: ${err.message || "Unknown error"}`);
+  });
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`PairUpToday Monolithic Engine running at http://0.0.0.0:${PORT}`);
     console.log(`  - Website: https://pairuptoday.com (or http://localhost:${PORT})`);
