@@ -99,6 +99,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const [bookingStep, setBookingStep] = useState<BookingStep>('form');
   const [activeBookingResponse, setActiveBookingResponse] = useState<any | null>(null);
   const pollIntervalRef = useRef<any>(null);
+  const isSubmittingBookingRef = useRef<boolean>(false);
 
   const cleanupPolling = () => {
     if (pollIntervalRef.current) {
@@ -236,6 +237,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       }).catch(() => {});
     }
     cleanupPolling();
+    isSubmittingBookingRef.current = false;
+    setBookingInProgress(false);
     setSelectedCompanion(null);
     setBookingStep('form');
     setActiveBookingResponse(null);
@@ -720,6 +723,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCompanion || !user) return;
+    if (isSubmittingBookingRef.current || bookingInProgress) return;
 
     // Strict Initial Listing Non-Bookable Guard
     if (selectedCompanion.isInitialListing) {
@@ -737,6 +741,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       return;
     }
 
+    isSubmittingBookingRef.current = true;
     setBookingError(null);
     setBookingInProgress(true);
 
@@ -764,6 +769,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       const data = await res.json();
       if (!res.ok) {
         setBookingError(data.error || 'Failed to submit booking request.');
+        isSubmittingBookingRef.current = false;
         setBookingInProgress(false);
         return;
       }
@@ -805,6 +811,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       }, 2000);
     } catch (err: any) {
       setBookingError(err.message || 'Network error during booking confirmation.');
+      isSubmittingBookingRef.current = false;
       setBookingInProgress(false);
     }
   };
@@ -1949,7 +1956,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
                               {/* Floating Top-Right Status Badge (Online / Offline) */}
                               <div className="absolute top-2 right-2">
-                                {comp.isOnline ? (
+                                {Boolean(comp.isOnline || (comp.isLive && !comp.isPaused)) ? (
                                   <span className="px-2.5 py-0.5 rounded-full bg-white/95 backdrop-blur text-emerald-700 text-[10px] font-bold flex items-center gap-1 shadow-sm">
                                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                                     <span>Online</span>
@@ -1968,7 +1975,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                               <h3 className="font-extrabold text-sm sm:text-base text-[#19125E] truncate">
                                 {comp.name}
                               </h3>
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${comp.isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${Boolean(comp.isOnline || (comp.isLive && !comp.isPaused)) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                             </div>
 
                             {/* Age & City */}

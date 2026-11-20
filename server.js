@@ -7327,6 +7327,30 @@ app.post("/api/bookings/create", async (req, res) => {
         });
       }
     }
+    const existingClientBookings = await databaseAdapter.listBookings({ clientId: authUser.id, companionId }).catch(() => []);
+    const nowMs = Date.now();
+    const duplicatePending = (existingClientBookings || []).find(
+      (b) => b.companionId === companionId && b.date === date && b.startTime === startTime && b.status === "PENDING" && !b.companionAccepted && nowMs - new Date(b.createdAt || b.created_at || nowMs).getTime() < 6e4
+    );
+    if (duplicatePending) {
+      const tracked = bookingAcceptanceMap.get(duplicatePending.id);
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        booking: {
+          ...duplicatePending,
+          paymentOrderId: duplicatePending.paymentOrderId,
+          status: "PENDING",
+          paymentStatus: "PENDING",
+          companionAccepted: false,
+          baseAmountPaise: tracked?.baseAmountPaise || calculatedBasePaise,
+          cgstPaise: tracked?.cgstPaise || Math.round(calculatedBasePaise * 0.09),
+          sgstPaise: tracked?.sgstPaise || Math.round(calculatedBasePaise * 0.09),
+          gstAmountPaise: tracked?.gstAmountPaise || Math.round(calculatedBasePaise * 0.18),
+          totalPayablePaise: tracked?.totalPayablePaise || Math.round(calculatedBasePaise * 1.18)
+        }
+      });
+    }
     const bookingCode = `PUT-${crypto4.randomBytes(5).toString("hex").toUpperCase()}`;
     const booking = await databaseAdapter.reserveBookingPayment({
       id: crypto4.randomUUID(),

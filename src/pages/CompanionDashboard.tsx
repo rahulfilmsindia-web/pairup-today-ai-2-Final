@@ -1022,7 +1022,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         // Detect newly confirmed/paid booking to surface active alert if companion hasn't acknowledged it yet
         const unhandledConfirmed = list.find((b: any) =>
           b.companionId === user.id &&
-          (b.status === 'CONFIRMED' || b.paymentStatus === 'PAID') &&
+          (b.status === 'CONFIRMED' || b.status === 'CONFIRMED_PAID' || b.paymentStatus === 'PAID') &&
           b.status !== 'COMPLETED' &&
           b.status !== 'CANCELLED' &&
           b.status !== 'REJECTED' &&
@@ -1031,7 +1031,10 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         );
         if (unhandledConfirmed) {
           setConfirmedBookingAlert((prev: any) => {
-            if (!prev) return unhandledConfirmed;
+            if (!prev || prev.id !== unhandledConfirmed.id) {
+              setActiveTab('upcoming');
+              return unhandledConfirmed;
+            }
             return prev;
           });
         }
@@ -1189,6 +1192,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
             setIncomingBookingRequest(null);
             if (data.booking) {
               setConfirmedBookingAlert(data.booking);
+              setActiveTab('upcoming');
             }
             triggerSystemNotification('🎉 Payment Confirmed! New Session Ready', {
               body: `${data.booking?.clientName || 'Client'} has paid for ${data.booking?.serviceName || 'Session'}. Tap to chat and view meeting venue!`,
@@ -1227,11 +1231,9 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     }
 
     const interval = setInterval(() => {
-      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-        fetchBookings();
-        fetchNotifications();
-      }
-    }, 3000);
+      fetchBookings();
+      fetchNotifications();
+    }, 2500);
 
     // Also listen for Service Worker postMessage actions (e.g. from notification clicks)
     const handleSwMessage = (e: MessageEvent) => {
@@ -1250,10 +1252,8 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
 
     // Re-check bookings immediately whenever user returns to the tab or screen wakes up
     const handleVisibilityOrFocus = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        fetchBookings();
-        fetchNotifications();
-      }
+      fetchBookings();
+      fetchNotifications();
     };
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
@@ -1264,6 +1264,18 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     };
     window.addEventListener('pairup:incoming-booking', handleGlobalBooking);
 
+    // Sync with global confirmed booking event (automatically transitions to active session tab)
+    const handleGlobalBookingConfirmed = (e: any) => {
+      if (e.detail) {
+        stopRingtone();
+        setIncomingBookingRequest(null);
+        setConfirmedBookingAlert(e.detail);
+        setActiveTab('upcoming');
+        fetchBookings();
+      }
+    };
+    window.addEventListener('pairup:booking-confirmed', handleGlobalBookingConfirmed);
+
     return () => {
       clearInterval(interval);
       if (eventSource) {
@@ -1272,6 +1284,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('pairup:incoming-booking', handleGlobalBooking);
+      window.removeEventListener('pairup:booking-confirmed', handleGlobalBookingConfirmed);
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleSwMessage);
       }
@@ -1840,7 +1853,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
   const completedBookings = safeBookings.filter(b => b && b.status === 'COMPLETED');
   const pendingRequests = safeBookings.filter(b => b && b.status === 'PENDING' && !b.companionAccepted && b.cancellationReason !== 'COMPANION_BUSY');
   const pendingBookings = pendingRequests;
-  const upcomingBookings = safeBookings.filter(b => b && (b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS' || (b.paymentStatus === 'PAID' && b.status !== 'COMPLETED' && b.status !== 'CANCELLED' && b.status !== 'REJECTED')));
+  const upcomingBookings = safeBookings.filter(b => b && (b.status === 'CONFIRMED' || b.status === 'CONFIRMED_PAID' || b.status === 'ONGOING' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS' || (b.paymentStatus === 'PAID' && b.status !== 'COMPLETED' && b.status !== 'CANCELLED' && b.status !== 'REJECTED')));
   const pastBookings = safeBookings.filter(b => b && (b.status === 'COMPLETED' || b.status === 'CANCELLED' || b.status === 'REJECTED'));
 
   if (loading && !statusData) {

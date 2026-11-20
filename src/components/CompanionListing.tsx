@@ -155,7 +155,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
       setCompanions(freshList);
 
       // If client has opened a booking context for a companion who just went offline, close modal and notify
-      if (bookingContext && !freshList.some(c => c.id === bookingContext.companionId)) {
+      if (bookingContext && freshList.length > 0 && !freshList.some(c => c.id === bookingContext.companionId)) {
         setBookingAlert({
           id: bookingContext.companionId,
           message: `${bookingContext.companionName} has just gone offline and is no longer accepting new bookings.`

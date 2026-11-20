@@ -360,6 +360,17 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('pairup:incoming-booking', { detail: null }));
             }
+          } else if (data.type === 'BOOKING_CONFIRMED' || data.type === 'BOOKING_PAID') {
+            stopRingtone();
+            setIncomingBooking(null);
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('pairup:incoming-booking', { detail: null }));
+              window.dispatchEvent(new CustomEvent('pairup:booking-confirmed', { detail: data.booking }));
+            }
+            triggerCallNotification('🎉 Booking Payment Confirmed!', {
+              body: `${data.booking?.clientName || 'Client'} has paid for ${data.booking?.serviceName || 'Session'}. Tap to chat & view venue!`,
+              data: { bookingId: data.booking?.id, url: '/companion-dashboard' }
+            });
           }
         } catch (e) {
           console.warn('Global SSE parse error', e);
@@ -407,26 +418,36 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
             return null;
           });
         }
+
+        // Cross-region sync for confirmed/paid bookings (ensures companion auto-transitions to active session)
+        const newlyConfirmed = list.find((b: any) =>
+          b.companionId === user.id &&
+          (b.status === 'CONFIRMED' || b.status === 'CONFIRMED_PAID' || b.paymentStatus === 'PAID') &&
+          b.status !== 'COMPLETED' &&
+          b.status !== 'CANCELLED' &&
+          b.status !== 'REJECTED' &&
+          !b.companionArrivedAt &&
+          !b.startOtpVerified
+        );
+        if (newlyConfirmed && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('pairup:booking-confirmed', { detail: newlyConfirmed }));
+        }
       } catch {}
     };
 
     checkPendingBookings();
 
     const handleVisibilityChange = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        checkPendingBookings();
-      }
+      checkPendingBookings();
     };
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
-    // Smart background poll: 10s interval, pauses when tab is hidden to save database bandwidth
+    // High-frequency 2.5s fallback poll running continuously even when minimized so companion never misses alerts!
     pollTimer = setInterval(() => {
-      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-        checkPendingBookings();
-      }
-    }, 10000);
+      checkPendingBookings();
+    }, 2500);
 
     return () => {
       if (eventSource) eventSource.close();

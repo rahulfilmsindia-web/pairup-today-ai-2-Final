@@ -4281,6 +4281,39 @@ app.post('/api/bookings/create', async (req: Request, res: Response) => {
       }
     }
 
+    // Idempotency & Duplicate Request Protection:
+    // If client already submitted a pending request to this companion for this date/time within the last 60s, return existing booking without spawning duplicates!
+    const existingClientBookings = await databaseAdapter.listBookings({ clientId: authUser.id, companionId }).catch(() => []);
+    const nowMs = Date.now();
+    const duplicatePending = (existingClientBookings || []).find((b: any) =>
+      b.companionId === companionId &&
+      b.date === date &&
+      b.startTime === startTime &&
+      b.status === 'PENDING' &&
+      !b.companionAccepted &&
+      (nowMs - new Date(b.createdAt || b.created_at || nowMs).getTime() < 60000)
+    );
+
+    if (duplicatePending) {
+      const tracked = bookingAcceptanceMap.get(duplicatePending.id);
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        booking: {
+          ...duplicatePending,
+          paymentOrderId: duplicatePending.paymentOrderId,
+          status: 'PENDING',
+          paymentStatus: 'PENDING',
+          companionAccepted: false,
+          baseAmountPaise: tracked?.baseAmountPaise || calculatedBasePaise,
+          cgstPaise: tracked?.cgstPaise || Math.round(calculatedBasePaise * 0.09),
+          sgstPaise: tracked?.sgstPaise || Math.round(calculatedBasePaise * 0.09),
+          gstAmountPaise: tracked?.gstAmountPaise || Math.round(calculatedBasePaise * 0.18),
+          totalPayablePaise: tracked?.totalPayablePaise || Math.round(calculatedBasePaise * 1.18)
+        }
+      });
+    }
+
     const bookingCode = `PUT-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
     const booking = await databaseAdapter.reserveBookingPayment({
       id: crypto.randomUUID(),
