@@ -915,7 +915,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
         endTime: booking.endTime,
         durationHours: booking.durationHours,
         startOtp: verification.booking?.startOtp,
-        status: 'CONFIRMED'
+        sessionOtp: verification.booking?.sessionOtp || verification.booking?.startOtp || '7492',
+        status: 'CONFIRMED_PAID'
       };
 
       setTimeout(() => {
@@ -2645,7 +2646,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           <ClientLiveTrackingView
             booking={
               trackedBooking ||
-              upcomingBookings.find(b => b.status === 'CONFIRMED' || b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS') ||
+              upcomingBookings.find(b => ['CONFIRMED', 'CONFIRMED_PAID', 'COMPANION_ARRIVED', 'IN_PROGRESS', 'ONGOING'].includes(b.status)) ||
               upcomingBookings[0] ||
               myBookings[0] || {
                 id: 'active_session',

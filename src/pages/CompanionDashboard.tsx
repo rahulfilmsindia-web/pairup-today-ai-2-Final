@@ -1278,13 +1278,27 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     };
   }, [user?.id]);
 
-  // Live GPS broadcaster for active bookings (enables real street-level client live tracking)
+  // Live GPS broadcaster for active bookings (enables privacy-protected client ETA updates)
   useEffect(() => {
-    const activeBooking = bookings.find(b => ['CONFIRMED', 'COMPANION_ARRIVED', 'IN_PROGRESS'].includes(b.status));
+    // Only broadcast while booking is confirmed transit; stop immediately when ongoing/completed
+    const activeBooking = bookings.find(b => ['CONFIRMED', 'CONFIRMED_PAID', 'COMPANION_ARRIVED'].includes(b.status));
     if (!activeBooking || !user || typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     let watchId: number | null = null;
     const sendCoords = (lat: number, lng: number, acc: number = 8) => {
+      // 1. Send to companion/live-coords for privacy-preserving reverse geocoded ETA calculation
+      apiFetch('/api/companion/live-coords', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat,
+          lng,
+          accuracy: acc,
+          bookingId: activeBooking.id
+        })
+      }).catch(() => {});
+
+      // 2. Also keep location service updated
       apiFetch('/api/location/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1356,6 +1370,16 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     }
 
     const messageText = newChatText.trim();
+
+    // Enforce Chat Safety Filter (block phone numbers, emails, URLs)
+    const phoneRegex = /(?:\+?91[\-\s]?)?[6-9]\d{9}|\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b|\b\d{5}[\-\s]?\d{5}\b/;
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+    const urlRegex = /(?:https?:\/\/|www\.)\S+/i;
+    if (phoneRegex.test(messageText) || emailRegex.test(messageText) || urlRegex.test(messageText)) {
+      alert('⚠️ For platform safety, contact phone numbers, emails, and external links are prohibited in chat.');
+      return;
+    }
+
     const tempId = `temp_${Date.now()}`;
     const optimisticMsg = {
       id: tempId,
@@ -1372,19 +1396,23 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     setNewChatText('');
 
     try {
-      const res = await apiFetch(`/api/chat/${activeChatBooking.id}`, {
+      const res = await apiFetch(`/api/bookings/${activeChatBooking.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          senderId: user.id,
-          message: messageText
-        })
+        body: JSON.stringify({ message: messageText })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.message) {
           setChatMessages(prev => prev.map(m => m.id === tempId ? data.message : m));
         }
+      } else {
+        // Fallback to legacy chat endpoint
+        await apiFetch(`/api/chat/${activeChatBooking.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ senderId: user.id, message: messageText })
+        });
       }
     } catch (err) {
       console.error('Failed to post message', err);
@@ -1716,26 +1744,37 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     }
   };
 
-  // VERIFY START OTP (Companion enters OTP told by Client)
+  // VERIFY SESSION OTP / START OTP (Companion enters OTP told by Client)
   const handleVerifyStartOtp = async (bookingId: string) => {
-    const otp = startOtpInputs[bookingId];
+    const otp = (startOtpInputs[bookingId] || '').trim();
     const delay = delayMinutesInputs[bookingId] || 0;
-    if (!otp || otp.length !== 6) {
-      alert('Please enter the exact 6-digit Start OTP from the Client.');
+    if (!otp || (otp.length !== 4 && otp.length !== 6)) {
+      alert('Please enter the 4-digit Session OTP (or 6-digit OTP) from the Client.');
       return;
     }
 
     try {
-      const res = await apiFetch(`/api/bookings/${bookingId}/verify-start-otp`, {
+      // 1. First attempt verify-session-otp (for 4-digit session OTP)
+      let res = await apiFetch(`/api/bookings/${bookingId}/verify-session-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otp, delayMinutes: delay })
+        body: JSON.stringify({ enteredOtp: otp })
       });
+
+      // 2. Fallback to verify-start-otp if 6-digit
+      if (!res.ok && otp.length === 6) {
+        res = await apiFetch(`/api/bookings/${bookingId}/verify-start-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ otp, delayMinutes: delay })
+        });
+      }
+
       const data = await res.json();
       if (res.ok) {
         fetchBookings();
-        setActionMsg('Meeting Start verified! Official session countdown active.');
-        setTimeout(() => setActionMsg(null), 3000);
+        setActionMsg('Meeting Start verified! Live location tracking stopped. Official session countdown active.');
+        setTimeout(() => setActionMsg(null), 4000);
       } else {
         alert(data.error || 'Failed to verify Start OTP.');
       }
@@ -4222,16 +4261,16 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                     <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/30 space-y-3">
                       <div className="flex items-center gap-2">
                         <KeyRound className="w-4 h-4 text-amber-400" />
-                        <span className="font-bold text-amber-300 text-sm">Step 1: Enter Start OTP</span>
+                        <span className="font-bold text-amber-300 text-sm">Step 1: Enter 4-Digit Session OTP</span>
                       </div>
                       <p className="text-slate-400 text-[11px]">
-                        The client receives this 6-digit Start OTP on their registered phone number upon arrival. Enter the code below to start the official session timer.
+                        The client displays this 4-digit security OTP on their live dashboard. Enter the code below to verify arrival, stop live tracking, and start the official session timer.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <input
                           type="text"
                           maxLength={6}
-                          placeholder="6-digit Start OTP"
+                          placeholder="4-digit Session OTP"
                           value={startOtpInputs[b.id] || ''}
                           onChange={e => setStartOtpInputs({ ...startOtpInputs, [b.id]: e.target.value.replace(/\D/g, '').slice(0, 6) })}
                           className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono font-bold text-amber-400 text-sm"

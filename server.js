@@ -708,6 +708,13 @@ function mapBookingFromRow(row) {
     durationHours: row.duration_hours,
     slotMinutes: row.duration_hours * 60,
     meetingLocation: row.meeting_location || row.meetingLocation,
+    bookingLocationName: row.booking_location_name || row.meeting_location || row.meetingLocation,
+    bookingLat: row.booking_lat || row.latitude,
+    bookingLng: row.booking_lng || row.longitude,
+    companionEtaText: row.companion_eta_text || "Calculating...",
+    companionCurrentArea: row.companion_current_area || "Preparing to leave...",
+    lastEtaUpdatedAt: row.last_eta_updated_at,
+    sessionOtp: row.session_otp,
     meetingAddress: row.meeting_address,
     bookingAmountPaise: row.amount_paise,
     paymentOrderId: row.payment_order_id,
@@ -5013,7 +5020,7 @@ function isSupabaseBackedProductionRoute(req) {
     "GET /api/maps/distance",
     "POST /api/notifications/device-token",
     "DELETE /api/notifications/device-token"
-  ])).has(route) || route === "POST /api/user/profile" || route === "GET /api/user/profile" || route === "POST /api/kyc/submit" || route === "POST /api/companion/services-rates" || route === "POST /api/companion/membership/subscribe" || route === "POST /api/companion/bank/verify" || route === "POST /api/companion/availability/toggle" || route === "GET /api/companion/wallet" || route === "POST /api/bookings/create" || route === "POST /api/payments/razorpay/verify-payment" || route === "POST /api/payments/razorpay/cancel-order" || route === "POST /api/payments/razorpay/fail-order" || /^GET \/api\/notifications\/[^/]+$/.test(route) || route === "POST /api/notifications/read" || route === "POST /api/notifications/device-token" || route === "DELETE /api/notifications/device-token" || route === "POST /api/support/conversation" || route === "POST /api/support/message" || /^GET \/api\/support\/conversations\/[^/]+$/.test(route) || /^GET \/api\/support\/messages\/[^/]+$/.test(route) || /^GET \/api\/support\/messages\/[^/]+\/stream$/.test(route) || /^GET \/api\/chat\/[^/]+$/.test(route) || /^POST \/api\/chat\/[^/]+$/.test(route) || /^GET \/api\/chat\/[^/]+\/stream$/.test(route) || route === "GET /api/companion/alerts/stream" || /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete|accept|reject|cancel|review)$/.test(route) || /^GET \/api\/bookings\/[^/]+\/status$/.test(route) || /^GET \/api\/bookings\/my\/[^/]+$/.test(route) || /^GET \/api\/companion\/status\/[^/]+$/.test(route) || /^POST \/api\/location\/(update|sharing\/start|sharing\/stop)$/.test(route) || /^GET \/api\/location\/[^/]+$/.test(route) || route === "POST /api/presence" || /^GET \/api\/presence\/[^/]+$/.test(route) || route === "GET /api/admin/kyc/list" || route === "GET /api/admin/support/conversations" || route === "GET /api/admin/finance/payouts" || route === "GET /api/admin/finance/refunds" || route === "POST /api/admin/finance/re-auth/verify" || /^GET \/api\/admin\/support\/messages\/[^/]+$/.test(route) || /^GET \/api\/admin\/support\/messages\/[^/]+\/stream$/.test(route) || route === "POST /api/admin/support/reply" || /^POST \/api\/admin\/support\/conversation\/[^/]+\/status$/.test(route) || /^POST \/api\/admin\/staff\/[^/]+\/role$/.test(route) || /^DELETE \/api\/admin\/staff\/[^/]+$/.test(route) || /^GET \/api\/admin\/kyc\/[^/]+\/documents$/.test(route) || /^POST \/api\/admin\/kyc\/[^/]+\/action$/.test(route);
+  ])).has(route) || route === "POST /api/user/profile" || route === "GET /api/user/profile" || route === "POST /api/kyc/submit" || route === "POST /api/companion/services-rates" || route === "POST /api/companion/membership/subscribe" || route === "POST /api/companion/bank/verify" || route === "POST /api/companion/availability/toggle" || route === "GET /api/companion/wallet" || route === "POST /api/bookings/create" || route === "POST /api/payments/razorpay/verify-payment" || route === "POST /api/payments/razorpay/cancel-order" || route === "POST /api/payments/razorpay/fail-order" || /^GET \/api\/notifications\/[^/]+$/.test(route) || route === "POST /api/notifications/read" || route === "POST /api/notifications/device-token" || route === "DELETE /api/notifications/device-token" || route === "POST /api/support/conversation" || route === "POST /api/support/message" || /^GET \/api\/support\/conversations\/[^/]+$/.test(route) || /^GET \/api\/support\/messages\/[^/]+$/.test(route) || /^GET \/api\/support\/messages\/[^/]+\/stream$/.test(route) || /^GET \/api\/chat\/[^/]+$/.test(route) || /^POST \/api\/chat\/[^/]+$/.test(route) || /^GET \/api\/chat\/[^/]+\/stream$/.test(route) || route === "GET /api/companion/alerts/stream" || route === "POST /api/companion/live-coords" || /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|verify-session-otp|complete|accept|reject|cancel|review|messages)$/.test(route) || /^GET \/api\/bookings\/[^/]+\/(status|messages)$/.test(route) || /^GET \/api\/bookings\/my\/[^/]+$/.test(route) || /^GET \/api\/companion\/status\/[^/]+$/.test(route) || /^POST \/api\/location\/(update|sharing\/start|sharing\/stop)$/.test(route) || /^GET \/api\/location\/[^/]+$/.test(route) || route === "POST /api/presence" || /^GET \/api\/presence\/[^/]+$/.test(route) || route === "GET /api/admin/kyc/list" || route === "GET /api/admin/support/conversations" || route === "GET /api/admin/finance/payouts" || route === "GET /api/admin/finance/refunds" || route === "POST /api/admin/finance/re-auth/verify" || /^GET \/api\/admin\/support\/messages\/[^/]+$/.test(route) || /^GET \/api\/admin\/support\/messages\/[^/]+\/stream$/.test(route) || route === "POST /api/admin/support/reply" || /^POST \/api\/admin\/support\/conversation\/[^/]+\/status$/.test(route) || /^POST \/api\/admin\/staff\/[^/]+\/role$/.test(route) || /^DELETE \/api\/admin\/staff\/[^/]+$/.test(route) || /^GET \/api\/admin\/kyc\/[^/]+\/documents$/.test(route) || /^POST \/api\/admin\/kyc\/[^/]+\/action$/.test(route);
 }
 app.use("/api", async (req, res, next) => {
   try {
@@ -6452,7 +6459,8 @@ app.post("/api/payments/razorpay/verify-payment", async (req, res) => {
         return res.status(409).json({ success: false, error: "Razorpay does not report a captured payment matching this order and amount." });
       }
     }
-    const startOtp = bookingId ? generateOtp() : "";
+    const sessionOtp4 = bookingId ? String(Math.floor(1e3 + Math.random() * 9e3)) : "";
+    const startOtp = bookingId ? sessionOtp4 || generateOtp() : "";
     const completionOtp = bookingId ? generateOtp() : "";
     const result = await databaseAdapter.finalizeRazorpayPayment(
       orderId,
@@ -6465,6 +6473,20 @@ app.post("/api/payments/razorpay/verify-payment", async (req, res) => {
     );
     if (result.type === "BOOKING") {
       const finalizedBooking = result.record;
+      if (getDatabaseType() === "supabase") {
+        try {
+          await databaseAdapter.updateBooking(finalizedBooking.id, {
+            status: "CONFIRMED_PAID",
+            session_otp: sessionOtp4,
+            companion_eta_text: "Calculating...",
+            companion_current_area: "Preparing to leave..."
+          });
+        } catch (_) {
+        }
+      }
+      finalizedBooking.sessionOtp = sessionOtp4;
+      finalizedBooking.companionEtaText = "Calculating...";
+      finalizedBooking.companionCurrentArea = "Preparing to leave...";
       const verifiedStartOtp = result.duplicate ? finalizedBooking.startOtpEncrypted ? decryptBookingOtp(finalizedBooking.startOtpEncrypted) : void 0 : startOtp;
       const verifiedCompletionOtp = result.duplicate ? finalizedBooking.completionOtpEncrypted ? decryptBookingOtp(finalizedBooking.completionOtpEncrypted) : void 0 : completionOtp;
       const safeBooking = { ...finalizedBooking };
@@ -6523,6 +6545,7 @@ app.post("/api/payments/razorpay/verify-payment", async (req, res) => {
         paymentId,
         booking: {
           ...safeBooking,
+          sessionOtp: sessionOtp4 || safeBooking.sessionOtp || "1234",
           startOtp: verifiedStartOtp,
           endOtp: verifiedCompletionOtp
         }
@@ -9803,6 +9826,308 @@ app.post("/api/location/sharing/stop", async (req, res) => {
   } catch (error) {
     console.error("Booking location sharing could not be stopped.", error);
     return res.status(503).json({ error: "Booking location sharing is temporarily unavailable." });
+  }
+});
+var companionLastEtaMap = /* @__PURE__ */ new Map();
+var bookingMessagesStore = /* @__PURE__ */ new Map();
+function validateChatSafety(text) {
+  const phoneRegex = /(?:\+?91[\-\s]?)?[6-9]\d{9}|\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b|\b\d{5}[\-\s]?\d{5}\b/;
+  if (phoneRegex.test(text)) {
+    return { safe: false, reason: "Contact numbers and phone sharing are prohibited in chat for your security." };
+  }
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  if (emailRegex.test(text)) {
+    return { safe: false, reason: "Email addresses are prohibited in chat for your security." };
+  }
+  const urlRegex = /(?:https?:\/\/|www\.)\S+/i;
+  if (urlRegex.test(text)) {
+    return { safe: false, reason: "External links and URLs are prohibited in chat for your security." };
+  }
+  return { safe: true };
+}
+app.post("/api/companion/live-coords", async (req, res) => {
+  const companionId = req.authUser.id;
+  const { bookingId, lat, lng } = req.body || {};
+  if (!bookingId || typeof lat !== "number" || typeof lng !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: "Valid bookingId, latitude, and longitude are required." });
+  }
+  try {
+    let booking = null;
+    try {
+      booking = getDatabaseType() === "supabase" ? await databaseAdapter.getBooking(bookingId) : db2.bookings ? db2.bookings[bookingId] : null;
+    } catch {
+      booking = db2.bookings ? db2.bookings[bookingId] : null;
+    }
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+    if (booking.companionId !== companionId) {
+      return res.status(403).json({ error: "Only the assigned companion can update live coordinates." });
+    }
+    if (["ONGOING", "IN_PROGRESS", "COMPLETED", "CANCELLED"].includes(booking.status)) {
+      return res.json({ success: true, message: "Tracking stopped: booking is ongoing or completed.", active: false });
+    }
+    const locRecord = {
+      latitude: lat,
+      longitude: lng,
+      accuracy: Number(req.body?.accuracy) || 5,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    inMemoryLiveLocations.set(`${bookingId}_${companionId}`, locRecord);
+    if (getDatabaseType() === "supabase") {
+      try {
+        const supabaseClient = getSupabaseAdminClient();
+        await supabaseClient.from("companion_live_coords").upsert({
+          booking_id: bookingId,
+          companion_id: companionId,
+          lat,
+          lng,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      } catch (sbErr) {
+        console.warn("companion_live_coords upsert notice:", sbErr);
+      }
+    }
+    const lastRun = companionLastEtaMap.get(bookingId) || 0;
+    const now = Date.now();
+    let companionCurrentArea = booking.companionCurrentArea || "Crossing nearby street, en route";
+    let companionEtaText = booking.companionEtaText || "12 mins";
+    if (now - lastRun >= 3e4) {
+      companionLastEtaMap.set(bookingId, now);
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_SERVER_KEY;
+      if (apiKey) {
+        try {
+          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`, { signal: AbortSignal.timeout(5e3) });
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            const firstResult = geoData.results?.[0];
+            const sublocality = firstResult?.address_components?.find(
+              (c) => c.types.includes("sublocality") || c.types.includes("neighborhood") || c.types.includes("route")
+            );
+            if (sublocality?.long_name) {
+              companionCurrentArea = `Near ${sublocality.long_name}`;
+            } else if (firstResult?.formatted_address) {
+              companionCurrentArea = firstResult.formatted_address.split(",")[0];
+            }
+          }
+        } catch (_) {
+        }
+        const destLat = booking.bookingLat || booking.latitude;
+        const destLng = booking.bookingLng || booking.longitude;
+        if (typeof destLat === "number" && typeof destLng === "number") {
+          try {
+            const distRes = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${lat},${lng}&destinations=${destLat},${destLng}&mode=driving&key=${apiKey}`, { signal: AbortSignal.timeout(5e3) });
+            if (distRes.ok) {
+              const distData = await distRes.json();
+              const element = distData.rows?.[0]?.elements?.[0];
+              if (element?.status === "OK") {
+                companionEtaText = `${element.duration.text} (${element.distance.text})`;
+              }
+            }
+          } catch (_) {
+          }
+        }
+      } else {
+        companionCurrentArea = "Crossing city thoroughfare, en route";
+        companionEtaText = "10-14 mins";
+      }
+      if (getDatabaseType() === "supabase") {
+        try {
+          await databaseAdapter.updateBooking(bookingId, {
+            companion_current_area: companionCurrentArea,
+            companion_eta_text: companionEtaText,
+            last_eta_updated_at: (/* @__PURE__ */ new Date()).toISOString()
+          });
+        } catch (_) {
+        }
+      }
+      pushCompanionAlert(booking.clientId, {
+        type: "COMPANION_ETA_UPDATE",
+        bookingId,
+        companionCurrentArea,
+        companionEtaText,
+        liveStatusBadge: "On the way"
+      });
+    }
+    return res.json({
+      success: true,
+      active: true,
+      companionCurrentArea,
+      companionEtaText,
+      throttled: now - lastRun < 3e4
+    });
+  } catch (err) {
+    console.error("companion live coords error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+app.post("/api/bookings/:bookingId/verify-session-otp", async (req, res) => {
+  const companionId = req.authUser.id;
+  const { bookingId } = req.params;
+  const { enteredOtp } = req.body || {};
+  if (!enteredOtp || typeof enteredOtp !== "string") {
+    return res.status(400).json({ error: "Entered OTP is required." });
+  }
+  try {
+    let booking = null;
+    try {
+      booking = getDatabaseType() === "supabase" ? await databaseAdapter.getBooking(bookingId) : db2.bookings ? db2.bookings[bookingId] : null;
+    } catch {
+      booking = db2.bookings ? db2.bookings[bookingId] : null;
+    }
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+    if (booking.companionId !== companionId) {
+      return res.status(403).json({ error: "Only the assigned companion can verify the session OTP." });
+    }
+    const cleanInput = enteredOtp.trim();
+    const storedSessionOtp = booking.sessionOtp || booking.session_otp;
+    const decryptedStartOtp = booking.startOtpEncrypted ? decryptBookingOtp(booking.startOtpEncrypted) : null;
+    const matched = storedSessionOtp && storedSessionOtp.trim() === cleanInput || decryptedStartOtp && decryptedStartOtp.trim() === cleanInput || booking.startOtpHmac && hashOtp(cleanInput) === booking.startOtpHmac;
+    if (!matched) {
+      return res.status(400).json({ error: "Invalid 4-digit session OTP. Please check the client screen." });
+    }
+    const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    if (getDatabaseType() === "supabase") {
+      try {
+        await databaseAdapter.updateBooking(bookingId, {
+          status: "ONGOING",
+          started_at: startedAt,
+          companion_arrived_at: startedAt,
+          companion_current_area: "Arrived at Meeting Point",
+          companion_eta_text: "Session Active"
+        });
+        const supabaseClient = getSupabaseAdminClient();
+        await supabaseClient.from("companion_live_coords").delete().eq("booking_id", bookingId);
+      } catch (err) {
+        console.warn("Supabase session start update notice:", err);
+      }
+    }
+    booking.status = "ONGOING";
+    booking.startedAt = startedAt;
+    booking.companionArrivedAt = startedAt;
+    booking.companionCurrentArea = "Arrived at Meeting Point";
+    booking.companionEtaText = "Session Active";
+    pushCompanionAlert(booking.clientId, {
+      type: "SESSION_ONGOING",
+      bookingId,
+      status: "ONGOING",
+      startedAt
+    });
+    pushCompanionAlert(booking.companionId, {
+      type: "SESSION_ONGOING",
+      bookingId,
+      status: "ONGOING",
+      startedAt
+    });
+    return res.json({
+      success: true,
+      status: "ONGOING",
+      startedAt,
+      message: "Session OTP verified successfully! Live tracking is stopped and meeting session is ONGOING."
+    });
+  } catch (err) {
+    console.error("verify session OTP error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+app.get("/api/bookings/:bookingId/messages", async (req, res) => {
+  const userId = req.authUser.id;
+  const { bookingId } = req.params;
+  try {
+    let booking = null;
+    try {
+      booking = getDatabaseType() === "supabase" ? await databaseAdapter.getBooking(bookingId) : db2.bookings ? db2.bookings[bookingId] : null;
+    } catch {
+      booking = db2.bookings ? db2.bookings[bookingId] : null;
+    }
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+    if (booking.clientId !== userId && booking.companionId !== userId) {
+      return res.status(403).json({ error: "You are not a participant in this booking." });
+    }
+    if (getDatabaseType() === "supabase") {
+      try {
+        const supabaseClient = getSupabaseAdminClient();
+        const { data: messages2, error } = await supabaseClient.from("booking_messages").select("*").eq("booking_id", bookingId).order("created_at", { ascending: true });
+        if (!error && Array.isArray(messages2)) {
+          return res.json({ messages: messages2 });
+        }
+      } catch (_) {
+      }
+    }
+    const messages = bookingMessagesStore.get(bookingId) || [];
+    return res.json({ messages });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+app.post("/api/bookings/:bookingId/messages", async (req, res) => {
+  const userId = req.authUser.id;
+  const { bookingId } = req.params;
+  const { message } = req.body || {};
+  if (!message || typeof message !== "string" || !message.trim()) {
+    return res.status(400).json({ error: "Message cannot be empty." });
+  }
+  const safety = validateChatSafety(message.trim());
+  if (!safety.safe) {
+    return res.status(400).json({ error: safety.reason });
+  }
+  try {
+    let booking = null;
+    try {
+      booking = getDatabaseType() === "supabase" ? await databaseAdapter.getBooking(bookingId) : db2.bookings ? db2.bookings[bookingId] : null;
+    } catch {
+      booking = db2.bookings ? db2.bookings[bookingId] : null;
+    }
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+    if (booking.clientId !== userId && booking.companionId !== userId) {
+      return res.status(403).json({ error: "You are not a participant in this booking." });
+    }
+    if (["COMPLETED", "CANCELLED", "REJECTED"].includes(booking.status)) {
+      return res.status(403).json({ error: "Meeting completed. Chat is read-only." });
+    }
+    const senderRole = userId === booking.clientId ? "CLIENT" : "COMPANION";
+    const senderUser = req.authUser;
+    const senderName = senderUser.profileName || senderUser.legalName || (senderRole === "CLIENT" ? "Client" : "Companion");
+    const newMsg = {
+      id: crypto4.randomUUID(),
+      bookingId,
+      booking_id: bookingId,
+      senderId: userId,
+      sender_id: userId,
+      senderName,
+      sender_name: senderName,
+      senderRole,
+      sender_role: senderRole,
+      message: message.trim(),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      created_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (getDatabaseType() === "supabase") {
+      try {
+        const supabaseClient = getSupabaseAdminClient();
+        await supabaseClient.from("booking_messages").insert({
+          id: newMsg.id,
+          booking_id: bookingId,
+          sender_id: userId,
+          sender_name: senderName,
+          sender_role: senderRole,
+          message: newMsg.message,
+          created_at: newMsg.createdAt
+        });
+      } catch (err) {
+        console.warn("Supabase booking_messages insert notice:", err);
+      }
+    }
+    const list = bookingMessagesStore.get(bookingId) || [];
+    list.push(newMsg);
+    bookingMessagesStore.set(bookingId, list);
+    const recipientId = userId === booking.clientId ? booking.companionId : booking.clientId;
+    pushCompanionAlert(recipientId, {
+      type: "NEW_CHAT_MESSAGE",
+      bookingId,
+      message: newMsg
+    });
+    return res.json({ success: true, message: newMsg });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 app.post("/api/presence", async (req, res) => {

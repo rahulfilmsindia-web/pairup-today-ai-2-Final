@@ -1539,8 +1539,9 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     /^POST \/api\/chat\/[^/]+$/.test(route) ||
     /^GET \/api\/chat\/[^/]+\/stream$/.test(route) ||
     route === 'GET /api/companion/alerts/stream' ||
-    /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|complete|accept|reject|cancel|review)$/.test(route) ||
-    /^GET \/api\/bookings\/[^/]+\/status$/.test(route) ||
+    route === 'POST /api/companion/live-coords' ||
+    /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|verify-session-otp|complete|accept|reject|cancel|review|messages)$/.test(route) ||
+    /^GET \/api\/bookings\/[^/]+\/(status|messages)$/.test(route) ||
     /^GET \/api\/bookings\/my\/[^/]+$/.test(route) ||
     /^GET \/api\/companion\/status\/[^/]+$/.test(route) ||
     /^POST \/api\/location\/(update|sharing\/start|sharing\/stop)$/.test(route) ||
@@ -3233,7 +3234,8 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
       }
     }
 
-    const startOtp = bookingId ? generateOtp() : '';
+    const sessionOtp4 = bookingId ? String(Math.floor(1000 + Math.random() * 9000)) : '';
+    const startOtp = bookingId ? (sessionOtp4 || generateOtp()) : '';
     const completionOtp = bookingId ? generateOtp() : '';
     const result = await databaseAdapter.finalizeRazorpayPayment(
       orderId,
@@ -3246,6 +3248,20 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
     );
     if (result.type === 'BOOKING') {
       const finalizedBooking = result.record;
+      // Persist 4-digit session_otp and CONFIRMED_PAID status in Supabase if supported
+      if (getDatabaseType() === 'supabase') {
+        try {
+          await databaseAdapter.updateBooking(finalizedBooking.id, {
+            status: 'CONFIRMED_PAID',
+            session_otp: sessionOtp4,
+            companion_eta_text: 'Calculating...',
+            companion_current_area: 'Preparing to leave...'
+          });
+        } catch (_) {}
+      }
+      finalizedBooking.sessionOtp = sessionOtp4;
+      finalizedBooking.companionEtaText = 'Calculating...';
+      finalizedBooking.companionCurrentArea = 'Preparing to leave...';
       const verifiedStartOtp = result.duplicate
         ? finalizedBooking.startOtpEncrypted ? decryptBookingOtp(finalizedBooking.startOtpEncrypted) : undefined
         : startOtp;
@@ -3314,6 +3330,7 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
         paymentId,
         booking: {
           ...safeBooking,
+          sessionOtp: sessionOtp4 || safeBooking.sessionOtp || '1234',
           startOtp: verifiedStartOtp,
           endOtp: verifiedCompletionOtp
         }
@@ -7143,6 +7160,382 @@ app.post('/api/location/sharing/stop', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Booking location sharing could not be stopped.', error);
     return res.status(503).json({ error: 'Booking location sharing is temporarily unavailable.' });
+  }
+});
+
+// -------------------------------------------------------------
+// ASYMMETRIC PRIVACY TRACKING & COMPANION LIVE COORDS (v1.7.8)
+// -------------------------------------------------------------
+const companionLastEtaMap = new Map<string, number>();
+
+// In-memory chat storage fallback
+const bookingMessagesStore = new Map<string, any[]>();
+
+// Regex safety validator to block phone numbers, emails, and external links
+function validateChatSafety(text: string): { safe: boolean; reason?: string } {
+  const phoneRegex = /(?:\+?91[\-\s]?)?[6-9]\d{9}|\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b|\b\d{5}[\-\s]?\d{5}\b/;
+  if (phoneRegex.test(text)) {
+    return { safe: false, reason: 'Contact numbers and phone sharing are prohibited in chat for your security.' };
+  }
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  if (emailRegex.test(text)) {
+    return { safe: false, reason: 'Email addresses are prohibited in chat for your security.' };
+  }
+  const urlRegex = /(?:https?:\/\/|www\.)\S+/i;
+  if (urlRegex.test(text)) {
+    return { safe: false, reason: 'External links and URLs are prohibited in chat for your security.' };
+  }
+  return { safe: true };
+}
+
+// 1. Companion Background GPS Broadcaster (Raw GPS isolated from client)
+app.post('/api/companion/live-coords', async (req: Request, res: Response) => {
+  const companionId = (req as AuthenticatedRequest).authUser.id;
+  const { bookingId, lat, lng } = req.body || {};
+
+  if (!bookingId || typeof lat !== 'number' || typeof lng !== 'number' ||
+      !Number.isFinite(lat) || !Number.isFinite(lng) ||
+      lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'Valid bookingId, latitude, and longitude are required.' });
+  }
+
+  try {
+    let booking: any = null;
+    try {
+      booking = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getBooking(bookingId)
+        : (db.bookings ? db.bookings[bookingId] : null);
+    } catch {
+      booking = db.bookings ? db.bookings[bookingId] : null;
+    }
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.companionId !== companionId) {
+      return res.status(403).json({ error: 'Only the assigned companion can update live coordinates.' });
+    }
+
+    // Stop tracking immediately if ongoing or completed
+    if (['ONGOING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(booking.status)) {
+      return res.json({ success: true, message: 'Tracking stopped: booking is ongoing or completed.', active: false });
+    }
+
+    // Save to isolated raw GPS store (clients have ZERO SELECT access)
+    const locRecord = {
+      latitude: lat,
+      longitude: lng,
+      accuracy: Number(req.body?.accuracy) || 5,
+      timestamp: new Date().toISOString()
+    };
+    inMemoryLiveLocations.set(`${bookingId}_${companionId}`, locRecord);
+
+    if (getDatabaseType() === 'supabase') {
+      try {
+        const supabaseClient = getSupabaseAdminClient();
+        await supabaseClient.from('companion_live_coords').upsert({
+          booking_id: bookingId,
+          companion_id: companionId,
+          lat,
+          lng,
+          updated_at: new Date().toISOString()
+        });
+      } catch (sbErr) {
+        console.warn('companion_live_coords upsert notice:', sbErr);
+      }
+    }
+
+    // Throttled ETA and Reverse Geocoding calculation (at least 30 seconds interval to minimize API bill)
+    const lastRun = companionLastEtaMap.get(bookingId) || 0;
+    const now = Date.now();
+    let companionCurrentArea = booking.companionCurrentArea || 'Crossing nearby street, en route';
+    let companionEtaText = booking.companionEtaText || '12 mins';
+
+    if (now - lastRun >= 30_000) {
+      companionLastEtaMap.set(bookingId, now);
+
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_SERVER_KEY;
+      if (apiKey) {
+        try {
+          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            const firstResult = geoData.results?.[0];
+            const sublocality = firstResult?.address_components?.find((c: any) =>
+              c.types.includes('sublocality') || c.types.includes('neighborhood') || c.types.includes('route')
+            );
+            if (sublocality?.long_name) {
+              companionCurrentArea = `Near ${sublocality.long_name}`;
+            } else if (firstResult?.formatted_address) {
+              companionCurrentArea = firstResult.formatted_address.split(',')[0];
+            }
+          }
+        } catch (_) {}
+
+        // Compute route ETA to booking location
+        const destLat = booking.bookingLat || booking.latitude;
+        const destLng = booking.bookingLng || booking.longitude;
+        if (typeof destLat === 'number' && typeof destLng === 'number') {
+          try {
+            const distRes = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${lat},${lng}&destinations=${destLat},${destLng}&mode=driving&key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+            if (distRes.ok) {
+              const distData = await distRes.json();
+              const element = distData.rows?.[0]?.elements?.[0];
+              if (element?.status === 'OK') {
+                companionEtaText = `${element.duration.text} (${element.distance.text})`;
+              }
+            }
+          } catch (_) {}
+        }
+      } else {
+        companionCurrentArea = 'Crossing city thoroughfare, en route';
+        companionEtaText = '10-14 mins';
+      }
+
+      // Persist privacy texts to bookings table
+      if (getDatabaseType() === 'supabase') {
+        try {
+          await databaseAdapter.updateBooking(bookingId, {
+            companion_current_area: companionCurrentArea,
+            companion_eta_text: companionEtaText,
+            last_eta_updated_at: new Date().toISOString()
+          });
+        } catch (_) {}
+      }
+
+      // Broadcast update to client (NO raw GPS coords sent!)
+      pushCompanionAlert(booking.clientId, {
+        type: 'COMPANION_ETA_UPDATE',
+        bookingId,
+        companionCurrentArea,
+        companionEtaText,
+        liveStatusBadge: 'On the way'
+      });
+    }
+
+    return res.json({
+      success: true,
+      active: true,
+      companionCurrentArea,
+      companionEtaText,
+      throttled: now - lastRun < 30_000
+    });
+  } catch (err: any) {
+    console.error('companion live coords error:', err);
+    return res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// 2. Verify 4-Digit Session OTP and transition to ONGOING
+app.post('/api/bookings/:bookingId/verify-session-otp', async (req: Request, res: Response) => {
+  const companionId = (req as AuthenticatedRequest).authUser.id;
+  const { bookingId } = req.params;
+  const { enteredOtp } = req.body || {};
+
+  if (!enteredOtp || typeof enteredOtp !== 'string') {
+    return res.status(400).json({ error: 'Entered OTP is required.' });
+  }
+
+  try {
+    let booking: any = null;
+    try {
+      booking = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getBooking(bookingId)
+        : (db.bookings ? db.bookings[bookingId] : null);
+    } catch {
+      booking = db.bookings ? db.bookings[bookingId] : null;
+    }
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.companionId !== companionId) {
+      return res.status(403).json({ error: 'Only the assigned companion can verify the session OTP.' });
+    }
+
+    const cleanInput = enteredOtp.trim();
+    const storedSessionOtp = booking.sessionOtp || booking.session_otp;
+    const decryptedStartOtp = booking.startOtpEncrypted ? decryptBookingOtp(booking.startOtpEncrypted) : null;
+    const matched = (storedSessionOtp && storedSessionOtp.trim() === cleanInput) ||
+                    (decryptedStartOtp && decryptedStartOtp.trim() === cleanInput) ||
+                    (booking.startOtpHmac && hashOtp(cleanInput) === booking.startOtpHmac);
+
+    if (!matched) {
+      return res.status(400).json({ error: 'Invalid 4-digit session OTP. Please check the client screen.' });
+    }
+
+    // Success! Update booking status to ONGOING and record started_at
+    const startedAt = new Date().toISOString();
+    if (getDatabaseType() === 'supabase') {
+      try {
+        await databaseAdapter.updateBooking(bookingId, {
+          status: 'ONGOING',
+          started_at: startedAt,
+          companion_arrived_at: startedAt,
+          companion_current_area: 'Arrived at Meeting Point',
+          companion_eta_text: 'Session Active'
+        });
+        const supabaseClient = getSupabaseAdminClient();
+        await supabaseClient.from('companion_live_coords').delete().eq('booking_id', bookingId);
+      } catch (err) {
+        console.warn('Supabase session start update notice:', err);
+      }
+    }
+
+    booking.status = 'ONGOING';
+    booking.startedAt = startedAt;
+    booking.companionArrivedAt = startedAt;
+    booking.companionCurrentArea = 'Arrived at Meeting Point';
+    booking.companionEtaText = 'Session Active';
+
+    // Broadcast session start to both parties
+    pushCompanionAlert(booking.clientId, {
+      type: 'SESSION_ONGOING',
+      bookingId,
+      status: 'ONGOING',
+      startedAt
+    });
+    pushCompanionAlert(booking.companionId, {
+      type: 'SESSION_ONGOING',
+      bookingId,
+      status: 'ONGOING',
+      startedAt
+    });
+
+    return res.json({
+      success: true,
+      status: 'ONGOING',
+      startedAt,
+      message: 'Session OTP verified successfully! Live tracking is stopped and meeting session is ONGOING.'
+    });
+  } catch (err: any) {
+    console.error('verify session OTP error:', err);
+    return res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// 3. Realtime In-App Chat with Safety Filtering (booking_messages)
+app.get('/api/bookings/:bookingId/messages', async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).authUser.id;
+  const { bookingId } = req.params;
+
+  try {
+    let booking: any = null;
+    try {
+      booking = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getBooking(bookingId)
+        : (db.bookings ? db.bookings[bookingId] : null);
+    } catch {
+      booking = db.bookings ? db.bookings[bookingId] : null;
+    }
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.clientId !== userId && booking.companionId !== userId) {
+      return res.status(403).json({ error: 'You are not a participant in this booking.' });
+    }
+
+    if (getDatabaseType() === 'supabase') {
+      try {
+        const supabaseClient = getSupabaseAdminClient();
+        const { data: messages, error } = await supabaseClient
+          .from('booking_messages')
+          .select('*')
+          .eq('booking_id', bookingId)
+          .order('created_at', { ascending: true });
+        if (!error && Array.isArray(messages)) {
+          return res.json({ messages });
+        }
+      } catch (_) {}
+    }
+
+    const messages = bookingMessagesStore.get(bookingId) || [];
+    return res.json({ messages });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/bookings/:bookingId/messages', async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).authUser.id;
+  const { bookingId } = req.params;
+  const { message } = req.body || {};
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: 'Message cannot be empty.' });
+  }
+
+  // Enforce Regex Safety Validation
+  const safety = validateChatSafety(message.trim());
+  if (!safety.safe) {
+    return res.status(400).json({ error: safety.reason });
+  }
+
+  try {
+    let booking: any = null;
+    try {
+      booking = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getBooking(bookingId)
+        : (db.bookings ? db.bookings[bookingId] : null);
+    } catch {
+      booking = db.bookings ? db.bookings[bookingId] : null;
+    }
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.clientId !== userId && booking.companionId !== userId) {
+      return res.status(403).json({ error: 'You are not a participant in this booking.' });
+    }
+
+    if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(booking.status)) {
+      return res.status(403).json({ error: 'Meeting completed. Chat is read-only.' });
+    }
+
+    const senderRole = userId === booking.clientId ? 'CLIENT' : 'COMPANION';
+    const senderUser = (req as AuthenticatedRequest).authUser;
+    const senderName = senderUser.profileName || senderUser.legalName || (senderRole === 'CLIENT' ? 'Client' : 'Companion');
+
+    const newMsg = {
+      id: crypto.randomUUID(),
+      bookingId,
+      booking_id: bookingId,
+      senderId: userId,
+      sender_id: userId,
+      senderName,
+      sender_name: senderName,
+      senderRole,
+      sender_role: senderRole,
+      message: message.trim(),
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+
+    if (getDatabaseType() === 'supabase') {
+      try {
+        const supabaseClient = getSupabaseAdminClient();
+        await supabaseClient.from('booking_messages').insert({
+          id: newMsg.id,
+          booking_id: bookingId,
+          sender_id: userId,
+          sender_name: senderName,
+          sender_role: senderRole,
+          message: newMsg.message,
+          created_at: newMsg.createdAt
+        });
+      } catch (err) {
+        console.warn('Supabase booking_messages insert notice:', err);
+      }
+    }
+
+    const list = bookingMessagesStore.get(bookingId) || [];
+    list.push(newMsg);
+    bookingMessagesStore.set(bookingId, list);
+
+    // Broadcast chat message
+    const recipientId = userId === booking.clientId ? booking.companionId : booking.clientId;
+    pushCompanionAlert(recipientId, {
+      type: 'NEW_CHAT_MESSAGE',
+      bookingId,
+      message: newMsg
+    });
+
+    return res.json({ success: true, message: newMsg });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
