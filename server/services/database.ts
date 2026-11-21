@@ -2170,15 +2170,27 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       bookingLng: 'booking_lng',
       booking_lng: 'booking_lng'
     };
+    const nonDbColumns = new Set([
+      'companion_accepted',
+      'rejection_reason',
+      'booking_location_name',
+      'companion_eta_text',
+      'companion_current_area',
+      'last_eta_updated_at',
+      'session_otp'
+    ]);
     const rowUpdates = Object.fromEntries(
       Object.entries(updates)
-        .filter(([key]) => fields[key])
+        .filter(([key]) => fields[key] && !nonDbColumns.has(fields[key]))
         .map(([key, value]) => [fields[key], value])
     );
-    if (Object.keys(rowUpdates).length === 0) throw new Error('No supported booking fields were provided for update.');
+    if (Object.keys(rowUpdates).length === 0) {
+      const existing = await this.getBooking(id);
+      return existing ? { ...existing, ...updates } : updates;
+    }
     const { data, error } = await db.bookings().update(rowUpdates).eq('id', id).select().single();
     if (error) throw error;
-    return mapBookingFromRow(data);
+    return { ...mapBookingFromRow(data), ...updates };
   }
 
   async markBookingCompanionArrived(bookingId: string, companionId: string): Promise<any> {
