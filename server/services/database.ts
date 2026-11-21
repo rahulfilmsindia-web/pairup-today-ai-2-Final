@@ -2798,14 +2798,18 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
 
   async consumeRateLimit(bucketKey: string, limit: number, windowSeconds: number): Promise<any> {
     try {
-      const { data, error } = await supabase.rpc('consume_api_rate_limit', {
+      const rpcPromise = supabase.rpc('consume_api_rate_limit', {
         p_bucket_key: bucketKey, p_limit: limit, p_window_seconds: windowSeconds
       });
+      const timeoutPromise = new Promise<{ data: null; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error('Rate limit RPC timeout')), 1200)
+      );
+      const { data, error } = await Promise.race([rpcPromise, timeoutPromise]) as any;
       if (!error && typeof data?.allowed === 'boolean') {
         return data;
       }
     } catch (err) {
-      console.warn('Supabase consume_api_rate_limit fallback to in-memory:', err);
+      // Non-blocking immediate fallback to high-speed in-memory rate limiting
     }
     const now = Date.now();
     let bucket = localRateLimitBuckets.get(bucketKey);
@@ -2819,12 +2823,16 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
 
   async isSessionRevoked(tokenId: string): Promise<boolean> {
     try {
-      const { data, error } = await supabase.rpc('is_session_revoked', { p_token_id: tokenId });
+      const rpcPromise = supabase.rpc('is_session_revoked', { p_token_id: tokenId });
+      const timeoutPromise = new Promise<{ data: null; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error('Session revoked RPC timeout')), 1200)
+      );
+      const { data, error } = await Promise.race([rpcPromise, timeoutPromise]) as any;
       if (!error && typeof data === 'boolean') {
         return data;
       }
     } catch (err) {
-      console.warn('Supabase is_session_revoked fallback to in-memory:', err);
+      // Non-blocking immediate fallback to high-speed in-memory session revocation lookup
     }
     return localRevokedSessions.has(tokenId);
   }

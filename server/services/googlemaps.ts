@@ -53,7 +53,7 @@ export async function getFallbackIndiaPredictions(input: string): Promise<Autoco
   try {
     const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(input)}&countrycodes=IN&format=json&addressdetails=1&limit=8&accept-language=en`;
     const res = await fetch(nomUrl, {
-      signal: AbortSignal.timeout(6_000),
+      signal: AbortSignal.timeout(2_500),
       headers: {
         'User-Agent': 'PairUpToday/1.0 (pairuptoday.in contact@pairuptoday.in)',
         'Accept': 'application/json'
@@ -149,7 +149,7 @@ export async function getPlaceAutocomplete(
 
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`,
-        { signal: AbortSignal.timeout(8_000) }
+        { signal: AbortSignal.timeout(2_500) }
       );
       if (response.ok) {
         const data = await response.json();

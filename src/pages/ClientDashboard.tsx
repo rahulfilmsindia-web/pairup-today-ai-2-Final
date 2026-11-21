@@ -180,13 +180,6 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   };
 
   const handleBookingTimeChange = (newTime: string) => {
-    if (isBookingToday) {
-      const minTime = getMinAllowedTimeForToday();
-      if (newTime < minTime) {
-        setBookingTime(minTime);
-        return;
-      }
-    }
     setBookingTime(newTime);
   };
 
@@ -808,8 +801,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       return;
     }
 
-    if (user.kycStatus !== 'APPROVED') {
-      setBookingError('Identity Verification Required: Please wait for admin KYC approval before booking.');
+    if (user.kycStatus === 'REJECTED') {
+      setBookingError('Identity Verification Rejected: Please update your KYC documents in Profile settings.');
       return;
     }
 
@@ -3889,7 +3882,6 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                       <input
                         type="time"
                         value={bookingTime}
-                        min={isBookingToday ? minAllowedTimeToday : undefined}
                         onChange={e => handleBookingTimeChange(e.target.value)}
                         className={`w-full px-3.5 py-2 bg-slate-950 border rounded-xl text-slate-100 focus:outline-none ${
                           timeConflictError || isPastMinTimeToday 
@@ -3898,6 +3890,30 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                         }`}
                         required
                       />
+                      {/* Mobile-Friendly Quick Time Presets */}
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {[
+                          { label: '10 AM', time: '10:00' },
+                          { label: '12 PM', time: '12:00' },
+                          { label: '2 PM', time: '14:00' },
+                          { label: '4 PM', time: '16:00' },
+                          { label: '6 PM', time: '18:00' },
+                          { label: '8 PM', time: '20:00' },
+                        ].map(slot => (
+                          <button
+                            key={slot.time}
+                            type="button"
+                            onClick={() => handleBookingTimeChange(slot.time)}
+                            className={`px-2 py-1 text-[11px] font-semibold rounded-lg border transition-all ${
+                              bookingTime === slot.time
+                                ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                                : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                            }`}
+                          >
+                            {slot.label}
+                          </button>
+                        ))}
+                      </div>
                       {isPastMinTimeToday && (
                         <p className="text-[10px] text-rose-400 mt-1 leading-tight">
                           For today, start time must be at least 30 mins in advance (minimum: {formatTimeAmPm(minAllowedTimeToday)}).

@@ -809,7 +809,12 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
                       e.preventDefault();
                       selectSuggestion(item);
                     }}
-                    className={`w-full text-left px-3.5 py-2.5 flex items-start gap-2.5 transition-colors
+                    onTouchEnd={e => {
+                      e.preventDefault();
+                      selectSuggestion(item);
+                    }}
+                    onClick={() => selectSuggestion(item)}
+                    className={`w-full text-left px-3.5 py-2.5 flex items-start gap-2.5 transition-colors cursor-pointer
                       ${idx === activeIndex
                         ? `${accentBg} border-l-2 border-${accentColor === 'pink' ? 'pink-500' : 'amber-400'}`
                         : 'hover:bg-slate-800/80'
