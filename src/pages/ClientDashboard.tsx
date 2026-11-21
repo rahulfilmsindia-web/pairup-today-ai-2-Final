@@ -26,18 +26,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const { user, token, activeRole, selectActiveRole, logout, bookingContext, setBookingContext, updateProfile, requestOtp, changePassword, deleteAccount, openKycWizard, refreshUserData } = useAuth();
   const { t, language, setLanguage } = useLanguage();
 
-  // Role switch helper: smoothly switch to Companion Dashboard
-  const handleSwitchToCompanion = async () => {
-    try {
-      await selectActiveRole('COMPANION');
-      if (onNavigateToPage) {
-        onNavigateToPage('companion-dashboard');
-      } else {
-        window.location.href = '/companion-dashboard';
-      }
-    } catch (e) {
-      console.warn('Switch to companion error', e);
+  // Role switch helper: smoothly switch to Companion Dashboard (0ms instant transition)
+  const handleSwitchToCompanion = () => {
+    // 1. Instant navigation
+    if (onNavigateToPage) {
+      onNavigateToPage('companion-dashboard');
+    } else {
+      window.location.href = '/companion-dashboard';
     }
+    // 2. Background role sync
+    selectActiveRole('COMPANION').catch(() => {});
   };
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);

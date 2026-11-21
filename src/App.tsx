@@ -122,10 +122,13 @@ const MainAppContent: React.FC = () => {
     return false;
   };
 
-  // Check if companion is currently live and active online
-  const checkIsCompanionOnline = async (): Promise<boolean> => {
+  // Check if companion is currently live and active online (instant local check with optional background verification)
+  const checkIsCompanionOnline = async (forceNetwork = false): Promise<boolean> => {
     if (!userRef.current?.id) return false;
     const local = localStorage.getItem('pairup_companion_online');
+    if (!forceNetwork) {
+      return local === 'true';
+    }
     try {
       const res = await apiFetch(`/api/companion/status/${userRef.current.id}`);
       if (res.ok) {
@@ -224,7 +227,7 @@ const MainAppContent: React.FC = () => {
         }
       }
 
-      const isOnline = await checkIsCompanionOnline();
+      const isOnline = localStorage.getItem('pairup_companion_online') === 'true';
       if (isOnline) {
         // ONLY prompt confirmation if companion is currently ONLINE!
         setPendingTargetPage(targetPage);
@@ -235,7 +238,13 @@ const MainAppContent: React.FC = () => {
       // If companion is already OFFLINE, directly switch role to CLIENT and navigate without popup!
       if (targetPage === 'client-dashboard') {
         selectActiveRole('CLIENT').catch(() => {});
+      } else if (targetPage === 'companion-dashboard') {
+        selectActiveRole('COMPANION').catch(() => {});
       }
+    } else if (targetPage === 'companion-dashboard') {
+      selectActiveRole('COMPANION').catch(() => {});
+    } else if (targetPage === 'client-dashboard') {
+      selectActiveRole('CLIENT').catch(() => {});
     }
 
     executeNavigation(targetPage, options);
@@ -359,7 +368,7 @@ const MainAppContent: React.FC = () => {
             logout();
           }
         } else {
-          const isOnline = await checkIsCompanionOnline();
+          const isOnline = localStorage.getItem('pairup_companion_online') === 'true';
           if (isOnline) {
             // Hold companion on companion-dashboard URL ONLY if online
             window.history.pushState({ page: 'companion-dashboard' }, '', '/companion-dashboard');

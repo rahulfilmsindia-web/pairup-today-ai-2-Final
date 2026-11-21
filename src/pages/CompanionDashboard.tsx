@@ -1669,7 +1669,8 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
       }
     }
 
-    // Offline companions switch directly without notice
+    // Offline companions switch directly without notice (0ms instant transition)
+    selectActiveRole('CLIENT').catch(() => {});
     if (onNavigateToPage) {
       onNavigateToPage('client-dashboard');
     } else {

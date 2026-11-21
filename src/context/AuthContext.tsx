@@ -297,9 +297,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     if (!currentUser) return { success: false, error: 'User not signed in' };
 
-    // Update frontend state immediately to avoid any lag or bounce
+    // Update frontend state immediately to avoid any lag or bounce (0ms instant transition)
     setActiveRole(role);
     localStorage.setItem('pairup_active_role', role);
+    setUser(prev => {
+      if (!prev) return prev;
+      const updatedUser = { ...prev, activeRole: role };
+      try {
+        localStorage.setItem('pairup_user', JSON.stringify(updatedUser));
+      } catch {}
+      return updatedUser;
+    });
 
     try {
       const res = await apiFetch('/api/auth/select-role', {

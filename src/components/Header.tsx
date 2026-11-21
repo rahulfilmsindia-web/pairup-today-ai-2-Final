@@ -26,13 +26,13 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
     setMobileMenuOpen(false);
   };
 
-  const handleRoleSwitch = async () => {
-    if (activeRole === 'COMPANION') {
-      handleNavClick('client-dashboard');
-    } else {
-      await selectActiveRole('COMPANION');
-      handleNavClick('companion-dashboard');
-    }
+  const handleRoleSwitch = () => {
+    const nextRole = activeRole === 'COMPANION' ? 'CLIENT' : 'COMPANION';
+    const targetPage = nextRole === 'COMPANION' ? 'companion-dashboard' : 'client-dashboard';
+    // 1. Instant 0ms navigation
+    handleNavClick(targetPage);
+    // 2. Background role sync
+    selectActiveRole(nextRole).catch(() => {});
   };
 
   const handleBack = () => {
