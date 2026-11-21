@@ -96,6 +96,7 @@ if gcloud builds submit --tag "${IMAGE_TAG}" . --project "${PROJECT_ID}" --quiet
   BUILD_SUCCESS=1
 else
   echo "⚠️ Cloud Build failed. Falling back to local docker build & push..."
+  gcloud auth configure-docker --quiet || true
   docker build -t "${IMAGE_TAG}" .
   docker push "${IMAGE_TAG}"
   BUILD_SUCCESS=1
