@@ -45,6 +45,8 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   --project "${PROJECT_ID}" --quiet || true
 
+sleep 3
+
 # 3. Setup Secret Manager for Supabase
 SUPABASE_URL_VAL="https://ljaylmqqspneeaeaivtq.supabase.co"
 SUPABASE_KEY_VAL="sb_secret_PfN3sGIPNAbcxJ793Kz_gw_h44VeAs4"
@@ -54,11 +56,12 @@ create_or_update_secret() {
   local secret_value="$2"
   if ! gcloud secrets describe "${secret_name}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
     echo "Creating secret [${secret_name}]..."
-    echo -n "${secret_value}" | gcloud secrets create "${secret_name}" --data-file=- --project="${PROJECT_ID}" --replication-policy="automatic"
+    printf '%s' "${secret_value}" | gcloud secrets create "${secret_name}" --data-file=- --project="${PROJECT_ID}" --replication-policy="automatic" --quiet
   else
     echo "Adding new version to secret [${secret_name}]..."
-    echo -n "${secret_value}" | gcloud secrets versions add "${secret_name}" --data-file=- --project="${PROJECT_ID}"
+    printf '%s' "${secret_value}" | gcloud secrets versions add "${secret_name}" --data-file=- --project="${PROJECT_ID}" --quiet
   fi
+  echo "✅ Secret [${secret_name}] is ready."
 }
 
 echo "Configuring Supabase credentials in Secret Manager..."
@@ -67,9 +70,10 @@ create_or_update_secret "SUPABASE_SERVICE_ROLE_KEY" "${SUPABASE_KEY_VAL}"
 
 # 4. Build and Push Container Image
 echo "Building container image ${IMAGE_TAG} via Google Cloud Build..."
+echo "This takes about 2-3 minutes to compile frontend, admin panel and backend container..."
 BUILD_SUCCESS=0
 
-if gcloud builds submit --tag "${IMAGE_TAG}" . --project "${PROJECT_ID}"; then
+if gcloud builds submit --tag "${IMAGE_TAG}" . --project "${PROJECT_ID}" --quiet; then
   echo "✅ Cloud Build completed successfully!"
   BUILD_SUCCESS=1
 else
