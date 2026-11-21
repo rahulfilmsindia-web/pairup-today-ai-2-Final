@@ -88,9 +88,9 @@ if [ ${BUILD_SUCCESS} -ne 1 ]; then
   exit 1
 fi
 
-# 5. Deploy to Primary Region (Mumbai: asia-south1)
+# 5. Deploy to Primary Region (Mumbai: asia-south1) - High Performance Turbo
 echo "------------------------------------------------------------------------------"
-echo "  Deploying to Primary Region: ${PRIMARY_REGION}..."
+echo "  Deploying High-Performance Turbo to Primary Region: ${PRIMARY_REGION}..."
 echo "------------------------------------------------------------------------------"
 gcloud run deploy "${SERVICE_NAME}" \
   --image "${IMAGE_TAG}" \
@@ -99,19 +99,21 @@ gcloud run deploy "${SERVICE_NAME}" \
   --platform managed \
   --allow-unauthenticated \
   --port 8080 \
-  --memory 1Gi \
-  --cpu 1 \
-  --min-instances 1 \
+  --memory 2Gi \
+  --cpu 2 \
+  --min-instances 2 \
   --max-instances 10 \
+  --concurrency 80 \
+  --no-cpu-throttling \
   --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
-  --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88"
+  --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88,APITXT_BASE_URL=https://apitxt.com"
 
 PRIMARY_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${PRIMARY_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
 echo "✅ Primary Region deployment successful: ${PRIMARY_URL}"
 
-# 6. Deploy to Failover Region (Singapore: asia-southeast1)
+# 6. Deploy to Failover Region (Singapore: asia-southeast1) - High Performance Turbo
 echo "------------------------------------------------------------------------------"
-echo "  Deploying to Failover Region: ${FAILOVER_REGION}..."
+echo "  Deploying High-Performance Turbo to Failover Region: ${FAILOVER_REGION}..."
 echo "------------------------------------------------------------------------------"
 gcloud run deploy "${SERVICE_NAME}" \
   --image "${IMAGE_TAG}" \
@@ -120,12 +122,14 @@ gcloud run deploy "${SERVICE_NAME}" \
   --platform managed \
   --allow-unauthenticated \
   --port 8080 \
-  --memory 1Gi \
-  --cpu 1 \
-  --min-instances 1 \
+  --memory 2Gi \
+  --cpu 2 \
+  --min-instances 2 \
   --max-instances 10 \
+  --concurrency 80 \
+  --no-cpu-throttling \
   --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
-  --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88"
+  --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88,APITXT_BASE_URL=https://apitxt.com"
 
 FAILOVER_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${FAILOVER_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
 echo "✅ Failover Region deployment successful: ${FAILOVER_URL}"

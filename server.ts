@@ -7843,14 +7843,24 @@ async function startServer() {
     // absolute /assets/... URLs, so chain dist-admin/assets BEFORE dist/assets;
     // express.static falls through to the next mount on a miss.
     if (fs.existsSync(distAdminDir)) {
-      app.use('/assets', express.static(path.join(distAdminDir, 'assets'), { fallthrough: true }));
+      app.use('/assets', express.static(path.join(distAdminDir, 'assets'), {
+        fallthrough: true,
+        maxAge: '1y',
+        immutable: true
+      }));
     }
     // Ensure all /api/* routes that are not handled return JSON 404, never index.html!
     app.all('/api/*', (_req: Request, res: Response) => {
       return res.status(404).json({ error: 'API endpoint not found.' });
     });
 
-    app.use(express.static(distDir));
+    app.use('/assets', express.static(path.join(distDir, 'assets'), {
+      maxAge: '1y',
+      immutable: true
+    }));
+    app.use(express.static(distDir, {
+      maxAge: '1h'
+    }));
     app.get('*', (req, res) => {
       if (req.path.startsWith('/api') || req.originalUrl.startsWith('/api')) {
         return res.status(404).json({ error: 'API endpoint not found.' });
