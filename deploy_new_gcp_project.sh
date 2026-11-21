@@ -35,7 +35,7 @@ echo "==========================================================================
 echo "Setting gcloud project to ${PROJECT_ID}..."
 gcloud config set project "${PROJECT_ID}" --quiet
 
-# 2. Enable Required Google Cloud APIs
+# 2. Enable Required Google Cloud APIs & IAM Permissions
 echo "Enabling required APIs (Cloud Run, Cloud Build, Secret Manager)..."
 gcloud services enable \
   run.googleapis.com \
@@ -45,15 +45,34 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   --project "${PROJECT_ID}" --quiet || true
 
-sleep 3
+PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" --format="value(projectNumber)" 2>/dev/null || echo "690852867738")
+echo "Configuring Cloud Build permissions for ${PROJECT_NUMBER}-compute@developer.gserviceaccount.com..."
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/storage.admin" --condition=None --quiet || true
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/cloudbuild.builds.builder" --condition=None --quiet || true
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+  --role="roles/storage.admin" --condition=None --quiet || true
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor" --condition=None --quiet || true
+
+sleep 2
 
 # 3. Setup Secret Manager for Supabase
 SUPABASE_URL_VAL="https://ljaylmqqspneeaeaivtq.supabase.co"
-SUPABASE_KEY_VAL="sb_secret_PfN3sGIPNAbcxJ793Kz_gw_h44VeAs4"
+SUPABASE_KEY_VAL="${2:-}"
 
 create_or_update_secret() {
   local secret_name="$1"
   local secret_value="$2"
+  if [ -z "${secret_value}" ]; then
+    echo "Secret [${secret_name}] already configured in Secret Manager (skipping overwrite)."
+    return 0
+  fi
   if ! gcloud secrets describe "${secret_name}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
     echo "Creating secret [${secret_name}]..."
     printf '%s' "${secret_value}" | gcloud secrets create "${secret_name}" --data-file=- --project="${PROJECT_ID}" --replication-policy="automatic" --quiet
@@ -64,7 +83,6 @@ create_or_update_secret() {
   echo "✅ Secret [${secret_name}] is ready."
 }
 
-echo "Configuring Supabase credentials in Secret Manager..."
 create_or_update_secret "SUPABASE_URL" "${SUPABASE_URL_VAL}"
 create_or_update_secret "SUPABASE_SERVICE_ROLE_KEY" "${SUPABASE_KEY_VAL}"
 
