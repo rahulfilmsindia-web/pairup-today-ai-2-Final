@@ -221,7 +221,27 @@ export async function reverseGeocode(
   lng: number
 ): Promise<GeocodeResult | null> {
   if (!GOOGLE_MAPS_API_KEY) {
-    throw new Error('Google Maps API key is not configured.');
+    try {
+      const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+        headers: { 'User-Agent': 'PairUpToday/1.0' },
+        signal: AbortSignal.timeout(3000)
+      });
+      if (nomRes.ok) {
+        const nomData: any = await nomRes.json();
+        return {
+          formatted_address: nomData.display_name || `${lat}, ${lng}`,
+          geometry: { location: { lat, lng } },
+          place_id: String(nomData.place_id || 'osm'),
+          address_components: []
+        };
+      }
+    } catch {}
+    return {
+      formatted_address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+      geometry: { location: { lat, lng } },
+      place_id: 'coords',
+      address_components: []
+    };
   }
 
   try {

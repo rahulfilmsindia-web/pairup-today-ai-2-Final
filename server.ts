@@ -7701,12 +7701,6 @@ app.get('/api/maps/reverse-geocode', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Latitude and longitude are required' });
   }
 
-  if (!isGoogleMapsConfigured()) {
-    return res.status(503).json({
-      error: 'Google Maps API not configured'
-    });
-  }
-
   const parsedLat = parseFloat(lat as string);
   const parsedLng = parseFloat(lng as string);
   if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng) || parsedLat < -90 || parsedLat > 90 || parsedLng < -180 || parsedLng > 180) {
