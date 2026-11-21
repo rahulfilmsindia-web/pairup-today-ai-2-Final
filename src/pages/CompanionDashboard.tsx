@@ -1231,9 +1231,11 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     }
 
     const interval = setInterval(() => {
-      fetchBookings();
-      fetchNotifications();
-    }, 2500);
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchBookings();
+        fetchNotifications();
+      }
+    }, 6000);
 
     // Also listen for Service Worker postMessage actions (e.g. from notification clicks)
     const handleSwMessage = (e: MessageEvent) => {

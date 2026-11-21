@@ -450,69 +450,41 @@ async function executePanIndiaSearch(
     results.push(item);
   };
 
-  // 1. Try Backend Google Places API Endpoint (when configured)
-  try {
-    const mapsRes = await fetch(`/api/maps/autocomplete?input=${encodeURIComponent(normalizedFull)}`, { signal });
-    if (mapsRes.ok) {
-      const mapsData = await mapsRes.json();
-      if (Array.isArray(mapsData.predictions) && mapsData.predictions.length > 0) {
-        for (const p of mapsData.predictions) {
-          const mainText = p.structured_formatting?.main_text || p.description.split(',')[0];
-          const secondary = p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(',').trim();
-          let baseAddress = p.description || (secondary ? `${mainText}, ${secondary}` : mainText);
-          const detectedPin = baseAddress.match(/\b([1-9]\d{5})\b/)?.[1] || lookupPincodeForAddress(baseAddress) || lookupPincodeForAddress(mainText) || '';
-          if (detectedPin && !baseAddress.includes(detectedPin)) {
-            baseAddress = `${baseAddress} - ${detectedPin}`;
+  // 1 & 2. Query Backend Google Places and Photon in parallel for sub-200ms instant suggestions
+  const fetchBackendMaps = async () => {
+    try {
+      const mapsRes = await fetch(`/api/maps/autocomplete?input=${encodeURIComponent(normalizedFull)}`, { signal });
+      if (mapsRes.ok) {
+        const mapsData = await mapsRes.json();
+        if (Array.isArray(mapsData.predictions) && mapsData.predictions.length > 0) {
+          for (const p of mapsData.predictions) {
+            const mainText = p.structured_formatting?.main_text || p.description.split(',')[0];
+            const secondary = p.structured_formatting?.secondary_text || p.description.split(',').slice(1).join(',').trim();
+            let baseAddress = p.description || (secondary ? `${mainText}, ${secondary}` : mainText);
+            const detectedPin = baseAddress.match(/\b([1-9]\d{5})\b/)?.[1] || lookupPincodeForAddress(baseAddress) || lookupPincodeForAddress(mainText) || '';
+            if (detectedPin && !baseAddress.includes(detectedPin)) {
+              baseAddress = `${baseAddress} - ${detectedPin}`;
+            }
+            addResult({
+              label: mainText,
+              sublabel: secondary ? (detectedPin && !secondary.includes(detectedPin) ? `${secondary} - ${detectedPin}` : secondary) : (detectedPin || 'India'),
+              fullAddress: baseAddress,
+              cityValue: secondary.split(',')[0]?.trim() || mainText,
+              key: `gmaps:${p.place_id || p.description}`.toLowerCase(),
+              placeId: p.place_id,
+              postalCode: detectedPin || undefined
+            });
           }
-          addResult({
-            label: mainText,
-            sublabel: secondary ? (detectedPin && !secondary.includes(detectedPin) ? `${secondary} - ${detectedPin}` : secondary) : (detectedPin || 'India'),
-            fullAddress: baseAddress,
-            cityValue: secondary.split(',')[0]?.trim() || mainText,
-            key: `gmaps:${p.place_id || p.description}`.toLowerCase(),
-            placeId: p.place_id,
-            postalCode: detectedPin || undefined
-          });
         }
-        if (results.length >= 5) return results.slice(0, 6);
       }
+    } catch (err: any) {
+      if (err.name === 'AbortError') throw err;
     }
-  } catch (err: any) {
-    if (err.name === 'AbortError') throw err;
-  }
+  };
 
-  // 2. Query OpenStreetMap Nominatim API (restricted to India)
-  try {
-    const searchQuery = normalizedRemainder.length >= 2 ? normalizedRemainder : normalizedFull;
-    let nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&countrycodes=IN&format=json&addressdetails=1&limit=8&accept-language=en`;
-    if (mode === 'city') {
-      nomUrl += '&featuretype=city&featuretype=town&featuretype=village&featuretype=district';
-    }
-
-    const nomRes = await fetch(nomUrl, {
-      signal,
-      headers: {
-        'User-Agent': 'PairUpToday/1.0 (pairuptoday.in contact@pairuptoday.in)',
-        'Accept': 'application/json',
-      },
-    });
-
-    if (nomRes.ok) {
-      const text = await nomRes.text();
-      if (text.startsWith('[')) {
-        const nomData: NominatimResult[] = JSON.parse(text);
-        nomData.forEach(r => addResult(buildFromNominatim(r, houseNumber, mode)));
-      }
-    }
-  } catch (err: any) {
-    if (err.name === 'AbortError') throw err;
-  }
-
-  // 3. Query Photon API (India-wide fuzzy & typo-tolerant geocoding)
-  if (results.length < 5) {
+  const fetchPhoton = async () => {
     try {
       const pQuery = normalizedRemainder.length >= 2 ? normalizedRemainder : normalizedFull;
-      // Lat 20.5937 & Lon 78.9629 biases results towards the geographic center of India
       const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(pQuery)}&limit=8&lang=en&lat=20.5937&lon=78.9629`;
       const pRes = await fetch(photonUrl, {
         signal,
@@ -524,6 +496,37 @@ async function executePanIndiaSearch(
         if (pText.startsWith('{')) {
           const pData: { features: PhotonFeature[] } = JSON.parse(pText);
           pData.features?.forEach(f => addResult(buildFromPhoton(f, houseNumber, mode)));
+        }
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') throw err;
+    }
+  };
+
+  await Promise.allSettled([fetchBackendMaps(), fetchPhoton()]);
+
+  // 3. If still needed, query Nominatim (restricted to India)
+  if (results.length < 3) {
+    try {
+      const searchQuery = normalizedRemainder.length >= 2 ? normalizedRemainder : normalizedFull;
+      let nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&countrycodes=IN&format=json&addressdetails=1&limit=8&accept-language=en`;
+      if (mode === 'city') {
+        nomUrl += '&featuretype=city&featuretype=town&featuretype=village&featuretype=district';
+      }
+
+      const nomRes = await fetch(nomUrl, {
+        signal,
+        headers: {
+          'User-Agent': 'PairUpToday/1.0 (pairuptoday.in contact@pairuptoday.in)',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (nomRes.ok) {
+        const text = await nomRes.text();
+        if (text.startsWith('[')) {
+          const nomData: NominatimResult[] = JSON.parse(text);
+          nomData.forEach(r => addResult(buildFromNominatim(r, houseNumber, mode)));
         }
       }
     } catch (err: any) {

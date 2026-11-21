@@ -721,9 +721,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     fetchNotifications();
     refreshUserData();
     const interval = setInterval(() => {
-      fetchCompanions(true);
-      fetchMyBookings();
-      fetchNotifications();
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchCompanions(true);
+        fetchMyBookings();
+        fetchNotifications();
+      }
     }, 6000);
     return () => clearInterval(interval);
   }, [user?.id, selectedServiceId, selectedCity]);
