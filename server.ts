@@ -12,6 +12,7 @@ import { updateUserLocation, getUserLocation, startLocationSharing, stopLocation
 import { sendToMultipleDevices } from './server/services/fcm.ts';
 import { getPlaceAutocomplete, geocodeAddress, reverseGeocode, getDistanceMatrix, calculateDistance, isGoogleMapsConfigured } from './server/services/googlemaps.ts';
 import { hashPassword, verifyPassword } from './server/services/passwords.ts';
+import { uploadMedia } from './server/services/storage.ts';
 import { PAIRUP_SERVICES } from './src/constants/services.ts';
 import * as webpushModule from 'web-push';
 const webpush: any = (webpushModule as any).default || webpushModule;
@@ -2225,7 +2226,9 @@ app.post('/api/kyc/submit', async (req: Request, res: Response) => {
     idBackUrl: backImage ? `${authenticatedUserId}/${kycId}/id-back.${backImage.extension}` : null,
     selfieUrl: `${authenticatedUserId}/${kycId}/selfie.${selfieImage.extension}`,
     bio: bio || '',
-    photos: Array.isArray(photos) ? photos.slice(0, 6) : [],
+    photos: Array.isArray(photos)
+      ? await Promise.all(photos.slice(0, 6).map((p: string, idx: number) => uploadMedia(p, 'gallery', `${authenticatedUserId}_kyc_${idx}`)))
+      : [],
     city: city || 'New Delhi',
     status: 'PENDING',
     submittedAt,
@@ -2367,7 +2370,7 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
 
     if (profilePhoto !== undefined) {
       if (typeof profilePhoto === 'string' && profilePhoto.trim()) {
-        user.profilePhoto = profilePhoto.trim();
+        user.profilePhoto = await uploadMedia(profilePhoto.trim(), 'avatars', user.id);
       }
     }
 
@@ -2376,9 +2379,9 @@ app.post('/api/user/profile', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Photos must be an array of image strings.' });
       }
       const cleanPhotos = photos.filter((p: unknown) => typeof p === 'string' && (p as string).trim()).slice(0, 6);
-      user.photos = cleanPhotos;
-      if (!user.profilePhoto && cleanPhotos.length > 0) {
-        user.profilePhoto = cleanPhotos[0];
+      user.photos = await Promise.all(cleanPhotos.map((p: string, idx: number) => uploadMedia(p, 'gallery', `${user.id}_${idx}`)));
+      if (!user.profilePhoto && user.photos.length > 0) {
+        user.profilePhoto = user.photos[0];
       }
     }
 
@@ -3657,6 +3660,7 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
   const searchCacheKey = `search:${query || ''}:${serviceId || ''}:${city || ''}:${roundedLat}:${roundedLng}`;
   const cachedSearchResult = getEgressCache<any>(searchCacheKey);
   if (cachedSearchResult) {
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
     return res.json(cachedSearchResult);
   }
 
@@ -3982,6 +3986,7 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
 
   const searchResultPayload = { count: combined.length, companions: combined };
   setEgressCache(searchCacheKey, searchResultPayload, 60);
+  res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
   return res.json(searchResultPayload);
 });
 
@@ -7676,6 +7681,7 @@ app.get('/api/maps/autocomplete', async (req: Request, res: Response) => {
 
   try {
     const predictions = await getPlaceAutocomplete(input, location, radiusKm);
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400');
     return res.json({ predictions });
   } catch (error) {
     console.error('Maps autocomplete request failed:', error);
@@ -7706,6 +7712,7 @@ app.get('/api/maps/geocode', async (req: Request, res: Response) => {
   }
 
   if (result) {
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
     return res.json({
       place_id: result.place_id,
       formatted_address: result.formatted_address,
@@ -7740,6 +7747,7 @@ app.get('/api/maps/reverse-geocode', async (req: Request, res: Response) => {
   }
 
   if (result) {
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
     return res.json({
       formatted_address: result.formatted_address,
       address_components: result.address_components

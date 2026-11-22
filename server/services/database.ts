@@ -1465,12 +1465,20 @@ function invalidateUserCache(userId: string, phone?: string) {
   }
 }
 
+// Strict Column Projections to eliminate Supabase Egress & Disk IO bloat
+const USER_PROJECTION_COLUMNS = 'id, phone, password_hash, legal_name, email, role, active_role, dob, age, kyc_status, kyc_submitted_at, kyc_decided_at, kyc_decided_by, kyc_rejection_reason, profile_photo, bio, photos, city, state, address, created_at, updated_at, kyc_decided_by_admin_id';
+const KYC_LIST_COLUMNS = 'id, user_id, submission_role, legal_name, dob, id_type, id_reference, status, submitted_at, reviewed_at, rejection_reason, reviewed_by_admin_id, profile_bio, created_at, updated_at';
+const COMPANION_PROFILE_COLUMNS = 'id, user_id, services, rates, availability, is_live, rating, total_bookings, address, state, latitude, longitude, is_initial_listing, is_paused, created_at, updated_at';
+const BOOKING_PROJECTION_COLUMNS = 'id, booking_code, client_id, companion_id, service_id, service_name, booking_date, start_time, end_time, duration_hours, meeting_location, meeting_address, latitude, longitude, notes, amount_paise, status, payment_order_id, payment_id, payment_status, start_otp_hash, completion_otp_hash, start_otp_encrypted, completion_otp_encrypted, companion_arrived_at, started_at, completed_at, delay_minutes, admin_platform_fee_paise, companion_gross_share_paise, companion_net_share_paise, late_penalty_paise, client_refund_penalty_paise, settlement_status, settlement_unlock_at, start_otp_attempts, completion_otp_attempts, start_otp_verified, completion_otp_verified, payout_id, created_at, updated_at';
+const NOTIFICATION_COLUMNS = 'id, user_id, title, body, type, is_read, metadata, created_at';
+const AUDIT_LOG_COLUMNS = 'id, admin_id, admin_email, action, target_type, target_id, details, ip_address, created_at';
+
 // Supabase-based adapter (production)
 class SupabaseDatabaseAdapter implements DatabaseAdapter {
   async getUser(id: string): Promise<any | null> {
     const cached = userCacheById.get(id);
     if (cached && Date.now() < cached.expiresAt) return cached.user;
-    const { data, error } = await db.users().select('*').eq('id', id).maybeSingle();
+    const { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('id', id).maybeSingle();
     if (error) throw error;
     const user = data ? this.mapUser(data) : null;
     if (user) cacheUser(user);
@@ -1480,7 +1488,7 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   async getUserByPhone(phone: string): Promise<any | null> {
     const cached = userCacheByPhone.get(phone);
     if (cached && Date.now() < cached.expiresAt) return cached.user;
-    const { data, error } = await db.users().select('*').eq('phone', phone).maybeSingle();
+    const { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('phone', phone).maybeSingle();
     if (error) throw error;
     const user = data ? this.mapUser(data) : null;
     if (user) cacheUser(user);
@@ -1759,7 +1767,7 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async getUserKycSubmission(userId: string, submissionRole: 'CLIENT' | 'COMPANION'): Promise<any | null> {
-    const { data, error } = await db.kycSubmissions().select('*')
+    const { data, error } = await db.kycSubmissions().select(KYC_LIST_COLUMNS)
       .eq('user_id', userId)
       .eq('submission_role', submissionRole)
       .maybeSingle();
@@ -1768,9 +1776,10 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async listKycSubmissions(filters?: any): Promise<any[]> {
-    let query = db.kycSubmissions().select('*');
+    let query = db.kycSubmissions().select(KYC_LIST_COLUMNS);
     if (filters?.status) query = query.eq('status', filters.status);
     if (filters?.submissionRole) query = query.eq('submission_role', filters.submissionRole);
+    query = query.order('submitted_at', { ascending: false }).limit(filters?.limit || 50);
     const { data, error } = await query;
     if (error) throw error;
     return (data || []).map(mapKycSubmissionFromRow);
@@ -1858,7 +1867,7 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async getCompanionProfile(userId: string): Promise<any | null> {
-    const { data, error } = await db.companionProfiles().select('*').eq('user_id', userId).maybeSingle();
+    const { data, error } = await db.companionProfiles().select(COMPANION_PROFILE_COLUMNS).eq('user_id', userId).maybeSingle();
     if (error) throw error;
     return data ? mapCompanionProfileFromRow(data) : null;
   }
@@ -1883,10 +1892,10 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async listCompanionProfiles(filters?: any): Promise<any[]> {
-    let query = db.companionProfiles().select('*');
+    let query = db.companionProfiles().select(COMPANION_PROFILE_COLUMNS);
     if (filters?.isLive !== undefined) query = query.eq('is_live', filters.isLive);
     if (filters?.state) query = query.eq('state', filters.state);
-    if (Number.isInteger(filters?.limit) && filters.limit > 0) query = query.limit(filters.limit);
+    query = query.limit(Number.isInteger(filters?.limit) && filters.limit > 0 ? filters.limit : 50);
     const { data, error } = await query;
     if (error) throw error;
     return (data || []).map(mapCompanionProfileFromRow);
@@ -2116,25 +2125,25 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async getBooking(id: string): Promise<any | null> {
-    const { data, error } = await db.bookings().select('*').eq('id', id).maybeSingle();
+    const { data, error } = await db.bookings().select(BOOKING_PROJECTION_COLUMNS).eq('id', id).maybeSingle();
     if (error) throw error;
     return data ? mapBookingFromRow(data) : null;
   }
 
   async getBookingByCode(code: string): Promise<any | null> {
-    const { data, error } = await db.bookings().select('*').eq('booking_code', code).maybeSingle();
+    const { data, error } = await db.bookings().select(BOOKING_PROJECTION_COLUMNS).eq('booking_code', code).maybeSingle();
     if (error) throw error;
     return data ? mapBookingFromRow(data) : null;
   }
 
   async getBookingByPaymentOrder(orderId: string): Promise<any | null> {
-    const { data, error } = await db.bookings().select('*').eq('payment_order_id', orderId).maybeSingle();
+    const { data, error } = await db.bookings().select(BOOKING_PROJECTION_COLUMNS).eq('payment_order_id', orderId).maybeSingle();
     if (error) throw error;
     return data ? mapBookingFromRow(data) : null;
   }
 
   async listBookings(filters?: any): Promise<any[]> {
-    let query = db.bookings().select('*');
+    let query = db.bookings().select(BOOKING_PROJECTION_COLUMNS);
     if (filters?.participantId) {
       query = query.or(`client_id.eq.${filters.participantId},companion_id.eq.${filters.participantId}`);
     } else {
@@ -2142,6 +2151,7 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       if (filters?.companionId) query = query.eq('companion_id', filters.companionId);
     }
     if (filters?.status) query = query.eq('status', filters.status);
+    query = query.order('created_at', { ascending: false }).limit(filters?.limit || 25);
     const { data, error } = await query;
     if (error) throw error;
     return (data || []).map(mapBookingFromRow);
@@ -2683,11 +2693,11 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async listAuditLogs(filters?: any): Promise<any[]> {
-    let query = db.auditLogs().select('*');
+    let query = db.auditLogs().select('id, admin_user_id, user_id, action, entity_type, entity_id, details, ip_address, created_at');
     if (filters?.adminId) query = query.or(`admin_id.eq.${filters.adminId},admin_user_id.eq.${filters.adminId}`);
     if (filters?.userId) query = query.eq('user_id', filters.userId);
     if (filters?.action) query = query.eq('action', filters.action);
-    const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(filters?.limit || 50);
     if (error) throw error;
     return data || [];
   }
@@ -2712,7 +2722,11 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async listNotifications(userId: string): Promise<any[]> {
-    const { data, error } = await db.notifications().select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    const { data, error } = await db.notifications()
+      .select('id, user_id, type, title, body, data, read_at, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20);
     if (error) throw error;
     return (data || []).map((row: any) => ({
       ...row,

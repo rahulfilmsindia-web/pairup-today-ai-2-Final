@@ -77,7 +77,11 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
     };
 
     fetchBookingStatus();
-    const interval = setInterval(fetchBookingStatus, 4000);
+    const interval = setInterval(() => {
+      if (typeof document === 'undefined' || !document.hidden) {
+        fetchBookingStatus();
+      }
+    }, 12000);
     return () => clearInterval(interval);
   }, [booking.id]);
 
@@ -107,7 +111,11 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
     };
 
     fetchChat();
-    const chatInterval = setInterval(fetchChat, 2500);
+    const chatInterval = setInterval(() => {
+      if (typeof document === 'undefined' || !document.hidden) {
+        fetchChat();
+      }
+    }, 8000);
     return () => clearInterval(chatInterval);
   }, [booking.id]);
 

@@ -720,13 +720,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     fetchMyBookings();
     fetchNotifications();
     refreshUserData();
+    // Background safety heartbeat every 60s (zero redundant database load)
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && !document.hidden) {
         fetchCompanions(true);
         fetchMyBookings();
         fetchNotifications();
       }
-    }, 12000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [user?.id, selectedServiceId, selectedCity]);
 
@@ -760,7 +761,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       }
     };
     fetchChat();
-    const chatInterval = setInterval(fetchChat, 4000);
+    const chatInterval = setInterval(() => {
+      if (typeof document === 'undefined' || !document.hidden) {
+        fetchChat();
+      }
+    }, 10000);
     return () => clearInterval(chatInterval);
   }, [activeChatBooking]);
 

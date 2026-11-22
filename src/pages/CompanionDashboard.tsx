@@ -1230,12 +1230,13 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
       console.warn('Failed to initialize SSE EventSource:', sseErr);
     }
 
+    // Heartbeat background sync every 60s (live alerts delivered instantly via SSE/Firebase)
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && !document.hidden) {
         fetchBookings();
         fetchNotifications();
       }
-    }, 6000);
+    }, 60000);
 
     // Also listen for Service Worker postMessage actions (e.g. from notification clicks)
     const handleSwMessage = (e: MessageEvent) => {
