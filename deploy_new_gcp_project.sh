@@ -125,12 +125,12 @@ gcloud run deploy "${SERVICE_NAME}" \
   --platform managed \
   --allow-unauthenticated \
   --port 8080 \
-  --memory 2Gi \
-  --cpu 2 \
-  --min-instances 2 \
-  --max-instances 10 \
+  --memory 1Gi \
+  --cpu 1 \
+  --min-instances 0 \
+  --max-instances 5 \
   --concurrency 80 \
-  --no-cpu-throttling \
+  --cpu-throttling \
   --set-secrets="${SECRETS_LIST}" \
   --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88,APITXT_BASE_URL=https://apitxt.com"
 
@@ -148,12 +148,12 @@ gcloud run deploy "${SERVICE_NAME}" \
   --platform managed \
   --allow-unauthenticated \
   --port 8080 \
-  --memory 2Gi \
-  --cpu 2 \
-  --min-instances 2 \
-  --max-instances 10 \
+  --memory 1Gi \
+  --cpu 1 \
+  --min-instances 0 \
+  --max-instances 5 \
   --concurrency 80 \
-  --no-cpu-throttling \
+  --cpu-throttling \
   --set-secrets="${SECRETS_LIST}" \
   --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88,APITXT_BASE_URL=https://apitxt.com"
 
