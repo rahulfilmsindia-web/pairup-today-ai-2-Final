@@ -103,7 +103,19 @@ export const SERVICE_TRANSLATIONS: Record<Language, Record<number, LocalizedServ
     24: {
       name: "Elder Care & Daily Living Assistance Companion",
       description: "Companionship for elderly individuals in everyday life, including walking, general assistance, meal reminders, shopping, social activities and accompanying them to necessary appointments."
-    }
+    },
+    25: { name: "Personal Driver", description: "Licensed personal driver for comfortable city commutes, outstation drives, or business travel in your vehicle." },
+    26: { name: "Personal Photographer", description: "Talented photographer companion for portraits, street photography, Instagram aesthetic reels, and memories." },
+    27: { name: "Content Creator Buddy", description: "Creative partner for collaborating on YouTube vlogs, TikTok/Reels content creation, and podcasting." },
+    28: { name: "Influencer Promotion", description: "Social media influencer companionship to attend brand launches, cafe inaugurations, and promote lifestyle experiences." },
+    29: { name: "Makeup & Styling", description: "Personal styling and beauty companion to assist with shopping, wardrobe curation, makeup suggestions, and grooming." },
+    30: { name: "Event & Party Host", description: "Charismatic emcee and co-host for private gatherings, birthday parties, team dinners, and social meetups." },
+    31: { name: "Astrology & Vastu", description: "Enlightening Vedic astrology, birth chart discussions, tarot readings, and Vastu lifestyle consultation." },
+    32: { name: "Pet Care & Dog Walk", description: "Animal-loving companion to walk your dogs, accompany you to pet cafes, or spend quality outdoor playtime with pets." },
+    33: { name: "Study & Home Tutor", description: "Dedicated academic companion for homework guidance, conceptual discussions, language practice, and study habits." },
+    34: { name: "Child Care & Babysitting", description: "Vetted, caring companion for storytelling, park playtimes, arts and crafts, and supportive family supervision." },
+    35: { name: "Home Cooking Buddy", description: "Culinary companion to cook authentic home meals together, explore new regional cuisines, and bake desserts." },
+    36: { name: "Event Security / Bouncer", description: "Professional, imposing personal security and discrete escort companion for late-night transit, VIP events, or crowded venues." }
   },
   bn: {
     1: {
@@ -201,7 +213,19 @@ export const SERVICE_TRANSLATIONS: Record<Language, Record<number, LocalizedServ
     24: {
       name: "প্রবীণ পরিচর্যা ও জীবনযাত্রা সহায়তা সঙ্গী",
       description: "বয়োজ্যেষ্ঠদের প্রতিদিনের ওষুধ মনে করানো, গল্প করা এবং যত্নশীল সাহচর্য প্রদান করা।"
-    }
+    },
+    25: { name: "ব্যক্তিগত ড্রাইভার সঙ্গী", description: "শহর বা দূরযাত্রায় আপনার গাড়িতে নিরাপদ ও মার্জিত ড্রাইভিং সহায়তা প্রদানকারী সঙ্গী।" },
+    26: { name: "ব্যক্তিগত ফটোগ্রাফার সঙ্গী", description: "ইনস্টাগ্রাম রিল, সুন্দর পোর্ট্রেট ও স্মরণীয় মুহূর্ত নিখুঁতভাবে ক্যামেরাবন্দী করার সঙ্গী।" },
+    27: { name: "কনটেন্ট ক্রিয়েটর কোলাব সঙ্গী", description: "ইউটিউব ব্লগ, রিল ও পডকাস্ট তৈরিতে সৃজনশীল আইডিয়া ও যৌথ অংশগ্রহণের সঙ্গী।" },
+    28: { name: "ইনফ্লুয়েন্সার প্রমোশন সঙ্গী", description: "ব্র্যান্ড উদ্বোধন, ক্যাফে লঞ্চ ও লাইফস্টাইল ইভেন্টে সোশ্যাল মিডিয়া রিচ বৃদ্ধির সহযোগী।" },
+    29: { name: "মেকআপ ও স্টাইলিং সঙ্গী", description: "পোশাক নির্বাচন, মেকআপ পরামর্শ ও যেকোনো অনুষ্ঠানে সাজসজ্জার ব্যক্তিগত সহকারী।" },
+    30: { name: "ইভেন্ট ও পার্টি হোস্ট", description: "পার্টি, পারিবারিক আড্ডা বা সামাজিক অনুষ্ঠানে প্রাণবন্ত উপস্থাপনা ও সঞ্চালনার সঙ্গী।" },
+    31: { name: "জ্যোতিষ ও বাস্তু পরামর্শ সঙ্গী", description: "বৈদিক জ্যোতিষশাস্ত্র, জন্মকুণ্ডলী বিচার ও বাস্তু নিয়ে আলোচনা ও পথনির্দেশনার সঙ্গী।" },
+    32: { name: "পোষ্য পরিচর্যা ও ডগ ওয়াকিং সঙ্গী", description: "পোষা প্রাণীকে হাঁটানো, পেট ক্যাফেতে যাওয়া এবং যত্নশীল সঙ্গ প্রদানের বিশ্বস্ত সঙ্গী।" },
+    33: { name: "হোম টিউটর ও স্টাডি মেন্টর", description: "পড়াশোনায় মনোযোগ বাড়ানো, হোমওয়ার্ক গাইডেন্স ও ভাষার অনুশীলনে সহায়ক সঙ্গী।" },
+    34: { name: "বেবিসিটিং ও শিশু যত্ন সঙ্গী", description: "শিশুদের গল্প শোনানো, পার্কে খেলাধুলা ও দায়িত্বশীল দেখাশোনার বিশ্বস্ত সঙ্গী।" },
+    35: { name: "হোম কুকিং ও শেফ সঙ্গী", description: "সুস্বাদু ঘরোয়া রান্না একসাথে তৈরি করা ও নতুন রেসিপি শেখার আনন্দময় সঙ্গী।" },
+    36: { name: "ইভেন্ট সিকিউরিটি ও বাউন্সার", description: "ভিআইপি ইভেন্ট, রাতের যাতায়াত বা জনবহুল স্থানে পেশাদার ব্যক্তিগত নিরাপত্তা সঙ্গী।" }
   },
   hi: {
     1: {
@@ -299,7 +323,19 @@ export const SERVICE_TRANSLATIONS: Record<Language, Record<number, LocalizedServ
     24: {
       name: "बुजुर्गों की देखभाल व जीवन सहयोग साथी",
       description: "दवाइयाँ याद दिलाना, टहलाना और बुजुर्गों के दैनिक जीवन में सम्मानजनक उपस्थिति।"
-    }
+    },
+    25: { name: "पर्सनल ड्राइवर साथी", description: "शहर के सफर या लंबी यात्राओं के लिए आपके वाहन में सुरक्षित और शालीन ड्राइविंग साथी।" },
+    26: { name: "पर्सनल फोटोग्राफर साथी", description: "इंस्टाग्राम रील्स, बेहतरीन पोर्ट्रेट और खूबसूरत यादों को कैमरे में कैद करने वाले साथी।" },
+    27: { name: "कंटेंट क्रिएटर बडी", description: "यूट्यूब व्लॉग, रील्स और पॉडकास्ट बनाने में रचनात्मक सहयोग देने वाले साथी।" },
+    28: { name: "इन्फ्लुएंसर प्रमोशन साथी", description: "ब्रांड लॉन्च, कैफे इवेंट्स और सोशल मीडिया लाइफस्टाइल प्रमोशन में सहयोग।" },
+    29: { name: "मेकअप व स्टाइलिंग साथी", description: "शॉपिंग, वार्डरोब चुनाव और पार्टी के लिए बेहतरीन मेकअप व स्टाइलिंग मार्गदर्शन।" },
+    30: { name: "इवेंट एवं पार्टी होस्ट", description: "पारिवारिक समारोहों, जन्मदिन पार्टियों और सोशल मीट्स में शानदार एंकरिंग साथी।" },
+    31: { name: "ज्योतिष एवं वास्तु साथी", description: "वैदिक ज्योतिष, कुंडली विश्लेषण और वास्तु संबंधी जीवनशैली परामर्श साथी।" },
+    32: { name: "पेट केयर एवं डॉग वॉक साथी", description: "पालतू जानवरों को टहलाना, पेट कैफे जाना और उनके साथ समय बिताने वाले स्नेही साथी।" },
+    33: { name: "होम ट्यूटर व स्टडी साथी", description: "होमवर्क, कॉन्सेप्ट क्लीयरिंग और अनुशासित अध्ययन में प्रेरक शैक्षणिक साथी।" },
+    34: { name: "चाइल्ड केयर व बेबीसिटिंग", description: "बच्चों को कहानियाँ सुनाने, खेलकूद और सुरक्षित पारिवारिक माहौल में देखभाल साथी।" },
+    35: { name: "होम कुकिंग शेफ साथी", description: "स्वादिष्ट घरेलू भोजन पकाने और नए व्यंजनों का अनुभव साझा करने वाले साथी।" },
+    36: { name: "इवेंट सिक्योरिटी व बाउंसर", description: "व्यक्तिगत सुरक्षा, देर रात यात्रा और वीआईपी आयोजनों में मजबूत सुरक्षा साथी।" }
   }
 };
 

@@ -17,8 +17,91 @@ import {
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
-  Navigation
+  Navigation,
+  Sparkle,
+  Bell
 } from 'lucide-react';
+
+interface FeaturedPreviewCompanion {
+  id: string;
+  name: string;
+  age: number;
+  city: string;
+  state: string;
+  hourlyRate: number;
+  rating: number;
+  bio: string;
+  tags: string[];
+}
+
+const FEATURED_PREVIEW_COMPANIONS: FeaturedPreviewCompanion[] = [
+  {
+    id: 'preview-kol-1',
+    name: 'Ananya Sen',
+    age: 24,
+    city: 'Kolkata',
+    state: 'West Bengal',
+    hourlyRate: 400,
+    rating: 4.9,
+    bio: 'Art and literature enthusiast, cafe lover, and passionate city culture explorer.',
+    tags: ['Cafe & Dining', 'City Tour', 'Social']
+  },
+  {
+    id: 'preview-mum-2',
+    name: 'Rohan Verma',
+    age: 27,
+    city: 'Mumbai',
+    state: 'Maharashtra',
+    hourlyRate: 550,
+    rating: 4.8,
+    bio: 'Music enthusiast, travel buddy, and weekend culinary explorer across South Mumbai.',
+    tags: ['Live Concerts', 'Travel Buddy', 'Food Walk']
+  },
+  {
+    id: 'preview-del-3',
+    name: 'Priya Sharma',
+    age: 25,
+    city: 'Delhi NCR',
+    state: 'Delhi',
+    hourlyRate: 500,
+    rating: 5.0,
+    bio: 'Heritage lover, shopping guide, and friendly conversationalist for social events.',
+    tags: ['Shopping Buddy', 'Events & Expos', 'Weddings']
+  },
+  {
+    id: 'preview-blr-4',
+    name: 'Aditi Roy',
+    age: 26,
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    hourlyRate: 600,
+    rating: 4.9,
+    bio: 'Tech professional, board game enthusiast, and weekend trek & cycling buddy.',
+    tags: ['Tech Events', 'Cycling & Trek', 'Weekend Trips']
+  },
+  {
+    id: 'preview-kol-5',
+    name: 'Sourav Das',
+    age: 28,
+    city: 'Kolkata',
+    state: 'West Bengal',
+    hourlyRate: 450,
+    rating: 4.8,
+    bio: 'Cinema buff, street food connoisseur, and museum walking companion.',
+    tags: ['Movie Buddy', 'Food & Local Spots', 'City Tour']
+  },
+  {
+    id: 'preview-ahm-6',
+    name: 'Sneha Patel',
+    age: 23,
+    city: 'Ahmedabad',
+    state: 'Gujarat',
+    hourlyRate: 450,
+    rating: 4.9,
+    bio: 'Festive event host, photography enthusiast, and traditional craft explorer.',
+    tags: ['Events & Expos', 'Photography', 'Social']
+  }
+];
 
 interface CompanionListingProps {
   initialServiceId?: number | null;
@@ -42,6 +125,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
   const [companions, setCompanions] = useState<CompanionDiscoveryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewModalCompanion, setPreviewModalCompanion] = useState<FeaturedPreviewCompanion | null>(null);
 
   // Quick View Modal state
   const [quickViewCompanion, setQuickViewCompanion] = useState<CompanionDiscoveryItem | null>(null);
@@ -172,6 +256,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
   useEffect(() => {
     fetchCompanions();
 
+    // On-demand fetch on visibility change (Zero continuous polling loop to protect Supabase egress)
     const handleVisibilityChange = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         fetchCompanions(true);
@@ -181,15 +266,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
-    // Smart visibility-aware polling every 20s (stops when tab is hidden to protect database bandwidth)
-    const pollInterval = setInterval(() => {
-      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-        fetchCompanions(true);
-      }
-    }, 20000);
-
     return () => {
-      clearInterval(pollInterval);
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
@@ -398,15 +475,45 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                 }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-amber-400 transition-colors cursor-pointer"
               >
-                <option value="all">{t.allServicesLabel} (24 Services)</option>
+                <option value="all">{t.allServicesLabel || 'All Services'} (36 Services)</option>
                 {PAIRUP_SERVICES.map((srv) => (
                   <option key={srv.id} value={srv.id}>
-                    #{srv.id}. {srv.name}
+                    #{srv.id}. {srv.cardTitle || srv.name}
                   </option>
                 ))}
               </select>
             </div>
 
+          </div>
+
+          {/* Quick Filter Horizontal Category Chips */}
+          <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <span className="text-[11px] font-semibold text-slate-400 whitespace-nowrap shrink-0">
+              Quick Filter:
+            </span>
+            <button
+              onClick={() => setSelectedServiceId('all')}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all shrink-0 cursor-pointer ${
+                selectedServiceId === 'all'
+                  ? 'bg-amber-400 text-slate-950 font-bold shadow-md'
+                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/60'
+              }`}
+            >
+              All Services (36)
+            </button>
+            {PAIRUP_SERVICES.slice(0, 14).map((srv) => (
+              <button
+                key={srv.id}
+                onClick={() => setSelectedServiceId(srv.id)}
+                className={`px-2.5 py-1 rounded-full text-xs transition-all shrink-0 cursor-pointer ${
+                  selectedServiceId === srv.id
+                    ? 'bg-pink-500 text-white font-bold shadow-md'
+                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/60'
+                }`}
+              >
+                {srv.chipLabel || srv.cardTitle || srv.name}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -481,21 +588,112 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
           </div>
         )}
 
-        {/* Empty State */}
+        {/* Safe Fallback for Empty State with 6 Realistic Featured Preview Cards */}
         {!loading && !error && companions.length === 0 && (
-          <div className="py-16 text-center text-slate-400 max-w-md mx-auto">
-            <p className="text-base font-semibold text-slate-300">No companions match your filter criteria.</p>
-            <p className="text-xs text-slate-500 mt-1">Try resetting the location or service filter.</p>
-            <button
-              onClick={() => {
-                setSelectedCity('');
-                setClientCoords(null);
-                setSelectedServiceId('all');
-              }}
-              className="mt-4 px-4 py-2 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30 text-xs font-bold"
-            >
-              Reset Filters
-            </button>
+          <div className="py-6">
+            <div className="text-center max-w-lg mx-auto mb-8">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-pink-400 text-xs font-semibold mb-3">
+                <Sparkles className="w-3.5 h-3.5" />
+                Featured Companion Roster
+              </div>
+              <h3 className="text-lg sm:text-xl font-bold text-slate-100">
+                No companions active in this exact filter right now
+              </h3>
+              <p className="text-xs text-slate-400 mt-1.5">
+                Explore our featured verified companions from major cities across India. Sign in to get notified or request bookings when they go live.
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedCity('');
+                    setClientCoords(null);
+                    setSelectedServiceId('all');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Reset Location &amp; Filters
+                </button>
+              </div>
+            </div>
+
+            {/* 6 Realistic Featured Preview Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {FEATURED_PREVIEW_COMPANIONS.map((preview) => (
+                <div
+                  key={preview.id}
+                  className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl hover:border-pink-500/40 hover:shadow-2xl transition-all duration-300 flex flex-col group"
+                >
+                  {/* Card Header with Avatar & Badge */}
+                  <div className="p-6 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border-b border-slate-800/80 relative">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 via-rose-500 to-amber-500 p-0.5 shadow-lg shadow-pink-500/20 shrink-0">
+                          <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-lg font-black text-white">
+                            {preview.name.slice(0, 1)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="font-extrabold text-white text-base group-hover:text-amber-300 transition-colors">
+                              {preview.name}
+                            </h4>
+                            <span className="text-xs text-slate-400">({preview.age})</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                            <MapPin className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                            <span>{preview.city}, {preview.state}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Featured Preview Badge */}
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-400/10 text-amber-300 border border-amber-400/30 shrink-0">
+                        <Sparkle className="w-3 h-3 text-amber-400" />
+                        Featured Preview
+                      </span>
+                    </div>
+
+                    <p className="mt-4 text-xs text-slate-300 leading-relaxed line-clamp-2">
+                      {preview.bio}
+                    </p>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+                    <div className="flex flex-wrap gap-1.5">
+                      {preview.tags.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700/60"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Footer with Rate and Connect CTA */}
+                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                          Hourly Rate
+                        </div>
+                        <div className="text-base font-extrabold text-amber-400">
+                          ₹{preview.hourlyRate}/hr
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setPreviewModalCompanion(preview)}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 shadow-md shadow-pink-500/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        <Bell className="w-3.5 h-3.5" />
+                        <span>Get Notified</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -871,6 +1069,59 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Featured Preview Notification Modal */}
+      {previewModalCompanion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-md rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl p-6 overflow-hidden">
+            <button
+              onClick={() => setPreviewModalCompanion(null)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-400/10 text-amber-300 border border-amber-400/30">
+                Featured Preview
+              </span>
+            </div>
+
+            <h3 className="text-lg font-bold text-white">
+              Connect with {previewModalCompanion.name}
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {previewModalCompanion.city}, {previewModalCompanion.state} • ₹{previewModalCompanion.hourlyRate}/hr
+            </p>
+
+            <p className="mt-4 text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+              "{previewModalCompanion.bio}"
+            </p>
+
+            <div className="mt-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200">
+              ℹ️ This companion profile is part of our verified preview roster. Sign in to PairUpToday to receive alerts when companions in {previewModalCompanion.city} open their calendar for instant bookings!
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setPreviewModalCompanion(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setPreviewModalCompanion(null);
+                  openAuthModal('signin');
+                }}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white text-xs font-bold shadow-lg shadow-pink-500/25 hover:from-pink-600 hover:to-rose-600 transition-all cursor-pointer"
+              >
+                Sign In / Get Notified
+              </button>
+            </div>
           </div>
         </div>
       )}

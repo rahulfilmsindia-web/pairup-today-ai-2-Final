@@ -1,204 +1,441 @@
+export type ServiceCategory = 'social' | 'travel' | 'creator' | 'active' | 'care';
+
 export interface ServiceItem {
   id: number;
+  slug?: string;
   name: string;
+  chipLabel: string;
+  cardTitle: string;
   description: string;
   iconName: string;
-  category: 'social' | 'lifestyle' | 'travel' | 'wellness' | 'culture' | 'care';
+  category: ServiceCategory;
   badgeLabel?: string;
   image: string;
 }
 
+export const SERVICE_CATEGORIES: { id: 'all' | ServiceCategory; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'social', label: 'Social & Entertainment' },
+  { id: 'travel', label: 'Travel & Exploration' },
+  { id: 'creator', label: 'Creator & Lifestyle' },
+  { id: 'active', label: 'Active & Hobbies' },
+  { id: 'care', label: 'Care & Family' }
+];
+
 export const PAIRUP_SERVICES: ServiceItem[] = [
+  // =========================================================================
+  // CATEGORY 1: SOCIAL & ENTERTAINMENT (8 Services)
+  // =========================================================================
   {
     id: 1,
-    name: "Social & Conversation Companion",
-    description: "Friendly companionship for conversations, casual chats, sharing stories and spending pleasant leisure time together.",
-    iconName: "MessageCircleHeart",
-    category: "social",
-    image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80"
+    slug: 'social-conversation',
+    name: 'Social & Conversation Companion',
+    cardTitle: 'Social & Conversation',
+    chipLabel: 'Hangout',
+    description: 'Friendly companionship for casual chats, meaningful conversations, sharing stories, and relaxing leisure time together.',
+    iconName: 'MessageCircleHeart',
+    category: 'social',
+    image: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80'
   },
   {
     id: 2,
-    name: "Cafe & Restaurant Companion",
-    description: "A companion for visiting cafés, restaurants, coffee shops and new food destinations and enjoying time together.",
-    iconName: "Coffee",
-    category: "lifestyle",
-    image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80"
+    slug: 'cafe-restaurant',
+    name: 'Cafe & Restaurant Companion',
+    cardTitle: 'Cafe & Dining',
+    chipLabel: 'Dining',
+    description: 'A charming companion for visiting trendy cafés, coffee bistros, culinary spots, and enjoying delightful meals together.',
+    iconName: 'Coffee',
+    category: 'social',
+    image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80'
   },
   {
     id: 3,
-    name: "Movie & Cinema Companion",
-    description: "Enjoy movies together at cinema halls, multiplexes and special movie screenings.",
-    iconName: "Film",
-    category: "lifestyle",
-    image: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=600&q=80"
+    slug: 'movie-cinema',
+    name: 'Movie & Cinema Companion',
+    cardTitle: 'Movie Buddy',
+    chipLabel: 'Movies',
+    description: 'Enjoy cinema releases, IMAX screenings, film festivals, and entertainment shows with an enthusiastic movie partner.',
+    iconName: 'Film',
+    category: 'social',
+    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=600&q=80'
   },
   {
     id: 4,
-    name: "Shopping Companion",
-    description: "Companionship for shopping malls, clothing stores, markets and other shopping activities, including general assistance in choosing items.",
-    iconName: "ShoppingBag",
-    category: "lifestyle",
-    image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 5,
-    name: "Travel & Holiday Companion",
-    description: "Friendly companionship for domestic and international travel, holidays, tours and tourism trips.",
-    iconName: "Plane",
-    category: "travel",
-    image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 6,
-    name: "City Tour & Sightseeing Companion",
-    description: "Explore city attractions, popular spots, parks and new places with a companion.",
-    iconName: "Compass",
-    category: "travel",
-    image: "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 7,
-    name: "Event & Exhibition Companion",
-    description: "Companionship for exhibitions, fairs, book fairs, cultural programmes and public events.",
-    iconName: "Calendar",
-    category: "culture",
-    image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 8,
-    name: "Wedding & Ceremony Companion",
-    description: "Companionship for weddings, receptions, family functions and social ceremonies.",
-    iconName: "Sparkles",
-    category: "social",
-    image: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80"
+    slug: 'shopping',
+    name: 'Shopping Companion',
+    cardTitle: 'Shopping Buddy',
+    chipLabel: 'Shopping',
+    description: 'Companionship for shopping malls, fashion streets, boutique visits, and friendly assistance with style selections.',
+    iconName: 'ShoppingBag',
+    category: 'social',
+    image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=600&q=80'
   },
   {
     id: 9,
-    name: "Party & Clubbing Companion",
-    description: "Companionship for social parties, special occasions and permitted entertainment events.",
-    iconName: "PartyPopper",
-    category: "lifestyle",
-    image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=600&q=80"
+    slug: 'party-clubbing',
+    name: 'Party & Clubbing Companion',
+    cardTitle: 'Party & Nightlife',
+    chipLabel: 'Nightlife',
+    description: 'Companionship for social parties, lounge evenings, weekend celebrations, and verified entertainment venues.',
+    iconName: 'PartyPopper',
+    category: 'social',
+    image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=600&q=80'
   },
   {
     id: 10,
-    name: "Concert & Live Music Companion",
-    description: "Enjoy live music, concerts, band performances and music festivals together.",
-    iconName: "Music",
-    category: "culture",
-    image: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80"
+    slug: 'concert-music',
+    name: 'Concert & Live Music Companion',
+    cardTitle: 'Live Concerts',
+    chipLabel: 'Concerts',
+    description: 'Attend live music concerts, band performances, acoustic festivals, and musical gatherings together.',
+    iconName: 'Music',
+    category: 'social',
+    image: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80'
   },
   {
-    id: 11,
-    name: "Sports & Stadium Companion",
-    description: "Enjoy cricket, football and other sports at stadiums and sporting events with a companion.",
-    iconName: "Trophy",
-    category: "lifestyle",
-    image: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=600&q=80"
+    id: 7,
+    slug: 'event-exhibition',
+    name: 'Event & Exhibition Companion',
+    cardTitle: 'Events & Expos',
+    chipLabel: 'Events',
+    description: 'Explore art exhibitions, trade expos, literature festivals, tech summits, and cultural shows with good company.',
+    iconName: 'Calendar',
+    category: 'social',
+    image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80'
   },
   {
-    id: 12,
-    name: "Fitness & Walking Companion",
-    description: "Companionship for walking, jogging, spending time in parks and general fitness activities.",
-    iconName: "Activity",
-    category: "wellness",
-    image: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=600&q=80"
+    id: 8,
+    slug: 'wedding-ceremony',
+    name: 'Wedding & Ceremony Companion',
+    cardTitle: 'Weddings & Events',
+    chipLabel: 'Weddings',
+    description: 'Respectful, well-groomed companionship for wedding receptions, sangeet functions, and formal family ceremonies.',
+    iconName: 'Sparkles',
+    category: 'social',
+    image: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80'
+  },
+
+  // =========================================================================
+  // CATEGORY 2: TRAVEL & EXPLORATION (6 Services)
+  // =========================================================================
+  {
+    id: 5,
+    slug: 'travel-holiday',
+    name: 'Travel & Holiday Companion',
+    cardTitle: 'Travel Buddy',
+    chipLabel: 'Travel',
+    description: 'Friendly, reliable companionship for domestic and international tours, holiday getaways, and scenic road trips.',
+    iconName: 'Plane',
+    category: 'travel',
+    image: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=80'
   },
   {
-    id: 13,
-    name: "Outdoor Activities Companion",
-    description: "Companionship for picnics, park visits, spending time in nature and other outdoor activities.",
-    iconName: "Trees",
-    category: "wellness",
-    image: "https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 14,
-    name: "Hobby & Creative Activities Companion",
-    description: "Spend time together on painting, photography, handicrafts and other creative hobbies.",
-    iconName: "Palette",
-    category: "culture",
-    image: "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 15,
-    name: "Gaming & Indoor Activities Companion",
-    description: "Enjoy chess, board games, card games and other indoor recreational activities together.",
-    iconName: "Gamepad2",
-    category: "lifestyle",
-    image: "https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 16,
-    name: "Study & Co-working Companion",
-    description: "Spend time studying or working together in libraries, study spaces and co-working environments.",
-    iconName: "BookOpen",
-    category: "social",
-    image: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 17,
-    name: "Senior Citizen Companionship",
-    description: "Friendly companionship for senior citizens through conversations, casual chats, walking and social activities.",
-    iconName: "HeartHandshake",
-    category: "care",
-    image: "https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 18,
-    name: "Hospital & Medical Appointment Companion",
-    description: "Companionship during travel to hospitals, clinics or medical appointments and while waiting. This is not a medical service.",
-    iconName: "Building2",
-    category: "care",
-    image: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 19,
-    name: "Daily Errands & Market Companion",
-    description: "Companionship for markets, post offices, banks, shopping and other ordinary daily errands.",
-    iconName: "CheckSquare",
-    category: "lifestyle",
-    image: "https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 20,
-    name: "Religious & Spiritual Visit Companion",
-    description: "Companionship for visits to temples, mosques, churches, gurudwaras and other religious or spiritual places.",
-    iconName: "Sun",
-    category: "culture",
-    image: "https://images.unsplash.com/photo-1561361066-51368ca52219?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: 21,
-    name: "Airport & Railway Travel Companion",
-    description: "Companionship and general assistance before or after journeys at airports and railway stations.",
-    iconName: "TrainTrack",
-    category: "travel",
-    image: "https://images.unsplash.com/photo-1530521954074-e64f6810b32d?auto=format&fit=crop&w=600&q=80"
+    id: 6,
+    slug: 'city-tour',
+    name: 'City Tour & Sightseeing Companion',
+    cardTitle: 'City Tour',
+    chipLabel: 'City Tour',
+    description: 'Explore city landmarks, historic monuments, heritage walks, and waterfronts with an energetic local buddy.',
+    iconName: 'Compass',
+    category: 'travel',
+    image: 'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?auto=format&fit=crop&w=600&q=80'
   },
   {
     id: 22,
-    name: "Local Exploration & Food Discovery Companion",
-    description: "Discover local food, street food, popular markets and new places around the city with a companion.",
-    iconName: "Utensils",
-    category: "lifestyle",
-    image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80"
+    slug: 'food-discovery',
+    name: 'Local Exploration & Food Discovery Companion',
+    cardTitle: 'Food & Local Spots',
+    chipLabel: 'Food Walk',
+    description: 'Discover legendary street food alleys, hidden regional culinary gems, and bustling midnight bazaars.',
+    iconName: 'Utensils',
+    category: 'travel',
+    image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=600&q=80'
   },
   {
     id: 23,
-    name: "Tourist Guide & Local Exploration Companion",
-    description: "Explore historical places, heritage sites, tourist attractions, local culture and tourism destinations with a companion. Professional guiding must be performed only where the required qualifications and permissions are available.",
-    iconName: "MapPin",
-    category: "travel",
-    image: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=600&q=80"
+    slug: 'tourist-guide',
+    name: 'Tourist Guide & Local Exploration Companion',
+    cardTitle: 'Local Guide',
+    chipLabel: 'Local Guide',
+    description: 'Knowledgeable companionship for cultural monuments, architectural wonders, and authentic local traditions.',
+    iconName: 'MapPin',
+    category: 'travel',
+    image: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 21,
+    slug: 'airport-railway',
+    name: 'Airport & Railway Travel Companion',
+    cardTitle: 'Airport & Rail',
+    chipLabel: 'Transit',
+    description: 'Reliable meet-and-greet companionship and assistance before, during, or after journeys at airports and railway stations.',
+    iconName: 'TrainTrack',
+    category: 'travel',
+    image: 'https://images.unsplash.com/photo-1530521954074-e64f6810b32d?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 25,
+    slug: 'personal-driver',
+    name: 'Personal Driver Companion',
+    cardTitle: 'Personal Driver',
+    chipLabel: 'Driver',
+    description: 'Licensed, courteous personal driver companion for comfortable city commutes, outstation drives, or business travel in your vehicle.',
+    iconName: 'Car',
+    category: 'travel',
+    image: 'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=600&q=80'
+  },
+
+  // =========================================================================
+  // CATEGORY 3: CREATOR & LIFESTYLE (6 Services - All New)
+  // =========================================================================
+  {
+    id: 26,
+    slug: 'personal-photographer',
+    name: 'Personal Photographer Companion',
+    cardTitle: 'Personal Photographer',
+    chipLabel: 'Photoshoot',
+    description: 'Skilled photographer companion for portraits, street photography, Instagram aesthetic reels, and capturing your best memories.',
+    iconName: 'Camera',
+    category: 'creator',
+    image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 27,
+    slug: 'content-creator-buddy',
+    name: 'Content Creator Buddy',
+    cardTitle: 'Content Creator Buddy',
+    chipLabel: 'Content Collab',
+    description: 'Creative partner for collaborating on YouTube vlogs, TikTok/Reels content creation, podcasting, and script brainstorms.',
+    iconName: 'Video',
+    category: 'creator',
+    image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 28,
+    slug: 'influencer-promotion',
+    name: 'Influencer Promotion Companion',
+    cardTitle: 'Influencer Promotion',
+    chipLabel: 'Influencer',
+    description: 'Social media influencer companionship to attend brand launches, cafe inaugurations, and promote lifestyle experiences.',
+    iconName: 'Megaphone',
+    category: 'creator',
+    image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 29,
+    slug: 'makeup-styling',
+    name: 'Makeup & Styling Companion',
+    cardTitle: 'Makeup & Styling',
+    chipLabel: 'Makeup',
+    description: 'Personal styling and beauty companion to assist with shopping, wardrobe curation, makeup suggestions, and event grooming.',
+    iconName: 'Sparkles',
+    category: 'creator',
+    image: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 30,
+    slug: 'event-party-host',
+    name: 'Event & Party Host Companion',
+    cardTitle: 'Event & Party Host',
+    chipLabel: 'Event Host',
+    description: 'Charismatic emcee and co-host for private gatherings, birthday parties, team dinners, game nights, and social meetups.',
+    iconName: 'Mic',
+    category: 'creator',
+    image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 31,
+    slug: 'astrology-vastu',
+    name: 'Astrology & Vastu Consultation Companion',
+    cardTitle: 'Astrology & Vastu',
+    chipLabel: 'Astrology',
+    description: 'Enlightening Vedic astrology, birth chart discussions, tarot readings, and Vastu lifestyle consultation companion.',
+    iconName: 'Moon',
+    category: 'creator',
+    image: 'https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?auto=format&fit=crop&w=600&q=80'
+  },
+
+  // =========================================================================
+  // CATEGORY 4: ACTIVE & HOBBIES (6 Services)
+  // =========================================================================
+  {
+    id: 11,
+    slug: 'sports-stadium',
+    name: 'Sports & Stadium Companion',
+    cardTitle: 'Sports & Matches',
+    chipLabel: 'Sports',
+    description: 'Cheer for cricket, football, and badminton matches at stadiums, turf grounds, and sports screening venues.',
+    iconName: 'Trophy',
+    category: 'active',
+    image: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 12,
+    slug: 'fitness-walking',
+    name: 'Fitness & Walking Companion',
+    cardTitle: 'Fitness & Walk',
+    chipLabel: 'Fitness',
+    description: 'Companionship for morning/evening jogging, gym motivation, park walking, and maintaining an active, healthy lifestyle.',
+    iconName: 'Activity',
+    category: 'active',
+    image: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 13,
+    slug: 'outdoor-activities',
+    name: 'Outdoor Activities Companion',
+    cardTitle: 'Outdoor Fun',
+    chipLabel: 'Outdoors',
+    description: 'Companionship for serene botanical park visits, scenic lakeside picnics, trekking trails, and open-air activities.',
+    iconName: 'Trees',
+    category: 'active',
+    image: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 14,
+    slug: 'hobby-creative',
+    name: 'Hobby & Creative Activities Companion',
+    cardTitle: 'Hobby & Craft',
+    chipLabel: 'Hobbies',
+    description: 'Share your artistic passions — painting, pottery, photography, handicrafts, and creative workshops together.',
+    iconName: 'Palette',
+    category: 'active',
+    image: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 15,
+    slug: 'gaming-indoor',
+    name: 'Gaming & Indoor Activities Companion',
+    cardTitle: 'Gaming & Indoor',
+    chipLabel: 'Gaming',
+    description: 'Enjoy board games, chess, e-sports, arcade gaming zones, and engaging indoor recreational pursuits together.',
+    iconName: 'Gamepad2',
+    category: 'active',
+    image: 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 16,
+    slug: 'study-coworking',
+    name: 'Study & Co-working Companion',
+    cardTitle: 'Study & Co-work',
+    chipLabel: 'Co-work',
+    description: 'Productive companionship in quiet libraries, cozy study cafes, and co-working spaces to keep you focused and motivated.',
+    iconName: 'BookOpen',
+    category: 'active',
+    image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=600&q=80'
+  },
+
+  // =========================================================================
+  // CATEGORY 5: CARE & FAMILY (10 Services)
+  // =========================================================================
+  {
+    id: 17,
+    slug: 'senior-care',
+    name: 'Senior Citizen Companionship',
+    cardTitle: 'Senior Care',
+    chipLabel: 'Senior Care',
+    description: 'Heartfelt, respectful companionship for seniors through engaging conversations, slow walking, and compassionate attention.',
+    iconName: 'HeartHandshake',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=600&q=80'
   },
   {
     id: 24,
-    name: "Elder Care & Daily Living Assistance Companion",
-    description: "Companionship for elderly individuals in everyday life, including walking, general assistance, meal reminders, shopping, social activities and accompanying them to necessary appointments.",
-    iconName: "ShieldCheck",
-    category: "care",
-    image: "https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=600&q=80"
+    slug: 'elder-assistance',
+    name: 'Elder Care & Daily Living Assistance Companion',
+    cardTitle: 'Elder Support',
+    chipLabel: 'Elder Help',
+    description: 'Supportive presence for elders in daily routines, garden strolls, mealtime company, and uplifting social interaction.',
+    iconName: 'ShieldCheck',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 18,
+    slug: 'hospital-medical',
+    name: 'Hospital & Medical Appointment Companion',
+    cardTitle: 'Hospital Visit',
+    chipLabel: 'Medical',
+    description: 'Caring companionship during hospital and clinic visits, prescription collection, and waiting room support (non-medical).',
+    iconName: 'Building2',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 19,
+    slug: 'daily-errands',
+    name: 'Daily Errands & Market Companion',
+    cardTitle: 'Daily Errands',
+    chipLabel: 'Errands',
+    description: 'Helpful companion for grocery visits, vegetable markets, postal errands, banking chores, and daily task management.',
+    iconName: 'CheckSquare',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 20,
+    slug: 'spiritual-visit',
+    name: 'Religious & Spiritual Visit Companion',
+    cardTitle: 'Spiritual Visits',
+    chipLabel: 'Spiritual',
+    description: 'Peaceful companionship for visits to temples, gurudwaras, mosques, churches, ashrams, and meditation centers.',
+    iconName: 'Sun',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1561361066-51368ca52219?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 32,
+    slug: 'pet-care-dog-walk',
+    name: 'Pet Care & Dog Walking Companion',
+    cardTitle: 'Pet Care & Dog Walk',
+    chipLabel: 'Pet Care',
+    description: 'Animal-loving companion to walk your dogs, accompany you to pet cafes, or spend joyful outdoor playtime with friendly pets.',
+    iconName: 'Footprints',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 33,
+    slug: 'study-home-tutor',
+    name: 'Study & Home Tutor Companion',
+    cardTitle: 'Study & Home Tutor',
+    chipLabel: 'Home Tutor',
+    description: 'Dedicated academic companion for homework guidance, conceptual discussions, language practice, and disciplined study habits.',
+    iconName: 'GraduationCap',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 34,
+    slug: 'child-care-babysitting',
+    name: 'Child Care & Babysitting Companion',
+    cardTitle: 'Child Care & Babysitting',
+    chipLabel: 'Babysitting',
+    description: 'Vetted, caring companion for engaging storytelling, park playtimes, arts and crafts, and supportive family supervision.',
+    iconName: 'Baby',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 35,
+    slug: 'home-cooking-buddy',
+    name: 'Home Cooking & Chef Companion',
+    cardTitle: 'Home Cooking Buddy',
+    chipLabel: 'Home Chef',
+    description: 'Culinary companion to cook delicious authentic home meals together, explore new regional cuisines, and bake desserts.',
+    iconName: 'ChefHat',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    id: 36,
+    slug: 'event-security-bouncer',
+    name: 'Event Security & Bouncer Companion',
+    cardTitle: 'Event Security / Bouncer',
+    chipLabel: 'Bodyguard',
+    description: 'Professional, imposing security and discrete personal safety companion for late-night transit, VIP events, or crowded venues.',
+    iconName: 'ShieldAlert',
+    category: 'care',
+    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80'
   }
 ];

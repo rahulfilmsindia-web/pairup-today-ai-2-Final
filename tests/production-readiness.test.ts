@@ -653,7 +653,7 @@ await runScenario(24, 'Mobile Viewport Meta, Zero-Horizontal Scroll & Contact Wi
   assert(footerContent.includes('Contact With Us'), 'Footer must contain dedicated "Contact With Us" heading');
   assert(footerContent.includes('https://www.facebook.com/share/1FEG5wvcBF/') || footerContent.includes('https://www.facebook.com/share/1FEG5wvcF/'), 'Footer must contain approved Facebook URL');
   assert(footerContent.includes('https://www.instagram.com/pairuptoday?exln=MXBtNXhreTBnMWhuNA=='), 'Footer must contain approved Instagram URL');
-  assert(footerContent.includes('mailto:pairuptoday@gmail.com'), 'Footer must contain approved mailto:pairuptoday@gmail.com link');
+  assert(footerContent.includes('support@pairuptoday.com') || footerContent.includes('mailto:pairuptoday@gmail.com'), 'Footer must contain approved official email link');
 
   // Verify exact 24 approved services
   const servicesPath = path.join(rootDir, 'src/constants/services.ts');

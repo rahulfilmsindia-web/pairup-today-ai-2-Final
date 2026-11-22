@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
 
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handleNavClick('home')}>
             {/* 1. Exact uploaded PairUpToday Logo */}
-            <div className="relative w-12 h-12 rounded-full overflow-hidden ring-2 ring-amber-400/60 shadow-lg shadow-pink-500/20 transition-transform group-hover:scale-105">
+            <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden ring-2 ring-amber-400/60 shadow-lg shadow-pink-500/20 transition-transform group-hover:scale-105 shrink-0">
               <img
                 src="/assets/aistudio/image_AIIEuv.png_bc62f6e1.png"
                 alt="PairUpToday Logo"
@@ -80,12 +80,12 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
               />
             </div>
 
-            {/* 2. PairUpToday Brand Name */}
-            <div className="flex flex-col">
-              <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
+            {/* 2. PairUpToday Brand Name & Tagline */}
+            <div className="flex flex-col justify-center min-w-0">
+              <span className="text-lg sm:text-xl font-extrabold tracking-tight bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent leading-none">
                 {t.navPairUpToday}
               </span>
-              <span className="text-[10px] text-slate-400 tracking-widest uppercase font-medium -mt-1 hidden sm:block">
+              <span className="text-[10px] text-slate-400 tracking-wider uppercase font-medium mt-1 whitespace-nowrap hidden sm:block">
                 Connect · Match · Belong
               </span>
             </div>
@@ -167,25 +167,14 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
             )}
           </div>
 
-          {/* If NOT authenticated: 7. Sign In and 8. Login */}
+          {/* If NOT authenticated: Unified Sign In Button */}
           {!isAuthenticated ? (
-            <>
-              {/* 7. Sign In */}
-              <button
-                onClick={() => openAuthModal('signin')}
-                className="px-4 py-2 rounded-lg border border-pink-500/50 text-pink-300 hover:bg-pink-500/10 text-xs font-semibold transition-colors"
-              >
-                {t.navSignIn}
-              </button>
-
-              {/* 8. Login */}
-              <button
-                onClick={() => openAuthModal('login')}
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 via-rose-500 to-sky-500 hover:from-amber-600 hover:to-sky-600 text-slate-950 text-xs font-bold shadow-md shadow-amber-500/20 transition-all hover:scale-[1.02]"
-              >
-                {t.navLogin}
-              </button>
-            </>
+            <button
+              onClick={() => openAuthModal('login')}
+              className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 via-rose-500 to-sky-500 hover:from-amber-600 hover:to-sky-600 text-slate-950 text-xs font-bold shadow-md shadow-amber-500/20 transition-all hover:scale-[1.02] cursor-pointer"
+            >
+              {t.navSignIn || 'Sign In'}
+            </button>
           ) : (
             /* When authenticated, preserve gateway access + direct dashboard & role status */
             <div className="flex items-center gap-2">
@@ -315,25 +304,15 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
           </div>
 
           {!isAuthenticated ? (
-            <div className="pt-2 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  openAuthModal('signin');
-                }}
-                className="w-full py-3 rounded-xl border border-pink-500/50 text-pink-300 text-xs font-bold text-center hover:bg-pink-500/10 transition-colors min-h-[44px]"
-              >
-                {t.navSignIn}
-              </button>
-
+            <div className="pt-2">
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);
                   openAuthModal('login');
                 }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 text-xs font-bold text-center shadow-lg transition-all min-h-[44px]"
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-sky-500 text-slate-950 text-sm font-bold text-center shadow-lg transition-all min-h-[44px]"
               >
-                {t.navLogin}
+                {t.navSignIn || 'Sign In'}
               </button>
             </div>
           ) : (

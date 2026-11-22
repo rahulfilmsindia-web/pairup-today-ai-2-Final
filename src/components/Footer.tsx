@@ -13,7 +13,7 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentPage }) => {
 
   const officialFacebookUrl = 'https://www.facebook.com/share/1FEG5wvcBF/';
   const officialInstagramUrl = 'https://www.instagram.com/pairuptoday?exln=MXBtNXhreTBnMWhuNA==';
-  const officialEmail = 'pairuptoday@gmail.com';
+  const officialEmail = 'support@pairuptoday.com';
 
   const handleFacebookClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
@@ -101,7 +101,23 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentPage }) => {
                   onClick={() => setCurrentPage('terms')}
                   className="hover:text-amber-400 transition-colors"
                 >
-                  {t.navTerms}
+                  {t.navTerms || 'Terms of Service'}
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setCurrentPage('privacy')}
+                  className="hover:text-amber-400 transition-colors"
+                >
+                  Privacy Policy
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setCurrentPage('refund-cancellation')}
+                  className="hover:text-amber-400 transition-colors"
+                >
+                  Refund &amp; Cancellation
                 </button>
               </li>
             </ul>
@@ -151,7 +167,7 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentPage }) => {
               <li>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <a
-                    href="mailto:pairuptoday@gmail.com"
+                    href={`mailto:${officialEmail}`}
                     onClick={handleEmailClick}
                     className="flex items-center gap-2 text-slate-300 hover:text-amber-400 transition-colors focus:outline-none focus:ring-1 focus:ring-amber-400 rounded py-0.5 group"
                     aria-label={`Send email to ${officialEmail}`}

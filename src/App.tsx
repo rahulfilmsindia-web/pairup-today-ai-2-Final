@@ -10,6 +10,8 @@ import { AboutPage } from './pages/AboutPage';
 import { HowItWorksPage } from './pages/HowItWorksPage';
 import { SafetyTrustPage } from './pages/SafetyTrustPage';
 import { TermsPage } from './pages/TermsPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
+import { RefundPolicyPage } from './pages/RefundPolicyPage';
 import { ClientDashboard } from './pages/ClientDashboard';
 import { CompanionDashboard } from './pages/CompanionDashboard';
 import { AuthGatewayModal } from './pages/AuthGatewayModal';
@@ -18,6 +20,7 @@ import { RoleSelectionModal } from './pages/RoleSelectionModal';
 import { AdminPortal } from './admin/AdminPortal';
 import { ServiceItem } from './constants/services';
 import { CompanionListing } from './components/CompanionListing';
+import { PartnerRecruitmentBanner } from './components/PartnerRecruitmentBanner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalCompanionAlertManager } from './components/GlobalCompanionAlertManager';
 import { apiFetch } from './utils/api';
@@ -29,6 +32,8 @@ const pageToPath = (page: string): string => {
     case 'how-it-works': return '/how-it-works';
     case 'safety-trust': return '/safety-trust';
     case 'terms': return '/terms';
+    case 'privacy': return '/privacy';
+    case 'refund-cancellation': return '/refund-cancellation';
     case 'client-dashboard': return '/client-dashboard';
     case 'companion-dashboard': return '/companion-dashboard';
     case 'admin': return '/admin';
@@ -46,6 +51,11 @@ const pathToPage = (pathname: string): string => {
     case '/safety-trust': return 'safety-trust';
     case '/terms':
     case '/terms-of-service': return 'terms';
+    case '/privacy':
+    case '/privacy-policy': return 'privacy';
+    case '/refund':
+    case '/refund-policy':
+    case '/refund-cancellation': return 'refund-cancellation';
     case '/client-dashboard': return 'client-dashboard';
     case '/companion-dashboard': return 'companion-dashboard';
     case '/admin': return 'admin';
@@ -493,6 +503,10 @@ const MainAppContent: React.FC = () => {
         return <SafetyTrustPage />;
       case 'terms':
         return <TermsPage />;
+      case 'privacy':
+        return <PrivacyPolicyPage />;
+      case 'refund-cancellation':
+        return <RefundPolicyPage />;
       case 'client-dashboard':
         return (
           <ErrorBoundary fallbackTitle="Client Dashboard">
@@ -511,6 +525,7 @@ const MainAppContent: React.FC = () => {
           <>
             <Hero onExploreCompanions={handleExploreCompanions} />
             <ServicesGrid onSelectService={handleSelectServiceFromGrid} />
+            <PartnerRecruitmentBanner onJoinCompanion={handleRegisterCompanion} />
             <CompanionListing
               initialServiceId={activeServiceFilter}
               onBookCompanion={(companion, serviceId) => {
