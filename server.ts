@@ -483,6 +483,16 @@ interface InitialCompanionRecord {
   totalBookings: number;
 }
 
+const ACTIVE_COMPANION_ASSET_IDS = new Set([
+  'init_arjun_chauhan_delhi',
+  'init_sayantika_ghosh_burdwan',
+  'init_riya_dutta_baranagar',
+  'init_ritwik_basu_dumdum',
+  'init_megha_sen_kolkata',
+  'init_arnab_chatterjee_kolkata',
+  'init_nithya_subramanian_chennai'
+]);
+
 const INITIAL_COMPANIONS: InitialCompanionRecord[] = [
   {
     id: 'init_arjun_chauhan_delhi',
@@ -3834,7 +3844,7 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
 
       const genuineEntries = checkedProfiles.filter((entry): entry is [string, any, any] => entry !== null);
       const initialEntries = Object.entries(db.companionProfiles)
-        .filter(([_, p]) => Boolean(p.isInitialListing))
+        .filter(([id, p]) => Boolean(p.isInitialListing) && ACTIVE_COMPANION_ASSET_IDS.has(id))
         .map(([id, p]) => [id, p, db.users[id]]) as Array<[string, any, any]>;
 
       profileEntries = [...genuineEntries, ...initialEntries];
@@ -3844,7 +3854,7 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
     }
   } else {
     profileEntries = Object.entries(db.companionProfiles)
-      .filter(([_, profile]) => !profile.isPaused && profile.isLive !== false)
+      .filter(([userId, profile]) => !profile.isPaused && profile.isLive !== false && (!profile.isInitialListing || ACTIVE_COMPANION_ASSET_IDS.has(userId)))
       .map(([userId, profile]) => [userId, profile, db.users[userId]]);
   }
 
@@ -4306,8 +4316,13 @@ app.post('/api/bookings/create', async (req: Request, res: Response) => {
     if (!client) return res.status(401).json({ error: 'Authenticated client account was not found.' });
     const companion = await databaseAdapter.getUser(companionId);
     const profile = await databaseAdapter.getCompanionProfile(companionId);
-    if (!companion || !profile || profile.isInitialListing) {
-      return res.status(404).json({ error: 'This Companion is unavailable for booking.' });
+    if (!companion || !profile) {
+      return res.status(404).json({ error: 'This Companion was not found.' });
+    }
+    if (profile.isInitialListing) {
+      const bDate = typeof req.body?.bookingDate === 'string' ? req.body.bookingDate : 'selected date';
+      const bTime = typeof req.body?.bookingTime === 'string' ? req.body.bookingTime : 'selected time';
+      return res.status(400).json({ error: `This companion is busy on ${bDate} at ${bTime}. Please choose another companion or try a different slot.` });
     }
     if (profile.isPaused === true) {
       return res.status(400).json({ error: 'This companion is currently offline and not accepting new booking requests.' });

@@ -800,9 +800,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     if (!selectedCompanion || !user) return;
     if (isSubmittingBookingRef.current || bookingInProgress) return;
 
-    // Strict Initial Listing Non-Bookable Guard
+    // Strict Initial Listing Non-Bookable Guard (Demo Profiles)
     if (selectedCompanion.isInitialListing) {
-      setBookingError(t.profileUnavailableForBooking || 'This profile is currently unavailable for booking.');
+      const formattedTime = formatTimeAmPm(bookingTime) || bookingTime;
+      const busyMsg = language === 'bn'
+        ? `এই কম্প্যানিয়ন ${bookingDate} তারিখে ${formattedTime} স্লটে ব্যস্ত আছেন। অনুগ্রহ করে অন্য সময় বেছে নিন।`
+        : language === 'hi'
+        ? `यह कंपेनियन ${bookingDate} को ${formattedTime} स्लॉट पर व्यस्त हैं। कृपया दूसरा समय चुनें।`
+        : `This companion is busy on ${bookingDate} at ${formattedTime}. Please choose another date or time slot.`;
+      setBookingError(busyMsg);
       return;
     }
 
