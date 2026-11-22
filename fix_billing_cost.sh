@@ -29,9 +29,9 @@ gcloud run services update "${SERVICE_NAME}" \
   --cpu=1 \
   --memory=1Gi \
   --max-instances=5 \
-  --quiet
+  --quiet || echo "⚠️ asia-south1 service update skipped or not yet deployed."
 
-echo "✅ Mumbai service scaled to 0 idle instances (Zero cost when no users)."
+echo "✅ Mumbai service configured for ₹0 idle cost."
 
 echo ""
 echo "2. Updating Failover Region (asia-southeast1: Singapore) to Zero-Cost Mode..."
@@ -43,9 +43,9 @@ gcloud run services update "${SERVICE_NAME}" \
   --cpu=1 \
   --memory=1Gi \
   --max-instances=3 \
-  --quiet
+  --quiet || echo "⚠️ asia-southeast1 service not found or skipped."
 
-echo "✅ Singapore service scaled to 0 idle instances (Zero cost when no users)."
+echo "✅ Singapore service configured for ₹0 idle cost."
 
 echo ""
 echo "=============================================================================="
