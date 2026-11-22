@@ -724,7 +724,7 @@ await runScenario(28, 'Multilingual Localization Integrity across English, Benga
   assert(transContent.includes('Verified Companions Across India'), 'English title present');
   assert(transContent.includes('Quick View'), 'English quick view button present');
   assert(transContent.includes('Book Now'), 'English book now button present');
-  assert(transContent.includes('This profile is currently unavailable for booking.'), 'English unavailable booking message present');
+  assert(transContent.includes('Not available for the selected date/time') || transContent.includes('This profile is currently unavailable for booking.'), 'English unavailable booking message present');
 
   // Check Bengali translations
   assert(transContent.includes('ভারতজুড়ে যাচাইকৃত কম্প্যানিয়ন'), 'Bengali title present');

@@ -912,6 +912,82 @@ const INITIAL_COMPANIONS: InitialCompanionRecord[] = [
     ],
     rating: 4.97,
     totalBookings: 34
+  },
+  {
+    id: 'init_anusha_mitra_kolkata',
+    name: 'Anusha Mitra',
+    age: 23,
+    city: 'Kolkata',
+    state: 'West Bengal',
+    address: 'South Kolkata, West Bengal',
+    hourlyRatePaise: 94900,
+    services: [1, 2, 3, 4, 7, 14, 20, 22],
+    bio: 'Vibrant and artistic companion from South Kolkata. Loves poetry readings, indie film festivals, traditional Durga Puja celebrations, and quiet evening walks along the Maidan.',
+    profilePhoto: '/assets/companions/anusha_main.jpg',
+    photos: [
+      '/assets/companions/anusha_photo1.png',
+      '/assets/companions/anusha_photo2.png',
+      '/assets/companions/anusha_photo3.png'
+    ],
+    rating: 4.91,
+    totalBookings: 22
+  },
+  {
+    id: 'init_rohit_sharma_kolkata',
+    name: 'Rohit Sharma',
+    age: 26,
+    city: 'Kolkata',
+    state: 'West Bengal',
+    address: 'North Kolkata, West Bengal',
+    hourlyRatePaise: 99900,
+    services: [1, 5, 6, 9, 10, 11, 21, 23],
+    bio: 'Sports enthusiast and event companion from North Kolkata. Passionate about cricket, live concerts at ICCR, gaming tournaments, and heritage walks through Shyambazar.',
+    profilePhoto: '/assets/companions/rohit_main.jpg',
+    photos: [
+      '/assets/companions/rohit_photo1.jpg',
+      '/assets/companions/rohit_photo2.jpg',
+      '/assets/companions/rohit_photo3.jpg'
+    ],
+    rating: 4.89,
+    totalBookings: 17
+  },
+  {
+    id: 'init_priya_das_kolkata',
+    name: 'Priya Das',
+    age: 24,
+    city: 'Kolkata',
+    state: 'West Bengal',
+    address: 'Salt Lake, Kolkata',
+    hourlyRatePaise: 89900,
+    services: [1, 2, 3, 4, 7, 8, 14, 22],
+    bio: 'Cheerful and empathetic companion from Salt Lake, Kolkata. Enjoys museum visits, festive shopping at Dakshinapan, senior care errands, and cosy cafe afternoons.',
+    profilePhoto: '/assets/companions/priya_main.jpg',
+    photos: [
+      '/assets/companions/priya_photo1.jpg',
+      '/assets/companions/priya_photo2.jpg',
+      '/assets/companions/priya_photo3.jpg'
+    ],
+    rating: 4.93,
+    totalBookings: 15
+  },
+  {
+    id: 'init_arjun_sen_kolkata',
+    name: 'Arjun Sen',
+    age: 27,
+    city: 'Kolkata',
+    state: 'West Bengal',
+    address: 'Jadavpur, Kolkata',
+    hourlyRatePaise: 104900,
+    services: [1, 5, 6, 10, 11, 12, 15, 21],
+    bio: 'Witty and well-read companion from Jadavpur, Kolkata. Loves weekend football at Yuva Bharati, tech event meetups, transit assistance, and lively intellectual conversations.',
+    profilePhoto: '/assets/companions/arjun_main.jpg',
+    photos: [
+      '/assets/companions/arjun_photo1.jpg',
+      '/assets/companions/arjun_photo2.jpg',
+      '/assets/companions/arjun_photo3.jpg'
+    ],
+    rating: 4.92,
+    totalBookings: 20
   }
 ];
 
@@ -976,7 +1052,7 @@ function seedInitialCompanions(targetDb: DBState) {
 // Initial DB state loader
 function loadDB(): DBState {
   if (process.env.NODE_ENV === 'production') {
-    return {
+    const prodDb: DBState = {
       users: {},
       kycSubmissions: {},
       companionProfiles: {},
@@ -995,6 +1071,8 @@ function loadDB(): DBState {
       adminMfaStore: {},
       auditLogs: []
     };
+    seedInitialCompanions(prodDb);
+    return prodDb;
   }
 
   if (fs.existsSync(DB_FILE)) {
