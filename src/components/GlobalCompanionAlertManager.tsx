@@ -437,21 +437,30 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
 
     checkPendingBookings();
 
+    const scheduleNextPoll = () => {
+      if (pollTimer) clearTimeout(pollTimer);
+      const isSseConnected = Boolean(eventSource && eventSource.readyState === 1);
+      const isHidden = typeof document !== 'undefined' && document.hidden;
+      const delay = isSseConnected ? 30000 : (isHidden ? 45000 : 10000);
+      pollTimer = setTimeout(async () => {
+        await checkPendingBookings();
+        scheduleNextPoll();
+      }, delay);
+    };
+    scheduleNextPoll();
+
     const handleVisibilityChange = () => {
-      checkPendingBookings();
+      if (typeof document !== 'undefined' && !document.hidden) {
+        checkPendingBookings().finally(scheduleNextPoll);
+      }
     };
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
-    // High-frequency 2.5s fallback poll running continuously even when minimized so companion never misses alerts!
-    pollTimer = setInterval(() => {
-      checkPendingBookings();
-    }, 2500);
-
     return () => {
       if (eventSource) eventSource.close();
-      if (pollTimer) clearInterval(pollTimer);
+      if (pollTimer) clearTimeout(pollTimer);
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }

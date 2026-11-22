@@ -1447,6 +1447,7 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
 // High-speed in-memory user cache with 30s TTL to eliminate database roundtrips on authentication
 const userCacheById = new Map<string, { user: any; expiresAt: number }>();
 const userCacheByPhone = new Map<string, { user: any; expiresAt: number }>();
+let listUsersCache: { data: any[]; expiresAt: number } | null = null;
 
 function cacheUser(user: any) {
   if (!user || !user.id) return;
@@ -1456,6 +1457,7 @@ function cacheUser(user: any) {
 }
 
 function invalidateUserCache(userId: string, phone?: string) {
+  listUsersCache = null;
   userCacheById.delete(userId);
   if (phone) userCacheByPhone.delete(phone);
   for (const [p, e] of userCacheByPhone.entries()) {
@@ -1687,12 +1689,19 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async listUsers(filters?: any): Promise<any[]> {
-    let query = db.users().select('*');
+    if (!filters && listUsersCache && Date.now() < listUsersCache.expiresAt) {
+      return listUsersCache.data;
+    }
+    let query = db.users().select('id, phone, legal_name, email, role, active_role, dob, age, kyc_status, profile_photo, bio, city, state, address, created_at, updated_at');
     if (filters?.role) query = query.eq('role', filters.role);
     if (filters?.kycStatus) query = query.eq('kyc_status', filters.kycStatus);
     const { data, error } = await query;
     if (error) throw error;
-    return (data || []).map((user: any) => this.mapUser(user));
+    const mapped = (data || []).map((user: any) => this.mapUser(user));
+    if (!filters) {
+      listUsersCache = { data: mapped, expiresAt: Date.now() + 30000 };
+    }
+    return mapped;
   }
 
   async deleteUser(userId: string): Promise<void> {

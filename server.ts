@@ -3652,7 +3652,9 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
 // -------------------------------------------------------------
 app.get('/api/companions/search', async (req: Request, res: Response) => {
   const { query, serviceId, city, lat, lng } = req.query;
-  const searchCacheKey = `search:${query || ''}:${serviceId || ''}:${city || ''}:${lat || ''}:${lng || ''}`;
+  const roundedLat = (lat !== undefined && lat !== '') ? Number(lat).toFixed(2) : '';
+  const roundedLng = (lng !== undefined && lng !== '') ? Number(lng).toFixed(2) : '';
+  const searchCacheKey = `search:${query || ''}:${serviceId || ''}:${city || ''}:${roundedLat}:${roundedLng}`;
   const cachedSearchResult = getEgressCache<any>(searchCacheKey);
   if (cachedSearchResult) {
     return res.json(cachedSearchResult);
@@ -3979,7 +3981,7 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
   }
 
   const searchResultPayload = { count: combined.length, companions: combined };
-  setEgressCache(searchCacheKey, searchResultPayload, 30);
+  setEgressCache(searchCacheKey, searchResultPayload, 60);
   return res.json(searchResultPayload);
 });
 
@@ -4763,10 +4765,31 @@ app.get('/api/bookings/:id/status', async (req: Request, res: Response) => {
   }
 });
 
+// High-speed in-memory user bookings cache (10s TTL) to prevent Supabase egress exhaustion
+interface CachedUserBookingsEntry {
+  payload: { bookings: any[] };
+  expiresAt: number;
+}
+const userBookingsCache = new Map<string, CachedUserBookingsEntry>();
+
+function invalidateUserBookingsCache(userId?: string) {
+  if (userId) {
+    userBookingsCache.delete(userId);
+  } else {
+    userBookingsCache.clear();
+  }
+}
+
 // Get user bookings (Client or Companion)
 app.get('/api/bookings/my/:userId', async (req: Request, res: Response) => {
   const userId = (req as AuthenticatedRequest).authUser.id;
   if (req.params.userId !== userId) return res.status(403).json({ error: 'You cannot access another user’s bookings.' });
+
+  const cached = userBookingsCache.get(userId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return res.json(cached.payload);
+  }
+
   try {
     const bookings = getDatabaseType() === 'supabase'
       ? await databaseAdapter.listBookings({ clientId: userId, participantId: userId })
@@ -4839,7 +4862,9 @@ app.get('/api/bookings/my/:userId', async (req: Request, res: Response) => {
 
       return copy;
     }));
-    return res.json({ bookings: sanitized });
+    const resultPayload = { bookings: sanitized };
+    userBookingsCache.set(userId, { payload: resultPayload, expiresAt: Date.now() + 10000 });
+    return res.json(resultPayload);
   } catch (error) {
     console.error('Booking list retrieval failed.', error);
     return res.status(503).json({ error: 'Bookings are temporarily unavailable.' });

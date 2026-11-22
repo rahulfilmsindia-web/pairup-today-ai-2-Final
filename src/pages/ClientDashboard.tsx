@@ -726,7 +726,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
         fetchMyBookings();
         fetchNotifications();
       }
-    }, 6000);
+    }, 12000);
     return () => clearInterval(interval);
   }, [user?.id, selectedServiceId, selectedCity]);
 
