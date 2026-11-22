@@ -2063,7 +2063,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                                 onError={(e: any) => {
                                   e.currentTarget.src = '/assets/companions/priya_main.jpg';
                                 }}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
                               />
 
                               {/* Floating Top-Right Status Badge (Online / Offline) */}
@@ -2524,7 +2524,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                     className="rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-400/40 overflow-hidden shadow-xl transition-all flex flex-col justify-between"
                   >
                     <div>
-                      <div className="relative h-48 w-full overflow-hidden bg-slate-800">
+                      <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-800">
                         <img
                           src={comp.profilePhoto}
                           alt={comp.name}
@@ -2532,7 +2532,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                           onError={(e: any) => {
                             e.currentTarget.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="%231e293b"/><circle cx="150" cy="80" r="40" fill="%23475569"/><circle cx="150" cy="180" r="70" fill="%23475569"/></svg>';
                           }}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover object-top"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
                         <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-500/90 text-slate-950 text-[10px] font-bold flex items-center gap-1 shadow">

@@ -704,8 +704,8 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                   key={comp.id}
                   className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl hover:border-slate-700 hover:shadow-2xl transition-all duration-300 flex flex-col"
                 >
-                  {/* Photo Container */}
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-950 group">
+                  {/* Photo Container - Portrait 3:4 aspect ratio with object-top to ensure face & head are never cropped */}
+                  <div className="relative aspect-[3/4] w-full overflow-hidden bg-slate-950 group">
                     <img
                       src={comp.profilePhoto}
                       alt={comp.name}
