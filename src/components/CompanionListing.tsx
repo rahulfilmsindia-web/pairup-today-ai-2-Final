@@ -492,7 +492,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
             >
               All Services (36)
             </button>
-            {PAIRUP_SERVICES.slice(0, 14).map((srv) => (
+            {PAIRUP_SERVICES.map((srv) => (
               <button
                 key={srv.id}
                 onClick={() => setSelectedServiceId(srv.id)}

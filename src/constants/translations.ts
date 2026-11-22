@@ -421,9 +421,9 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
 
     // Services Catalog
     servicesSectionKicker: "Curated Experiences",
-    servicesSectionTitle: "24 Distinctive Companionship Services",
+    servicesSectionTitle: "36 Distinctive Companionship Services",
     servicesSectionDesc: "Choose from our verified companionship offerings across social, lifestyle, travel, wellness, culture and care.",
-    catAll: "All 24 Services",
+    catAll: "All 36 Services",
     catSocial: "Social",
     catLifestyle: "Lifestyle",
     catTravel: "Travel & Tours",
@@ -492,7 +492,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     hiwStep2CompTitle: "Complete Mandatory KYC",
     hiwStep2CompDesc: "Upload government identity documents and clear live selfie for admin audit and verification.",
     hiwStep3CompTitle: "Select Services & Rates",
-    hiwStep3CompDesc: "Choose which of the 24 approved services you wish to offer and configure hourly rates.",
+    hiwStep3CompDesc: "Choose which of the 36 approved services you wish to offer and configure hourly rates.",
     hiwStep4CompTitle: "Activate Membership",
     hiwStep4CompDesc: "Choose a membership plan (Starter ₹449, Professional ₹1,099, or Premium ₹5,999) to activate bookings.",
     hiwStep5CompTitle: "Verify Bank Details",
@@ -612,7 +612,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     tabProfile: "My Profile",
     tabKycStatus: "My KYC Status",
     tabDiscover: "Discover Companions",
-    tabServices: "24 Services",
+    tabServices: "36 Services",
     tabBookings: "My Bookings",
     tabHistory: "Booking History",
     tabChat: "Secure Chat",
@@ -647,7 +647,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     searchPlaceholder: "Search by city, name, or interests...",
     filterByService: "Filter by Service",
     filterByCity: "City",
-    allServices: "All 24 Services",
+    allServices: "All 36 Services",
     allCities: "All Cities",
     maxBudget: "Max Budget / Hour",
     nearbyCompanions: "Nearby Companions (GPS Enabled)",
@@ -752,7 +752,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
 
     // Companion Listing & Profile Details
     companionListSectionTitle: "Verified Companions Across India",
-    companionListSectionSubtitle: "Explore verified social companions available in your city for all 24 companionship services.",
+    companionListSectionSubtitle: "Explore verified social companions available in your city for all 36 companionship services.",
     quickViewAction: "View Profile", // Quick View
     bookNowAction: "Book Now",
     availableServicesLabel: "Available Services",
@@ -762,7 +762,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     selectLocationLabel: "Select City / Location",
     allLocationsLabel: "All Locations",
     filterByServiceLabel: "Filter by Service",
-    allServicesLabel: "All 24 Services",
+    allServicesLabel: "All 36 Services",
     viewDetailsAction: "View Profile",
     additionalPhotosLabel: "Additional Photographs"
   },
@@ -804,9 +804,9 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
 
     // Services Catalog
     servicesSectionKicker: "বিশেষ সেবা সমূহ",
-    servicesSectionTitle: "২৪টি অনন্য সাহচর্য সেবা",
+    servicesSectionTitle: "৩৬টি অনন্য সাহচর্য সেবা",
     servicesSectionDesc: "সামাজিক, লাইফস্টাইল, ভ্রমণ, স্বাস্থ্য, সংস্কৃতি এবং পরিচর্যা বিষয়ক আমাদের যাচাইকৃত সেবা থেকে বেছে নিন।",
-    catAll: "সকল ২৪টি সার্ভিস",
+    catAll: "সকল ৩৬টি সার্ভিস",
     catSocial: "সামাজিক",
     catLifestyle: "লাইফস্টাইল",
     catTravel: "ভ্রমণ ও ট্যুর",
@@ -875,7 +875,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     hiwStep2CompTitle: "বাধ্যতামূলক কেওয়াইসি পূরণ",
     hiwStep2CompDesc: "অ্যাডমিন নিরীক্ষার জন্য আপনার বৈধ সরকারি পরিচয়পত্র এবং স্পষ্ট সেলফি আপলোড করুন।",
     hiwStep3CompTitle: "সেবা ও মূল্য নির্ধারণ",
-    hiwStep3CompDesc: "অনুমোদিত ২৪টি সেবার মধ্যে কোনগুলো প্রদান করতে চান এবং প্রতি ঘণ্টার রেট ঠিক করুন।",
+    hiwStep3CompDesc: "অনুমোদিত ৩৬টি সেবার মধ্যে কোনগুলো প্রদান করতে চান এবং প্রতি ঘণ্টার রেট ঠিক করুন।",
     hiwStep4CompTitle: "মেম্বারশিপ সক্রিয় করুন",
     hiwStep4CompDesc: "বুকিং গ্রহণ সক্রিয় করতে মেম্বারশিপ প্ল্যান (স্টার্টার ₹৪৪৯, প্রো ₹১,০৯৯, প্রিমিয়াম ₹৫,৯৯৯) বেছে নিন।",
     hiwStep5CompTitle: "ব্যাংক অ্যাকাউন্ট যাচাই",
@@ -995,7 +995,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     tabProfile: "আমার প্রোফাইল",
     tabKycStatus: "কেওয়াইসি স্ট্যাটাস",
     tabDiscover: "সঙ্গী খুঁজুন",
-    tabServices: "২৪টি সার্ভিস",
+    tabServices: "৩৬টি সার্ভিস",
     tabBookings: "আমার বুকিং",
     tabHistory: "বুকিং হিস্ট্রি",
     tabChat: "সুরক্ষিত চ্যাট",
@@ -1030,7 +1030,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     searchPlaceholder: "শহর, নাম বা পছন্দের বিষয় দিয়ে খুঁজুন...",
     filterByService: "সার্ভিস অনুযায়ী ফিল্টার",
     filterByCity: "শহর",
-    allServices: "সকল ২৪টি সার্ভিস",
+    allServices: "সকল ৩৬টি সার্ভিস",
     allCities: "সকল শহর",
     maxBudget: "সর্বোচ্চ বাজেট / ঘণ্টা",
     nearbyCompanions: "নিকটবর্তী সঙ্গী (জিপিএস সক্রিয়)",
@@ -1135,7 +1135,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
 
     // Companion Listing & Profile Details
     companionListSectionTitle: "ভারতজুড়ে যাচাইকৃত কম্প্যানিয়ন",
-    companionListSectionSubtitle: "২৪টি সাহচর্য সেবার জন্য আপনার শহরের যাচাইকৃত সঙ্গী অন্বেষণ করুন।",
+    companionListSectionSubtitle: "৩৬টি সাহচর্য সেবার জন্য আপনার শহরের যাচাইকৃত সঙ্গী অন্বেষণ করুন।",
     quickViewAction: "প্রোফাইল দেখুন",
     bookNowAction: "বুকিং করুন",
     availableServicesLabel: "উপলব্ধ সেবাসমূহ",
@@ -1145,7 +1145,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     selectLocationLabel: "শহর / অবস্থান নির্বাচন করুন",
     allLocationsLabel: "সকল অবস্থান",
     filterByServiceLabel: "সার্ভিস অনুযায়ী ফিল্টার",
-    allServicesLabel: "সকল ২৪টি সার্ভিস",
+    allServicesLabel: "সকল ৩৬টি সার্ভিস",
     viewDetailsAction: "প্রোফাইল দেখুন",
     additionalPhotosLabel: "অতিরিক্ত আলোকচিত্র"
   },
@@ -1187,9 +1187,9 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
 
     // Services Catalog
     servicesSectionKicker: "विशिष्ट सेवाएँ",
-    servicesSectionTitle: "24 विशिष्ट साहचर्य सेवाएँ",
+    servicesSectionTitle: "36 विशिष्ट साहचर्य सेवाएँ",
     servicesSectionDesc: "सामाजिक, जीवनशैली, यात्रा, स्वास्थ्य, संस्कृति और देखभाल से जुड़ी हमारी सत्यापित सेवाओं में से चुनें।",
-    catAll: "सभी 24 सेवाएँ",
+    catAll: "सभी 36 सेवाएँ",
     catSocial: "सामाजिक",
     catLifestyle: "जीवनशैली",
     catTravel: "यात्रा व पर्यटन",
@@ -1258,7 +1258,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     hiwStep2CompTitle: "अनिवार्य केवाईसी पूर्ण करें",
     hiwStep2CompDesc: "व्यवस्थापक सत्यापन हेतु अपना सरकारी पहचान पत्र व स्पष्ट लाइव सेल्फ़ी अपलोड करें।",
     hiwStep3CompTitle: "सेवाएँ व दरें चुनें",
-    hiwStep3CompDesc: "स्वीकृत 24 सेवाओं में से चुनें कि आप कौन-सी सेवाएँ देना चाहते हैं और दरें तय करें।",
+    hiwStep3CompDesc: "स्वीकृत 36 सेवाओं में से चुनें कि आप कौन-सी सेवाएँ देना चाहते हैं और दरें तय करें।",
     hiwStep4CompTitle: "सदस्यता सक्रिय करें",
     hiwStep4CompDesc: "बुकिंग पाने हेतु सदस्यता योजना (स्टार्टर ₹449, प्रो ₹1,099, प्रीमियम ₹5,999) चुनें।",
     hiwStep5CompTitle: "बैंक खाता सत्यापन",
@@ -1378,7 +1378,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     tabProfile: "मेरी प्रोफ़ाइल",
     tabKycStatus: "केवाईसी स्थिति",
     tabDiscover: "साथी खोजें",
-    tabServices: "24 सेवाएँ",
+    tabServices: "36 सेवाएँ",
     tabBookings: "मेरी बुकिंग्स",
     tabHistory: "बुकिंग इतिहास",
     tabChat: "सुरक्षित चैट",
@@ -1413,7 +1413,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     searchPlaceholder: "शहर, नाम या रुचि से खोजें...",
     filterByService: "सेवा अनुसार फ़िल्टर करें",
     filterByCity: "शहर",
-    allServices: "सभी 24 सेवाएँ",
+    allServices: "सभी 36 सेवाएँ",
     allCities: "सभी शहर",
     maxBudget: "अधिकतम बजट / घंटा",
     nearbyCompanions: "आसपास के साथी (जीपीएस आधारित)",
@@ -1518,7 +1518,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
 
     // Companion Listing & Profile Details
     companionListSectionTitle: "भारतभर में सत्यापित साथी",
-    companionListSectionSubtitle: "सभी 24 साहचर्य सेवाओं के लिए अपने शहर में उपलब्ध सत्यापित साथियों की सूची देखें।",
+    companionListSectionSubtitle: "सभी 36 साहचर्य सेवाओं के लिए अपने शहर में उपलब्ध सत्यापित साथियों की सूची देखें।",
     quickViewAction: "प्रोफ़ाइल देखें",
     bookNowAction: "अभी बुक करें",
     availableServicesLabel: "उपलब्ध सेवाएँ",
@@ -1528,7 +1528,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     selectLocationLabel: "शहर / स्थान चुनें",
     allLocationsLabel: "सभी स्थान",
     filterByServiceLabel: "सेवा अनुसार फ़िल्टर करें",
-    allServicesLabel: "सभी 24 सेवाएँ",
+    allServicesLabel: "सभी 36 सेवाएँ",
     viewDetailsAction: "प्रोफ़ाइल देखें",
     additionalPhotosLabel: "अतिरिक्त छायाचित्र"
   }

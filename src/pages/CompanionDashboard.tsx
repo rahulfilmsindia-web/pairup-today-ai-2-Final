@@ -2219,7 +2219,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     {
       title: 'Services & Schedule',
       items: [
-        { id: 'services' as CompanionTab, label: '24 Services Offered', icon: CheckSquare },
+        { id: 'services' as CompanionTab, label: '36 Services Offered', icon: CheckSquare },
         { id: 'rates' as CompanionTab, label: 'Rate Management', icon: DollarSign },
         { id: 'availability' as CompanionTab, label: 'Availability Schedule', icon: Calendar },
       ]
@@ -3145,7 +3145,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                 </div>
                 <div className="p-3.5 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1">
                   <span className="text-[10px] uppercase font-bold text-purple-700 tracking-wider">Services Active</span>
-                  <div className="text-lg font-extrabold text-[#191040]">{selectedServices.length} of 24</div>
+                  <div className="text-lg font-extrabold text-[#191040]">{selectedServices.length} of 36</div>
                   <span className="text-[10px] text-slate-500">Offered in your area</span>
                 </div>
               </div>

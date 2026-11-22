@@ -150,6 +150,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   };
 
   const [selectedCompanion, setSelectedCompanion] = useState<any | null>(null);
+  const [bookingServiceId, setBookingServiceId] = useState<number>(1);
   const [bookingDate, setBookingDate] = useState(() => getTodayDateStr());
   const [bookingTime, setBookingTime] = useState(() => getInitialBookingDateTime().timeStr);
   const [bookingDurationHours, setBookingDurationHours] = useState(1);
@@ -188,6 +189,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       setBookingDate(init.dateStr);
       setBookingTime(init.timeStr);
       setBookingDurationHours(1);
+      const defaultServiceId = (bookingContext as any)?.serviceId 
+        || selectedServiceId 
+        || (Array.isArray(selectedCompanion.services) && selectedCompanion.services[0]) 
+        || 1;
+      setBookingServiceId(defaultServiceId);
       setBookingError(null);
       setTimeConflictError(null);
     }
@@ -849,8 +855,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           body: JSON.stringify({
             clientId: user.id,
             companionId: selectedCompanion.id,
-            serviceId: selectedServiceId || selectedCompanion.services[0] || 1,
-            serviceName: PAIRUP_SERVICES.find(s => s.id === (selectedServiceId || selectedCompanion.services[0]))?.name || 'Social Companionship',
+            serviceId: bookingServiceId || selectedServiceId || selectedCompanion.services?.[0] || 1,
+            serviceName: PAIRUP_SERVICES.find(s => s.id === (bookingServiceId || selectedServiceId || selectedCompanion.services?.[0]))?.name || 'Social & Conversation Companion',
             date: bookingDate,
             startTime: bookingTime,
             endTime: formattedEndTime,
@@ -1130,7 +1136,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     { id: 'overview', label: 'Overview', icon: Compass },
     { id: 'profile', label: 'My Profile', icon: User },
     { id: 'kyc-status', label: 'My KYC Status', icon: ShieldCheck, badge: isKycApproved ? '✓' : 'Pending', badgeColor: isKycApproved ? 'bg-emerald-500' : 'bg-amber-500' },
-    { id: 'services', label: '24 Services', icon: Sparkles },
+    { id: 'services', label: '36 Services', icon: Sparkles },
     { id: 'upcoming', label: 'Upcoming Plans', icon: CalendarCheck, badge: upcomingBookings.length > 0 ? upcomingBookings.length : undefined, badgeColor: 'bg-violet-600' },
     { id: 'history', label: 'Booking History', icon: Calendar, badge: successfulBookings.length > 0 ? successfulBookings.length : undefined, badgeColor: 'bg-emerald-500' },
     { id: 'chat', label: 'Secure Chat', icon: MessageSquare, badge: paidChatBookingsCount > 0 ? (paidChatBookingsCount > 9 ? '9+' : paidChatBookingsCount) : undefined, badgeColor: 'bg-pink-500' },
@@ -2598,10 +2604,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           </div>
         )}
 
-        {/* TAB 5: 24 SERVICES CATALOGUE */}
+        {/* TAB 5: 36 SERVICES CATALOGUE */}
         {activeTab === 'services' && (
           <div className="space-y-4">
-            <h3 className="text-lg font-bold text-slate-100">All 24 Authoritative Companionship Services</h3>
+            <h3 className="text-lg font-bold text-slate-100">All 36 Authoritative Companionship Services</h3>
             <p className="text-xs text-slate-400">Click any service to view verified companions providing that category.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {PAIRUP_SERVICES.map(s => (
@@ -3832,6 +3838,41 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
               return (
                 <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
+                  {/* Service Selection for this Booking (All 36 Services) */}
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      {language === 'bn' ? 'পরিষেবা নির্বাচন করুন (Choose Service)' : language === 'hi' ? 'सेवा चुनें (Choose Service)' : 'Select Companionship Service'}
+                    </label>
+                    <select
+                      value={bookingServiceId}
+                      onChange={e => setBookingServiceId(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 font-medium focus:outline-none focus:border-amber-400 cursor-pointer"
+                      required
+                    >
+                      {PAIRUP_SERVICES.map(s => {
+                        const isOffered = Array.isArray(selectedCompanion?.services) && selectedCompanion.services.includes(s.id);
+                        return (
+                          <option key={s.id} value={s.id}>
+                            #{s.id}. {s.name} {isOffered ? '★ (Host Speciality)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {(() => {
+                      const activeSrv = PAIRUP_SERVICES.find(s => s.id === bookingServiceId);
+                      if (!activeSrv) return null;
+                      return (
+                        <div className="mt-1.5 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 flex items-start gap-2 shadow-inner">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold text-amber-300">{activeSrv.cardTitle}: </span>
+                            <span className="text-slate-400 leading-relaxed">{activeSrv.description}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-slate-300 font-semibold">
@@ -4025,6 +4066,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
                   {/* Price Calculation Card (Detailed with 18% GST Breakdown) */}
                   <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                    <div className="flex justify-between text-slate-300 pb-1.5 border-b border-slate-800/80">
+                      <span className="font-semibold text-slate-400">Selected Service:</span>
+                      <span className="text-amber-300 font-bold">
+                        {PAIRUP_SERVICES.find(s => s.id === bookingServiceId)?.name || 'Social & Conversation Companion'}
+                      </span>
+                    </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Companion Fee ({bookingDurationHours}h):</span>
                       <span className="text-slate-200">₹{baseAmount.toFixed(2)}</span>
