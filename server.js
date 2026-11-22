@@ -2210,13 +2210,25 @@ var SupabaseDatabaseAdapter = class {
       bookingLng: "booking_lng",
       booking_lng: "booking_lng"
     };
+    const nonDbColumns = /* @__PURE__ */ new Set([
+      "companion_accepted",
+      "rejection_reason",
+      "booking_location_name",
+      "companion_eta_text",
+      "companion_current_area",
+      "last_eta_updated_at",
+      "session_otp"
+    ]);
     const rowUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([key]) => fields[key]).map(([key, value]) => [fields[key], value])
+      Object.entries(updates).filter(([key]) => fields[key] && !nonDbColumns.has(fields[key])).map(([key, value]) => [fields[key], value])
     );
-    if (Object.keys(rowUpdates).length === 0) throw new Error("No supported booking fields were provided for update.");
+    if (Object.keys(rowUpdates).length === 0) {
+      const existing = await this.getBooking(id);
+      return existing ? { ...existing, ...updates } : updates;
+    }
     const { data, error } = await db.bookings().update(rowUpdates).eq("id", id).select().single();
     if (error) throw error;
-    return mapBookingFromRow(data);
+    return { ...mapBookingFromRow(data), ...updates };
   }
   async markBookingCompanionArrived(bookingId, companionId) {
     const { data, error } = await supabase.rpc("mark_booking_companion_arrived", {
@@ -2764,18 +2776,6 @@ var SupabaseDatabaseAdapter = class {
     return data?.sharing_enabled === true;
   }
   async consumeRateLimit(bucketKey, limit, windowSeconds) {
-    try {
-      const { data, error } = await supabase.rpc("consume_api_rate_limit", {
-        p_bucket_key: bucketKey,
-        p_limit: limit,
-        p_window_seconds: windowSeconds
-      });
-      if (!error && typeof data?.allowed === "boolean") {
-        return data;
-      }
-    } catch (err) {
-      console.warn("Supabase consume_api_rate_limit fallback to in-memory:", err);
-    }
     const now = Date.now();
     let bucket = localRateLimitBuckets.get(bucketKey);
     if (!bucket || now - bucket.startedAt >= windowSeconds * 1e3) {
@@ -2783,17 +2783,12 @@ var SupabaseDatabaseAdapter = class {
       localRateLimitBuckets.set(bucketKey, bucket);
     }
     bucket.count++;
-    return { allowed: bucket.count <= limit, retryAfterSeconds: Math.max(1, Math.ceil((bucket.startedAt + windowSeconds * 1e3 - now) / 1e3)) };
+    return {
+      allowed: bucket.count <= limit,
+      retryAfterSeconds: Math.max(1, Math.ceil((bucket.startedAt + windowSeconds * 1e3 - now) / 1e3))
+    };
   }
   async isSessionRevoked(tokenId) {
-    try {
-      const { data, error } = await supabase.rpc("is_session_revoked", { p_token_id: tokenId });
-      if (!error && typeof data === "boolean") {
-        return data;
-      }
-    } catch (err) {
-      console.warn("Supabase is_session_revoked fallback to in-memory:", err);
-    }
     return localRevokedSessions.has(tokenId);
   }
   async revokeSession(tokenId, principalId, principalType, expiresAt) {
@@ -3097,32 +3092,37 @@ function getDatabaseType() {
 }
 
 // server/services/firebase.ts
-import { initializeApp, cert } from "firebase-admin/app";
+import { initializeApp, cert, applicationDefault } from "firebase-admin/app";
 import { getDatabase } from "firebase-admin/database";
 var firebaseApp = null;
 var rtdb = null;
 function initializeFirebase() {
   if (firebaseApp) return firebaseApp;
   const serviceAccountKey = process.env.FIREBASE_PRIVATE_KEY;
-  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || "project-f4b5d045-f344-4919-8e8";
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const databaseURL = process.env.FIREBASE_DATABASE_URL?.trim();
-  if (!serviceAccountKey || !projectId || !clientEmail || !databaseURL) {
+  const hasKeyCredentials = Boolean(serviceAccountKey && clientEmail);
+  const isCloudPlatform = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
+  if (!hasKeyCredentials && !isCloudPlatform && !databaseURL) {
     console.warn("Firebase Admin credentials or FIREBASE_DATABASE_URL are not configured. Firebase features will be disabled.");
     return null;
   }
   try {
-    const serviceAccount = {
+    const credential = hasKeyCredentials ? cert({
       projectId,
       clientEmail,
       privateKey: serviceAccountKey.replace(/\\n/g, "\n")
-    };
-    firebaseApp = initializeApp({
-      credential: cert(serviceAccount),
-      databaseURL
-    });
-    rtdb = getDatabase(firebaseApp);
-    console.log("Firebase Admin SDK initialized successfully");
+    }) : applicationDefault();
+    const options = { credential, projectId };
+    if (databaseURL) {
+      options.databaseURL = databaseURL;
+    }
+    firebaseApp = initializeApp(options);
+    if (databaseURL) {
+      rtdb = getDatabase(firebaseApp);
+    }
+    console.log("Firebase Admin SDK initialized successfully via", hasKeyCredentials ? "cert" : "applicationDefault");
     return firebaseApp;
   } catch (error) {
     console.error("Failed to initialize Firebase Admin SDK:", error);
@@ -3176,33 +3176,40 @@ async function getUserPresence(userId) {
   return snapshot.val();
 }
 function isFirebaseConfigured() {
-  return !!(process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_DATABASE_URL);
+  const hasKeyCredentials = Boolean(process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL);
+  const isCloudPlatform = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
+  return Boolean(
+    (hasKeyCredentials || isCloudPlatform) && (process.env.FIREBASE_DATABASE_URL || process.env.FIREBASE_PROJECT_ID)
+  );
 }
 
 // server/services/fcm.ts
-import { getApps, initializeApp as initializeApp2, cert as cert2 } from "firebase-admin/app";
+import { getApps, initializeApp as initializeApp2, cert as cert2, applicationDefault as applicationDefault2 } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 var messaging = null;
 function initializeFCM() {
   try {
     const serviceAccountKey = process.env.FIREBASE_PRIVATE_KEY;
-    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || "project-f4b5d045-f344-4919-8e8";
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    if (!serviceAccountKey || !projectId || !clientEmail) {
+    const hasKeyCredentials = Boolean(serviceAccountKey && clientEmail);
+    const isCloudPlatform = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
+    if (!hasKeyCredentials && !isCloudPlatform) {
       console.warn("Firebase credentials not configured. FCM will be disabled.");
       return null;
     }
-    const serviceAccount = {
+    const credential = hasKeyCredentials ? cert2({
       projectId,
       clientEmail,
       privateKey: serviceAccountKey.replace(/\\n/g, "\n")
-    };
+    }) : applicationDefault2();
     const app2 = getApps().find((candidate) => candidate.name === "fcm-app") || initializeApp2({
-      credential: cert2(serviceAccount),
+      credential,
+      projectId,
       ...process.env.FIREBASE_DATABASE_URL ? { databaseURL: process.env.FIREBASE_DATABASE_URL } : {}
     }, "fcm-app");
     messaging = getMessaging(app2);
-    console.log("Firebase Cloud Messaging initialized successfully");
+    console.log("Firebase Cloud Messaging initialized successfully via", hasKeyCredentials ? "cert" : "applicationDefault");
     return messaging;
   } catch (error) {
     console.error("Failed to initialize FCM:", error);
@@ -3262,7 +3269,7 @@ async function getFallbackIndiaPredictions(input) {
   try {
     const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(input)}&countrycodes=IN&format=json&addressdetails=1&limit=8&accept-language=en`;
     const res = await fetch(nomUrl, {
-      signal: AbortSignal.timeout(6e3),
+      signal: AbortSignal.timeout(2500),
       headers: {
         "User-Agent": "PairUpToday/1.0 (pairuptoday.in contact@pairuptoday.in)",
         "Accept": "application/json"
@@ -3344,7 +3351,7 @@ async function getPlaceAutocomplete(input, location, radius) {
       }
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`,
-        { signal: AbortSignal.timeout(8e3) }
+        { signal: AbortSignal.timeout(2500) }
       );
       if (response.ok) {
         const data = await response.json();
@@ -3395,7 +3402,28 @@ async function geocodeAddress(addressOrPlaceId, isPlaceId = false) {
 }
 async function reverseGeocode(lat, lng) {
   if (!GOOGLE_MAPS_API_KEY) {
-    throw new Error("Google Maps API key is not configured.");
+    try {
+      const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+        headers: { "User-Agent": "PairUpToday/1.0" },
+        signal: AbortSignal.timeout(3e3)
+      });
+      if (nomRes.ok) {
+        const nomData = await nomRes.json();
+        return {
+          formatted_address: nomData.display_name || `${lat}, ${lng}`,
+          geometry: { location: { lat, lng } },
+          place_id: String(nomData.place_id || "osm"),
+          address_components: []
+        };
+      }
+    } catch {
+    }
+    return {
+      formatted_address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+      geometry: { location: { lat, lng } },
+      place_id: "coords",
+      address_components: []
+    };
   }
   try {
     const params = new URLSearchParams({
@@ -10294,11 +10322,6 @@ app.get("/api/maps/reverse-geocode", async (req, res) => {
   if (!lat || !lng) {
     return res.status(400).json({ error: "Latitude and longitude are required" });
   }
-  if (!isGoogleMapsConfigured()) {
-    return res.status(503).json({
-      error: "Google Maps API not configured"
-    });
-  }
   const parsedLat = parseFloat(lat);
   const parsedLng = parseFloat(lng);
   if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng) || parsedLat < -90 || parsedLat > 90 || parsedLng < -180 || parsedLng > 180) {
@@ -10406,12 +10429,22 @@ async function startServer() {
       res.sendFile(swPath);
     });
     if (fs2.existsSync(distAdminDir)) {
-      app.use("/assets", express.static(path2.join(distAdminDir, "assets"), { fallthrough: true }));
+      app.use("/assets", express.static(path2.join(distAdminDir, "assets"), {
+        fallthrough: true,
+        maxAge: "1y",
+        immutable: true
+      }));
     }
     app.all("/api/*", (_req, res) => {
       return res.status(404).json({ error: "API endpoint not found." });
     });
-    app.use(express.static(distDir));
+    app.use("/assets", express.static(path2.join(distDir, "assets"), {
+      maxAge: "1y",
+      immutable: true
+    }));
+    app.use(express.static(distDir, {
+      maxAge: "1h"
+    }));
     app.get("*", (req, res) => {
       if (req.path.startsWith("/api") || req.originalUrl.startsWith("/api")) {
         return res.status(404).json({ error: "API endpoint not found." });

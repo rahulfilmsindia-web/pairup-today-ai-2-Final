@@ -56,11 +56,6 @@ export function getRTDB(): Database {
   if (!rtdb) throw new Error('Firebase Realtime Database is not configured.');
   return rtdb;
 }
-    initializeFirebase();
-  }
-  if (!rtdb) throw new Error('Firebase Realtime Database is not configured.');
-  return rtdb;
-}
 
 // Firebase Realtime Database operations for location tracking
 export interface LocationUpdate {
