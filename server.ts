@@ -7887,6 +7887,17 @@ app.get('/api/maps/distance', async (req: Request, res: Response) => {
 });
 
 // Health check endpoint for Cloud Run
+app.get('/.well-known/security.txt', (_req: Request, res: Response) => {
+  res.type('text/plain');
+  res.send(`Contact: mailto:support@pairuptoday.com
+Preferred-Languages: en, bn, hi
+Canonical: https://pairuptoday.com/.well-known/security.txt
+Policy: https://pairuptoday.com/privacy
+Acknowledgments: https://pairuptoday.com/about
+Expires: 2027-12-31T23:59:59.000Z
+`);
+});
+
 app.get('/health', (req: Request, res: Response) => {
   const dbType = getDatabaseType();
   const firebaseReady = isFirebaseConfigured();
