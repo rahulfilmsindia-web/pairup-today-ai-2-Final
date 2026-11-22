@@ -2617,21 +2617,35 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                     setSelectedServiceId(s.id);
                     setActiveTab('discover');
                   }}
-                  className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-400/40 cursor-pointer transition-all hover:bg-slate-850 flex flex-col justify-between"
+                  className="rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-400/40 cursor-pointer transition-all hover:bg-slate-850 flex flex-col justify-between overflow-hidden group shadow-lg"
                 >
-                  <div>
-                    <div className="text-xs font-bold text-amber-300 mb-1">
-                      {s.id}. {s.name}
+                  <div className="relative h-36 w-full overflow-hidden bg-slate-950">
+                    <img
+                      src={s.image}
+                      alt={s.name}
+                      className="w-full h-full object-cover object-[center_top] transition-transform duration-500 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+                    <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/85 backdrop-blur border border-slate-800 text-[10px] font-bold text-amber-300">
+                      #{s.id} {s.chipLabel}
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
-                      {s.description}
-                    </p>
                   </div>
-                  <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-500">
-                    <span className="uppercase tracking-wider">{s.category}</span>
-                    <span className="text-amber-400 font-semibold flex items-center gap-1">
-                      Find Companion <ChevronRight className="w-3 h-3" />
-                    </span>
+                  <div className="p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-amber-300 mb-1">
+                        {s.id}. {s.name}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2">
+                        {s.description}
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-500">
+                      <span className="uppercase tracking-wider">{s.category}</span>
+                      <span className="text-amber-400 font-semibold flex items-center gap-1 group-hover:text-pink-400 transition-colors">
+                        Find Companion <ChevronRight className="w-3 h-3" />
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -3862,11 +3876,17 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                       const activeSrv = PAIRUP_SERVICES.find(s => s.id === bookingServiceId);
                       if (!activeSrv) return null;
                       return (
-                        <div className="mt-1.5 p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 flex items-start gap-2 shadow-inner">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                          <div>
-                            <span className="font-bold text-amber-300">{activeSrv.cardTitle}: </span>
-                            <span className="text-slate-400 leading-relaxed">{activeSrv.description}</span>
+                        <div className="mt-2 p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 flex items-center gap-3 shadow-inner">
+                          {activeSrv.image && (
+                            <img
+                              src={activeSrv.image}
+                              alt={activeSrv.cardTitle}
+                              className="w-14 h-14 rounded-xl object-cover object-[center_top] shrink-0 border border-slate-700/80 shadow"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <span className="font-bold text-amber-300 block">{activeSrv.cardTitle}</span>
+                            <span className="text-slate-400 leading-relaxed text-[11px] line-clamp-2">{activeSrv.description}</span>
                           </div>
                         </div>
                       );

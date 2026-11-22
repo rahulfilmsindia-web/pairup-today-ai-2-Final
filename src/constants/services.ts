@@ -35,7 +35,7 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
     description: 'Friendly companionship for casual chats, meaningful conversations, sharing stories, and relaxing leisure time together.',
     iconName: 'MessageCircleHeart',
     category: 'social',
-    image: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80'
+    image: '/assets/services/social_conversation_rabindra_sarobar.jpg'
   },
   {
     id: 2,
@@ -46,7 +46,7 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
     description: 'A charming companion for visiting trendy cafés, coffee bistros, culinary spots, and enjoying delightful meals together.',
     iconName: 'Coffee',
     category: 'social',
-    image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80'
+    image: '/assets/services/cafe_restaurant_dining.jpg'
   },
   {
     id: 3,
@@ -57,7 +57,7 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
     description: 'Enjoy cinema releases, IMAX screenings, film festivals, and entertainment shows with an enthusiastic movie partner.',
     iconName: 'Film',
     category: 'social',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=600&q=80'
+    image: '/assets/services/movie_cinema_pvr.jpg'
   },
   {
     id: 4,
@@ -127,7 +127,7 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
     description: 'Friendly, reliable companionship for domestic and international tours, holiday getaways, and scenic road trips.',
     iconName: 'Plane',
     category: 'travel',
-    image: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=80'
+    image: '/assets/services/travel_holiday_hill_station.jpg'
   },
   {
     id: 6,

@@ -143,12 +143,12 @@ export const ServicesGrid: React.FC<ServicesGridProps> = ({ onSelectService }) =
               className="group cursor-pointer rounded-2xl bg-slate-900/80 border border-slate-800/90 hover:border-pink-500/50 overflow-hidden shadow-lg shadow-black/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-pink-500/15 flex flex-col justify-between"
             >
               <div>
-                {/* Card Visual Header with Unsplash image */}
-                <div className="relative h-44 w-full overflow-hidden bg-slate-950">
+                {/* Card Visual Header with Verified Service Image */}
+                <div className="relative h-48 sm:h-52 w-full overflow-hidden bg-slate-950">
                   <img
                     src={service.image}
                     alt={service.cardTitle}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="w-full h-full object-cover object-[center_top] transition-transform duration-500 group-hover:scale-105"
                     loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
