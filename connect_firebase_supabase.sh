@@ -83,17 +83,22 @@ FIREBASE_DATABASE_URL="https://${PROJECT_ID}-default-rtdb.asia-southeast1.fireba
 create_or_update_secret "FIREBASE_PROJECT_ID" "${PROJECT_ID}"
 create_or_update_secret "FIREBASE_DATABASE_URL" "${FIREBASE_DATABASE_URL}"
 
-# 4. Build and Push High-Performance Container Image
+# 4. Stop and Delete Duplicate Singapore Instances to Prevent Idle Billing
+echo ""
+echo "Stopping and deleting duplicate Singapore (asia-southeast1) instance to ensure ₹0 idle cost..."
+gcloud run services delete "${SERVICE_NAME}" --region="asia-southeast1" --project="${PROJECT_ID}" --quiet || echo "ℹ️ Singapore service not present or already removed."
+
+# 5. Build and Push High-Performance Container Image
 IMAGE_TAG="gcr.io/${PROJECT_ID}/${SERVICE_NAME}:latest"
 echo ""
-echo "Step 4: Building updated container image with native ADC support..."
+echo "Step 5: Building updated container image with latest 36 services, photo fixes, and ADC support..."
 gcloud builds submit --tag "${IMAGE_TAG}" . --project="${PROJECT_ID}"
 
-# 5. Deploy to Primary Region (Mumbai, India) - 100% Free Tier Compatible
+# 6. Deploy to Primary Region (Mumbai, India) - 100% Free Tier Compatible
 SECRETS_MOUNT="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,FIREBASE_DATABASE_URL=FIREBASE_DATABASE_URL:latest"
 
 echo ""
-echo "Step 5: Deploying to Mumbai Region (${PRIMARY_REGION})..."
+echo "Step 6: Deploying to Mumbai Region (${PRIMARY_REGION}) in ₹0 Idle Cost Mode..."
 gcloud run deploy "${SERVICE_NAME}" \
   --image "${IMAGE_TAG}" \
   --region "${PRIMARY_REGION}" \
@@ -114,7 +119,7 @@ gcloud run deploy "${SERVICE_NAME}" \
 PRIMARY_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${PRIMARY_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
 echo "✅ Primary Region (Mumbai) deployment successful: ${PRIMARY_URL}"
 
-# 6. Verify Health Check
+# 7. Verify Health Check
 echo ""
 echo "=============================================================================="
 echo "  Verification: Testing Live Health Endpoint..."
