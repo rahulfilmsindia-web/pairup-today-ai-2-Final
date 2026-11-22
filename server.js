@@ -1552,16 +1552,39 @@ var JsonDatabaseAdapter = class {
     return "verified";
   }
 };
+var userCacheById = /* @__PURE__ */ new Map();
+var userCacheByPhone = /* @__PURE__ */ new Map();
+function cacheUser(user) {
+  if (!user || !user.id) return;
+  const entry = { user, expiresAt: Date.now() + 3e4 };
+  userCacheById.set(user.id, entry);
+  if (user.phone) userCacheByPhone.set(user.phone, entry);
+}
+function invalidateUserCache(userId, phone) {
+  userCacheById.delete(userId);
+  if (phone) userCacheByPhone.delete(phone);
+  for (const [p, e] of userCacheByPhone.entries()) {
+    if (e.user?.id === userId) userCacheByPhone.delete(p);
+  }
+}
 var SupabaseDatabaseAdapter = class {
   async getUser(id) {
+    const cached = userCacheById.get(id);
+    if (cached && Date.now() < cached.expiresAt) return cached.user;
     const { data, error } = await db.users().select("*").eq("id", id).maybeSingle();
     if (error) throw error;
-    return data ? this.mapUser(data) : null;
+    const user = data ? this.mapUser(data) : null;
+    if (user) cacheUser(user);
+    return user;
   }
   async getUserByPhone(phone) {
+    const cached = userCacheByPhone.get(phone);
+    if (cached && Date.now() < cached.expiresAt) return cached.user;
     const { data, error } = await db.users().select("*").eq("phone", phone).maybeSingle();
     if (error) throw error;
-    return data ? this.mapUser(data) : null;
+    const user = data ? this.mapUser(data) : null;
+    if (user) cacheUser(user);
+    return user;
   }
   async createUser(user) {
     const { data, error } = await db.users().insert({
@@ -1736,13 +1759,18 @@ var SupabaseDatabaseAdapter = class {
           if (retry.error) {
             console.warn("Supabase updateUser fallback error:", retry.error.message);
           }
-          return applyMetaOverrides(this.mapUser(retry.data || { id, ...updates }));
+          const updatedUser2 = applyMetaOverrides(this.mapUser(retry.data || { id, ...updates }));
+          cacheUser(updatedUser2);
+          return updatedUser2;
         }
         console.warn("Supabase updateUser error:", error.message);
       }
-      return applyMetaOverrides(this.mapUser(data || { id, ...updates }));
+      const updatedUser = applyMetaOverrides(this.mapUser(data || { id, ...updates }));
+      cacheUser(updatedUser);
+      return updatedUser;
     } catch (err) {
       console.warn("Supabase updateUser exception:", err.message);
+      invalidateUserCache(id);
       return applyMetaOverrides(this.mapUser({ id, ...updates }));
     }
   }
