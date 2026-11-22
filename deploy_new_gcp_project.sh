@@ -107,6 +107,13 @@ if [ ${BUILD_SUCCESS} -ne 1 ]; then
   exit 1
 fi
 
+# Check if Firebase secrets are available in Secret Manager
+SECRETS_LIST="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest"
+if gcloud secrets describe FIREBASE_PROJECT_ID --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  echo "Attaching Firebase credentials from Secret Manager..."
+  SECRETS_LIST="${SECRETS_LIST},FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,FIREBASE_CLIENT_EMAIL=FIREBASE_CLIENT_EMAIL:latest,FIREBASE_PRIVATE_KEY=FIREBASE_PRIVATE_KEY:latest,FIREBASE_DATABASE_URL=FIREBASE_DATABASE_URL:latest"
+fi
+
 # 5. Deploy to Primary Region (Mumbai: asia-south1) - High Performance Turbo
 echo "------------------------------------------------------------------------------"
 echo "  Deploying High-Performance Turbo to Primary Region: ${PRIMARY_REGION}..."
@@ -124,7 +131,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --max-instances 10 \
   --concurrency 80 \
   --no-cpu-throttling \
-  --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
+  --set-secrets="${SECRETS_LIST}" \
   --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88,APITXT_BASE_URL=https://apitxt.com"
 
 PRIMARY_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${PRIMARY_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
@@ -147,7 +154,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --max-instances 10 \
   --concurrency 80 \
   --no-cpu-throttling \
-  --set-secrets="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest" \
+  --set-secrets="${SECRETS_LIST}" \
   --set-env-vars="NODE_ENV=production,SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88,APITXT_BASE_URL=https://apitxt.com"
 
 FAILOVER_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${FAILOVER_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
