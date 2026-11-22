@@ -1,4 +1,4 @@
-import { initializeApp, cert, type App } from 'firebase-admin/app';
+import { initializeApp, cert, applicationDefault, type App } from 'firebase-admin/app';
 import { getDatabase, type Database } from 'firebase-admin/database';
 
 // Firebase Admin SDK initialization
@@ -10,29 +10,37 @@ export function initializeFirebase() {
   if (firebaseApp) return firebaseApp;
 
   const serviceAccountKey = process.env.FIREBASE_PRIVATE_KEY;
-  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'project-f4b5d045-f344-4919-8e8';
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const databaseURL = process.env.FIREBASE_DATABASE_URL?.trim();
 
-  if (!serviceAccountKey || !projectId || !clientEmail || !databaseURL) {
+  const hasKeyCredentials = Boolean(serviceAccountKey && clientEmail);
+  const isCloudPlatform = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
+
+  if (!hasKeyCredentials && !isCloudPlatform && !databaseURL) {
     console.warn('Firebase Admin credentials or FIREBASE_DATABASE_URL are not configured. Firebase features will be disabled.');
     return null;
   }
 
   try {
-    const serviceAccount = {
-      projectId,
-      clientEmail,
-      privateKey: serviceAccountKey.replace(/\\n/g, '\n')
-    };
+    const credential = hasKeyCredentials
+      ? cert({
+          projectId,
+          clientEmail: clientEmail!,
+          privateKey: serviceAccountKey!.replace(/\\n/g, '\n')
+        })
+      : applicationDefault();
 
-    firebaseApp = initializeApp({
-      credential: cert(serviceAccount),
-      databaseURL
-    });
+    const options: any = { credential, projectId };
+    if (databaseURL) {
+      options.databaseURL = databaseURL;
+    }
 
-    rtdb = getDatabase(firebaseApp);
-    console.log('Firebase Admin SDK initialized successfully');
+    firebaseApp = initializeApp(options);
+    if (databaseURL) {
+      rtdb = getDatabase(firebaseApp);
+    }
+    console.log('Firebase Admin SDK initialized successfully via', hasKeyCredentials ? 'cert' : 'applicationDefault');
     return firebaseApp;
   } catch (error) {
     console.error('Failed to initialize Firebase Admin SDK:', error);
@@ -43,6 +51,11 @@ export function initializeFirebase() {
 // Get Firebase Realtime Database instance
 export function getRTDB(): Database {
   if (!rtdb) {
+    initializeFirebase();
+  }
+  if (!rtdb) throw new Error('Firebase Realtime Database is not configured.');
+  return rtdb;
+}
     initializeFirebase();
   }
   if (!rtdb) throw new Error('Firebase Realtime Database is not configured.');
@@ -154,10 +167,10 @@ export async function cleanupExpiredLocations(): Promise<number> {
 
 // Check if Firebase is configured
 export function isFirebaseConfigured(): boolean {
-  return !!(
-    process.env.FIREBASE_PRIVATE_KEY &&
-    process.env.FIREBASE_PROJECT_ID &&
-    process.env.FIREBASE_CLIENT_EMAIL &&
-    process.env.FIREBASE_DATABASE_URL
+  const hasKeyCredentials = Boolean(process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL);
+  const isCloudPlatform = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
+  return Boolean(
+    (hasKeyCredentials || isCloudPlatform) &&
+    (process.env.FIREBASE_DATABASE_URL || process.env.FIREBASE_PROJECT_ID)
   );
 }

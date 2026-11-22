@@ -1,4 +1,4 @@
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { getApps, initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getMessaging, type Messaging, type Message, type MulticastMessage, type SendResponse } from 'firebase-admin/messaging';
 
 // FCM instance
@@ -10,27 +10,33 @@ let messaging: Messaging | null = null;
 export function initializeFCM() {
   try {
     const serviceAccountKey = process.env.FIREBASE_PRIVATE_KEY;
-    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'project-f4b5d045-f344-4919-8e8';
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 
-    if (!serviceAccountKey || !projectId || !clientEmail) {
+    const hasKeyCredentials = Boolean(serviceAccountKey && clientEmail);
+    const isCloudPlatform = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
+
+    if (!hasKeyCredentials && !isCloudPlatform) {
       console.warn('Firebase credentials not configured. FCM will be disabled.');
       return null;
     }
 
-    const serviceAccount = {
-      projectId,
-      clientEmail,
-      privateKey: serviceAccountKey.replace(/\\n/g, '\n')
-    };
+    const credential = hasKeyCredentials
+      ? cert({
+          projectId,
+          clientEmail: clientEmail!,
+          privateKey: serviceAccountKey!.replace(/\\n/g, '\n')
+        })
+      : applicationDefault();
 
     const app = getApps().find(candidate => candidate.name === 'fcm-app') || initializeApp({
-      credential: cert(serviceAccount),
+      credential,
+      projectId,
       ...(process.env.FIREBASE_DATABASE_URL ? { databaseURL: process.env.FIREBASE_DATABASE_URL } : {})
     }, 'fcm-app');
 
     messaging = getMessaging(app);
-    console.log('Firebase Cloud Messaging initialized successfully');
+    console.log('Firebase Cloud Messaging initialized successfully via', hasKeyCredentials ? 'cert' : 'applicationDefault');
     return messaging;
   } catch (error) {
     console.error('Failed to initialize FCM:', error);
@@ -325,9 +331,7 @@ export async function sendSupportReplyNotification(
  * Check if FCM is configured
  */
 export function isFCMConfigured(): boolean {
-  return !!(
-    process.env.FIREBASE_PRIVATE_KEY &&
-    process.env.FIREBASE_PROJECT_ID &&
-    process.env.FIREBASE_CLIENT_EMAIL
-  );
+  const hasKeyCredentials = Boolean(process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL);
+  const isCloudPlatform = Boolean(process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT);
+  return Boolean((hasKeyCredentials || isCloudPlatform) && (process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT));
 }
