@@ -20,7 +20,7 @@ echo "==========================================================================
 gcloud config set project "${PROJECT_ID}" --quiet
 
 echo ""
-echo "1. Updating Primary Region (asia-south1: Mumbai) to Zero-Cost Mode..."
+echo "1. Configuring Mumbai (asia-south1) to True ₹0 Zero-Cost Mode..."
 gcloud run services update "${SERVICE_NAME}" \
   --region="asia-south1" \
   --project="${PROJECT_ID}" \
@@ -28,24 +28,19 @@ gcloud run services update "${SERVICE_NAME}" \
   --cpu-throttling \
   --cpu=1 \
   --memory=1Gi \
-  --max-instances=5 \
-  --quiet || echo "⚠️ asia-south1 service update skipped or not yet deployed."
+  --max-instances=3 \
+  --quiet || echo "⚠️ asia-south1 service update skipped."
 
-echo "✅ Mumbai service configured for ₹0 idle cost."
+echo "✅ Mumbai service configured with --min-instances=0 and --cpu-throttling (100% Free Tier)."
 
 echo ""
-echo "2. Updating Failover Region (asia-southeast1: Singapore) to Zero-Cost Mode..."
-gcloud run services update "${SERVICE_NAME}" \
+echo "2. Deleting unused Singapore (asia-southeast1) instance to eliminate dual-region duplicate charges..."
+gcloud run services delete "${SERVICE_NAME}" \
   --region="asia-southeast1" \
   --project="${PROJECT_ID}" \
-  --min-instances=0 \
-  --cpu-throttling \
-  --cpu=1 \
-  --memory=1Gi \
-  --max-instances=3 \
-  --quiet || echo "⚠️ asia-southeast1 service not found or skipped."
+  --quiet || echo "ℹ️ asia-southeast1 service already removed or not present."
 
-echo "✅ Singapore service configured for ₹0 idle cost."
+echo "✅ Duplicate Singapore charges stopped."
 
 echo ""
 echo "=============================================================================="

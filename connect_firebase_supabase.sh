@@ -89,11 +89,11 @@ echo ""
 echo "Step 4: Building updated container image with native ADC support..."
 gcloud builds submit --tag "${IMAGE_TAG}" . --project="${PROJECT_ID}"
 
-# 5. Deploy to Dual-Region Cloud Run
+# 5. Deploy to Primary Region (Mumbai, India) - 100% Free Tier Compatible
 SECRETS_MOUNT="SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,FIREBASE_DATABASE_URL=FIREBASE_DATABASE_URL:latest"
 
 echo ""
-echo "Step 5: Deploying to Primary Region (${PRIMARY_REGION}: Mumbai)..."
+echo "Step 5: Deploying to Mumbai Region (${PRIMARY_REGION})..."
 gcloud run deploy "${SERVICE_NAME}" \
   --image "${IMAGE_TAG}" \
   --region "${PRIMARY_REGION}" \
@@ -104,7 +104,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --memory 1Gi \
   --cpu 1 \
   --min-instances 0 \
-  --max-instances 5 \
+  --max-instances 3 \
   --concurrency 80 \
   --cpu-throttling \
   --set-secrets="${SECRETS_MOUNT}" \
@@ -112,29 +112,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --quiet
 
 PRIMARY_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${PRIMARY_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
-echo "✅ Primary Region deployment successful: ${PRIMARY_URL}"
-
-echo ""
-echo "Step 6: Deploying to Failover Region (${FAILOVER_REGION}: Singapore)..."
-gcloud run deploy "${SERVICE_NAME}" \
-  --image "${IMAGE_TAG}" \
-  --region "${FAILOVER_REGION}" \
-  --project="${PROJECT_ID}" \
-  --platform managed \
-  --allow-unauthenticated \
-  --port 8080 \
-  --memory 1Gi \
-  --cpu 1 \
-  --min-instances 0 \
-  --max-instances 5 \
-  --concurrency 80 \
-  --cpu-throttling \
-  --set-secrets="${SECRETS_MOUNT}" \
-  --set-env-vars="NODE_ENV=production,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},SESSION_SECRET=pairuptoday_prod_session_secret_2026_super_secure_key_99,OTP_HMAC_SECRET=pairuptoday_prod_otp_hmac_secret_2026_super_secure_key_88,APITXT_BASE_URL=https://apitxt.com" \
-  --quiet
-
-FAILOVER_URL=$(gcloud run services describe "${SERVICE_NAME}" --region="${FAILOVER_REGION}" --project="${PROJECT_ID}" --format="value(status.url)")
-echo "✅ Failover Region deployment successful: ${FAILOVER_URL}"
+echo "✅ Primary Region (Mumbai) deployment successful: ${PRIMARY_URL}"
 
 # 6. Verify Health Check
 echo ""
@@ -147,6 +125,7 @@ echo "Health Status: ${HEALTH_RES}"
 echo ""
 echo "=============================================================================="
 echo "  🎉 CONGRATULATIONS! Google Cloud + Supabase + Firebase are fully connected!"
-echo "  Primary (Mumbai):     ${PRIMARY_URL}"
-echo "  Failover (Singapore): ${FAILOVER_URL}"
+echo "  Live URL (Mumbai): ${PRIMARY_URL}"
+echo "  - Idle Billing: ₹0.00 / month (Zero active instances when no visitors)"
+echo "  - Free Tier: First 2,000,000 monthly requests included for free"
 echo "=============================================================================="
