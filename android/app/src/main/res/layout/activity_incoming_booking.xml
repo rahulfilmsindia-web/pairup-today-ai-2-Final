@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#0F172A"
+    android:padding="24dp">
+
+    <!-- Header & 30s Countdown -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🚨 NEW BOOKING REQUEST"
+            android:textColor="#F43F5E"
+            android:textStyle="bold"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tv_countdown_timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="30s"
+            android:textColor="#FBBF24"
+            android:textStyle="bold"
+            android:textSize="18sp" />
+    </LinearLayout>
+
+    <!-- Booking Amount -->
+    <TextView
+        android:id="@+id/tv_booking_amount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="₹1,200"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:textSize="38sp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Client Info -->
+    <TextView
+        android:id="@+id/tv_client_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Client Name • 1.8 km away"
+        android:textColor="#94A3B8"
+        android:textSize="15sp"
+        android:layout_marginBottom="4dp" />
+
+    <!-- Meeting Location -->
+    <TextView
+        android:id="@+id/tv_meeting_location"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Central Public Cafe, Kolkata"
+        android:textColor="#CBD5E1"
+        android:textSize="14sp"
+        android:layout_marginBottom="32dp" />
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_decline"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="DECLINE"
+            android:backgroundTint="#EF4444"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:layout_marginEnd="12dp" />
+
+        <Button
+            android:id="@+id/btn_accept"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="ACCEPT"
+            android:backgroundTint="#10B981"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:layout_marginStart="12dp" />
+    </LinearLayout>
+
+</LinearLayout>

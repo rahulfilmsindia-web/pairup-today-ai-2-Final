@@ -397,3 +397,77 @@ export function formatAddressFromComponents(
 export function isGoogleMapsConfigured(): boolean {
   return !!GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY';
 }
+
+const directionsCache = new Map<string, { route: any; expiresAt: number }>();
+
+/**
+ * Get cached Google Directions route polyline once (Zero redundant API calls)
+ */
+export async function getDirectionsRoute(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number }
+): Promise<{
+  points: [number, number][];
+  distanceKm: number;
+  durationMins: number;
+  encodedPolyline?: string;
+}> {
+  const cacheKey = `${origin.lat.toFixed(3)},${origin.lng.toFixed(3)}->${destination.lat.toFixed(3)},${destination.lng.toFixed(3)}`;
+  const cached = directionsCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.route;
+  }
+
+  // Calculate local Haversine distance as base ground-truth
+  const distKm = calculateDistance(origin.lat, origin.lng, destination.lat, destination.lng);
+  const estMins = Math.max(1, Math.round((distKm / 22) * 60)); // 22 km/h city average
+
+  // Generate smooth fallback points between origin and destination
+  const fallbackPoints: [number, number][] = [
+    [origin.lat, origin.lng],
+    [origin.lat + (destination.lat - origin.lat) * 0.33, origin.lng + (destination.lng - origin.lng) * 0.33],
+    [origin.lat + (destination.lat - origin.lat) * 0.66, origin.lng + (destination.lng - origin.lng) * 0.66],
+    [destination.lat, destination.lng]
+  ];
+
+  let result = {
+    points: fallbackPoints,
+    distanceKm: parseFloat(distKm.toFixed(1)),
+    durationMins: estMins,
+    encodedPolyline: ''
+  };
+
+  if (isGoogleMapsConfigured()) {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}&mode=driving&key=${GOOGLE_MAPS_API_KEY}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'OK' && data.routes && data.routes[0]) {
+          const route = data.routes[0];
+          const leg = route.legs?.[0];
+          const points: [number, number][] = [];
+          if (leg?.steps) {
+            for (const step of leg.steps) {
+              if (step.start_location) points.push([step.start_location.lat, step.start_location.lng]);
+              if (step.end_location) points.push([step.end_location.lat, step.end_location.lng]);
+            }
+          }
+          result = {
+            points: points.length > 0 ? points : fallbackPoints,
+            distanceKm: leg?.distance?.value ? parseFloat((leg.distance.value / 1000).toFixed(1)) : parseFloat(distKm.toFixed(1)),
+            durationMins: leg?.duration?.value ? Math.max(1, Math.round(leg.duration.value / 60)) : estMins,
+            encodedPolyline: route.overview_polyline?.points || ''
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Google Directions API notice, applying local Haversine route:', e);
+    }
+  }
+
+  // Cache for 2 hours to protect $200 free credit
+  directionsCache.set(cacheKey, { route: result, expiresAt: Date.now() + 2 * 3600 * 1000 });
+  return result;
+}
+

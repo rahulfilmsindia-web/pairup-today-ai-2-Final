@@ -59,6 +59,7 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
   const [incomingBooking, setIncomingBooking] = useState<any | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [countdown, setCountdown] = useState(30);
   const [notificationPermission, setNotificationPermission] = useState<string>(() => {
     return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted';
   });
@@ -533,6 +534,26 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
     }
   };
 
+  // 30-Second Countdown Timer for Incoming Booking
+  useEffect(() => {
+    if (!incomingBooking) {
+      setCountdown(30);
+      return;
+    }
+    setCountdown(30);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleDecline();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [incomingBooking?.id]);
+
   if (!isCompanion) return null;
 
   const totalEarningsPaise = incomingBooking
@@ -557,17 +578,22 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
           <div className="relative w-full max-w-md bg-slate-900 border-2 border-pink-500 rounded-3xl shadow-2xl p-6 text-slate-100 space-y-4">
             {/* Header */}
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
-              <div className="w-12 h-12 rounded-full bg-pink-500/20 border-2 border-pink-500 flex items-center justify-center text-pink-400 animate-pulse shrink-0">
-                <Bell className="w-6 h-6 animate-bounce" />
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-full bg-pink-500/20 border-2 border-pink-500 flex items-center justify-center text-pink-400 animate-pulse shrink-0">
+                  <Bell className="w-6 h-6 animate-bounce" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-1.5">
+                    <span>🚨 Urgent Booking Call!</span>
+                  </h3>
+                  <p className="text-xs text-pink-400 font-semibold truncate">
+                    {incomingBooking.clientName || 'A Client'} is waiting
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-1.5">
-                  <span>🚨 Urgent Booking Call!</span>
-                </h3>
-                <p className="text-xs text-pink-400 font-semibold truncate">
-                  {incomingBooking.clientName || 'A Client'} is waiting for your instant response
-                </p>
+              <div className="px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-extrabold text-xs shrink-0 animate-pulse">
+                ⏱️ {countdown}s
               </div>
             </div>
 
@@ -634,7 +660,7 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
                 className="py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
               >
                 <Check className="w-4 h-4" />
-                <span>{isProcessing ? 'Accepting...' : 'Accept & Proceed'}</span>
+                <span>{isProcessing ? 'Accepting...' : `Accept (${countdown}s)`}</span>
               </button>
             </div>
           </div>

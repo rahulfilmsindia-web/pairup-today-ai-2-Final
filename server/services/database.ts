@@ -412,6 +412,13 @@ function mapBookingToRow(booking: any): Record<string, unknown> {
     longitude: booking.longitude ?? null,
     notes: booking.notes || null,
     amount_paise: booking.bookingAmountPaise ?? booking.amountPaise,
+    selected_services: booking.selectedServices ? (typeof booking.selectedServices === 'string' ? JSON.parse(booking.selectedServices) : booking.selectedServices) : [],
+    actual_start_time: booking.actualStartTime || null,
+    cancellation_reason: booking.cancellationReason || null,
+    cancellation_note: booking.cancellationNote || null,
+    cancelled_by: booking.cancelledBy || null,
+    cancelled_at: booking.cancelledAt || null,
+    penalty_deducted_paise: booking.penaltyDeductedPaise || 0,
     status: booking.status || 'PENDING',
     payment_order_id: booking.paymentOrderId || null,
     payment_id: booking.paymentId || null,
@@ -481,7 +488,14 @@ function mapBookingFromRow(row: any): any {
     startOtpAttempts: row.start_otp_attempts,
     endOtpAttempts: row.completion_otp_attempts,
     endOtpVerified: row.completion_otp_verified,
-    payoutId: row.payout_id
+    payoutId: row.payout_id,
+    selectedServices: row.selected_services || (row.selectedServices ? row.selectedServices : []),
+    actualStartTime: row.actual_start_time || row.actualStartTime || null,
+    cancellationReason: row.cancellation_reason || row.cancellationReason || null,
+    cancellationNote: row.cancellation_note || row.cancellationNote || null,
+    cancelledBy: row.cancelled_by || row.cancelledBy || null,
+    cancelledAt: row.cancelled_at || row.cancelledAt || null,
+    penaltyDeductedPaise: row.penalty_deducted_paise || row.penaltyDeductedPaise || 0
   };
 }
 
@@ -2299,7 +2313,15 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       refundedAt: 'refunded_at',
       refunded_at: 'refunded_at',
       refundedByAdmin: 'refunded_by_admin',
-      refunded_by_admin: 'refunded_by_admin'
+      refunded_by_admin: 'refunded_by_admin',
+      actualStartTime: 'actual_start_time',
+      actual_start_time: 'actual_start_time',
+      selectedServices: 'selected_services',
+      selected_services: 'selected_services',
+      penaltyDeductedPaise: 'penalty_deducted_paise',
+      penalty_deducted_paise: 'penalty_deducted_paise',
+      cancelledBy: 'cancelled_by',
+      cancelled_by: 'cancelled_by'
     };
     const nonDbColumns = new Set([
       'companion_accepted',
@@ -2319,7 +2341,11 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       'refund_bank_details',
       'refund_utr',
       'refunded_at',
-      'refunded_by_admin'
+      'refunded_by_admin',
+      'actual_start_time',
+      'selected_services',
+      'penalty_deducted_paise',
+      'cancelled_by'
     ]);
     const rowUpdates = Object.fromEntries(
       Object.entries(updates)

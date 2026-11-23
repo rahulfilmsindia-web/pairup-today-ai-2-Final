@@ -151,6 +151,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
   const [selectedCompanion, setSelectedCompanion] = useState<any | null>(null);
   const [bookingServiceId, setBookingServiceId] = useState<number>(1);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([1]);
   const [bookingDate, setBookingDate] = useState(() => getTodayDateStr());
   const [bookingTime, setBookingTime] = useState(() => getInitialBookingDateTime().timeStr);
   const [bookingDurationHours, setBookingDurationHours] = useState(1);
@@ -194,10 +195,25 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
         || (Array.isArray(selectedCompanion.services) && selectedCompanion.services[0]) 
         || 1;
       setBookingServiceId(defaultServiceId);
+      const initialServices = Array.isArray(selectedCompanion.services) && selectedCompanion.services.length > 0
+        ? [selectedCompanion.services[0]]
+        : [defaultServiceId];
+      setSelectedServiceIds(initialServices);
       setBookingError(null);
       setTimeConflictError(null);
     }
   }, [selectedCompanion?.id]);
+
+  // 24-Hour Time Slots with 15-Minute Precision (00:00 to 23:45)
+  const allTimeSlots24h = useMemo(() => {
+    const slots: string[] = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+      }
+    }
+    return slots;
+  }, []);
 
   // Review & Rating Modal state
   const [reviewingBooking, setReviewingBooking] = useState<any | null>(null);
@@ -1026,6 +1042,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
             companionId: selectedCompanion.id,
             serviceId: bookingServiceId || selectedServiceId || selectedCompanion.services?.[0] || 1,
             serviceName: PAIRUP_SERVICES.find(s => s.id === (bookingServiceId || selectedServiceId || selectedCompanion.services?.[0]))?.name || 'Social & Conversation Companion',
+            selectedServices: selectedServiceIds.map(id => ({
+              id,
+              name: PAIRUP_SERVICES.find(s => s.id === id)?.name || 'Service'
+            })),
             date: bookingDate,
             startTime: bookingTime,
             endTime: formattedEndTime,
@@ -4051,45 +4071,74 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
               return (
                 <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
-                  {/* Service Selection for this Booking (All 35 Services) */}
+                  {/* Multi-Select Service Chips for this Booking */}
                   <div>
-                    <label className="block text-slate-300 font-semibold mb-1">
-                      {language === 'bn' ? 'পরিষেবা নির্বাচন করুন (Choose Service)' : language === 'hi' ? 'सेवा चुनें (Choose Service)' : 'Select Companionship Service'}
-                    </label>
-                    <select
-                      value={bookingServiceId}
-                      onChange={e => setBookingServiceId(Number(e.target.value))}
-                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 font-medium focus:outline-none focus:border-amber-400 cursor-pointer"
-                      required
-                    >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-slate-300 font-semibold">
+                        {language === 'bn' ? 'পরিষেবা নির্বাচন করুন (Choose Services)' : language === 'hi' ? 'सेवाएं चुनें (Choose Services)' : 'Select Companionship Services (Multi-Select)'}
+                      </label>
+                      <span className="text-[11px] text-amber-400 font-bold">
+                        {selectedServiceIds.length} Selected
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-52 overflow-y-auto p-1.5 rounded-2xl bg-slate-950 border border-slate-800">
                       {PAIRUP_SERVICES.map(s => {
-                        const isOffered = Array.isArray(selectedCompanion?.services) && selectedCompanion.services.includes(s.id);
+                        const isOffered = !Array.isArray(selectedCompanion?.services) || selectedCompanion.services.length === 0 || selectedCompanion.services.includes(s.id);
+                        const isSelected = selectedServiceIds.includes(s.id);
+
                         return (
-                          <option key={s.id} value={s.id}>
-                            #{s.id}. {s.name} {isOffered ? '★ (Host Speciality)' : ''}
-                          </option>
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedServiceIds(prev => {
+                                if (prev.includes(s.id)) {
+                                  if (prev.length <= 1) return prev; // keep at least 1
+                                  const next = prev.filter(id => id !== s.id);
+                                  setBookingServiceId(next[0] || 1);
+                                  return next;
+                                } else {
+                                  const next = [...prev, s.id];
+                                  setBookingServiceId(s.id);
+                                  return next;
+                                }
+                              });
+                            }}
+                            className={`p-2 rounded-xl text-left border transition-all flex items-center gap-2 cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-400/20 border-amber-400 text-amber-200 shadow-sm'
+                                : isOffered
+                                ? 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                                : 'bg-slate-900/40 border-slate-800/60 text-slate-500 opacity-60'
+                            }`}
+                          >
+                            {s.image ? (
+                              <img
+                                src={s.image}
+                                alt={s.cardTitle}
+                                className="w-8 h-8 rounded-lg object-cover shrink-0"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-xs shrink-0">
+                                #{s.id}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <span className="font-bold text-[11px] block truncate">{s.cardTitle}</span>
+                              <span className="text-[9px] text-slate-400 block truncate">
+                                #{s.id} {isOffered ? '• Offered' : ''}
+                              </span>
+                            </div>
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 text-[10px] ${
+                              isSelected ? 'bg-amber-400 border-amber-400 text-slate-950 font-bold' : 'border-slate-600'
+                            }`}>
+                              {isSelected ? '✓' : ''}
+                            </div>
+                          </button>
                         );
                       })}
-                    </select>
-                    {(() => {
-                      const activeSrv = PAIRUP_SERVICES.find(s => s.id === bookingServiceId);
-                      if (!activeSrv) return null;
-                      return (
-                        <div className="mt-2 p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 flex items-center gap-3 shadow-inner">
-                          {activeSrv.image && (
-                            <img
-                              src={activeSrv.image}
-                              alt={activeSrv.cardTitle}
-                              className="w-14 h-14 rounded-xl object-cover object-[center_top] shrink-0 border border-slate-700/80 shadow"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <span className="font-bold text-amber-300 block">{activeSrv.cardTitle}</span>
-                            <span className="text-slate-400 leading-relaxed text-[11px] line-clamp-2">{activeSrv.description}</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    </div>
                   </div>
 
                   <div>
@@ -4155,27 +4204,27 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="time"
+                      <div className="space-y-1.5">
+                        <select
                           value={bookingTime}
                           onChange={e => handleBookingTimeChange(e.target.value)}
-                          className={`w-full px-3 py-2 bg-slate-950 border rounded-xl text-slate-100 text-sm focus:outline-none ${
+                          className={`w-full px-3 py-2.5 bg-slate-950 border rounded-xl text-slate-100 text-xs font-semibold focus:outline-none cursor-pointer ${
                             timeConflictError
                               ? 'border-rose-500 text-rose-200' 
                               : 'border-slate-700 focus:border-amber-400'
                           }`}
-                          required
-                        />
-                        <select
-                          value={bookingTime}
-                          onChange={e => handleBookingTimeChange(e.target.value)}
-                          className="w-full px-2 py-2 bg-slate-950 border border-slate-700 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-amber-400"
                         >
-                          <option value={bookingTime}>Slot: {formatTimeAmPm(bookingTime)}</option>
-                          {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'].map(slot => (
-                            <option key={slot} value={slot}>{formatTimeAmPm(slot)}</option>
-                          ))}
+                          {allTimeSlots24h.map(slot => {
+                            const isPastToday = isBookingToday && slot < minAllowedTimeToday;
+                            const isBooked = companionSchedule?.bookedSlots?.some((b: any) => slot >= b.start && slot < b.end);
+                            const disabled = isPastToday || isBooked;
+
+                            return (
+                              <option key={slot} value={slot} disabled={disabled}>
+                                {formatTimeAmPm(slot)} {isPastToday ? '(Past)' : isBooked ? '(Booked)' : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                       {/* Mobile-Friendly Quick Time Presets */}

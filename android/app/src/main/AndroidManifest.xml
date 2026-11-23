@@ -12,6 +12,14 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
+    <!-- Rapido Captain-Style Overlay & Full-Screen Intent Permissions -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Internet & Network Security -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -47,6 +55,31 @@
                 <data android:scheme="https" android:host="pairuptoday.com" />
             </intent-filter>
         </activity>
+
+        <!-- Rapido Captain Incoming Booking Full-Screen Intent Activity (Over Lock Screen) -->
+        <activity
+            android:name=".IncomingBookingActivity"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:exported="false" />
+
+        <!-- Floating Window Overlay Service (Display Over Other Apps e.g. YouTube/Facebook) -->
+        <service
+            android:name=".BookingOverlayService"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- High-Priority FCM Receiver for Background Wakeup -->
+        <service
+            android:name=".PairUpFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
