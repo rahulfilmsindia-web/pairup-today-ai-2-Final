@@ -33,6 +33,7 @@ export const db = {
   kycSubmissions: () => supabase.from('kyc_submissions'),
   companionProfiles: () => supabase.from('companion_profiles'),
   companionMemberships: () => supabase.from('companion_memberships'),
+  memberships: () => supabase.from('companion_memberships'),
   bankVerifications: () => supabase.from('bank_verifications'),
   bookings: () => supabase.from('bookings'),
   walletLedger: () => supabase.from('wallet_ledger'),

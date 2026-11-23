@@ -1930,12 +1930,35 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async getActiveMembership(userId: string): Promise<any | null> {
-    const { data, error } = await db.companionMemberships()
+    let { data, error } = await db.companionMemberships()
       .select('*')
       .eq('user_id', userId)
       .order('expiry_date', { ascending: false })
       .limit(10);
     if (error) throw error;
+
+    if (!data || data.length === 0) {
+      try {
+        const { data: currentUser } = await db.users().select('phone, role, legal_name').eq('id', userId).maybeSingle();
+        if (currentUser?.phone) {
+          const rawPhone = currentUser.phone.replace(/^\+91/, '').trim();
+          const phones = [currentUser.phone, rawPhone, `+91${rawPhone}`];
+          const { data: matchingUsers } = await db.users().select('id').in('phone', phones);
+          const userIds = (matchingUsers || []).map((u: any) => u.id).filter((id: string) => id !== userId);
+          if (userIds.length > 0) {
+            const { data: altMems } = await db.companionMemberships()
+              .select('*')
+              .in('user_id', userIds)
+              .order('expiry_date', { ascending: false })
+              .limit(5);
+            if (altMems && altMems.length > 0) {
+              data = altMems;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
     if (!data || data.length === 0) return null;
 
     const now = new Date();
@@ -2037,8 +2060,25 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async getBankVerification(userId: string): Promise<any | null> {
-    const { data, error } = await db.bankVerifications().select('*').eq('user_id', userId).maybeSingle();
+    let { data, error } = await db.bankVerifications().select('*').eq('user_id', userId).maybeSingle();
     if (error) throw error;
+    if (!data) {
+      try {
+        const { data: currentUser } = await db.users().select('phone').eq('id', userId).maybeSingle();
+        if (currentUser?.phone) {
+          const rawPhone = currentUser.phone.replace(/^\+91/, '').trim();
+          const phones = [currentUser.phone, rawPhone, `+91${rawPhone}`];
+          const { data: matchingUsers } = await db.users().select('id').in('phone', phones);
+          const userIds = (matchingUsers || []).map((u: any) => u.id).filter((id: string) => id !== userId);
+          if (userIds.length > 0) {
+            const { data: altBank } = await db.bankVerifications().select('*').in('user_id', userIds).limit(1);
+            if (altBank && altBank.length > 0) {
+              data = altBank[0];
+            }
+          }
+        }
+      } catch (_) {}
+    }
     if (!data) return null;
     const isVerified = String(data.verification_status || '').toUpperCase() === 'VERIFIED' || data.is_verified === true || Boolean(data.name_matched);
     return {
@@ -2384,10 +2424,10 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     }
 
     // Resilient fallback: Direct Supabase service_role update on companion_memberships
-    const { data: memRow } = await db.memberships().select('*').eq('payment_order_id', orderId).maybeSingle();
+    const { data: memRow } = await db.companionMemberships().select('*').eq('payment_order_id', orderId).maybeSingle();
     if (memRow) {
       const durationDays = memRow.plan === 'STARTER' ? 30 : memRow.plan === 'PROFESSIONAL' ? 90 : 365;
-      const { data: updatedMem, error: mErr } = await db.memberships().update({
+      const { data: updatedMem, error: mErr } = await db.companionMemberships().update({
         payment_status: 'PAID',
         payment_id: paymentId,
         paid_at: new Date().toISOString(),
