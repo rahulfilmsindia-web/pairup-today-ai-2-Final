@@ -2798,11 +2798,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                   }}
                   className="rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-400/40 cursor-pointer transition-all hover:bg-slate-850 flex flex-col justify-between overflow-hidden group shadow-lg"
                 >
-                  <div className="relative h-36 w-full overflow-hidden bg-slate-950">
+                  <div className="relative h-52 sm:h-56 w-full overflow-hidden bg-slate-950">
                     <img
                       src={s.image}
                       alt={s.name}
-                      className="w-full h-full object-cover object-[center_top] transition-transform duration-500 group-hover:scale-105"
+                      className="w-full h-full object-cover object-[center_12%] transition-transform duration-500 group-hover:scale-105"
                       loading="lazy"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />

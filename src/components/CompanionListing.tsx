@@ -502,7 +502,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                     : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/60'
                 }`}
               >
-                {srv.chipLabel || srv.cardTitle || srv.name}
+                #{srv.id}. {srv.chipLabel || srv.cardTitle || srv.name}
               </button>
             ))}
           </div>
