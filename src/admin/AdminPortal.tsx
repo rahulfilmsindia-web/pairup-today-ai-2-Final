@@ -214,7 +214,7 @@ export const AdminPortal: React.FC = () => {
         setSelectedRefundForProcess(null);
         setRefundUtrInput('');
         setRefundNoteInput('');
-        fetchDashboardData();
+        loadAdminData();
       }
     } catch (err: any) {
       setRefundProcessError(err.message || 'Error processing refund.');
