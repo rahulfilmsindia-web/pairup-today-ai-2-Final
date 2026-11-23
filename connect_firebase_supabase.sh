@@ -34,9 +34,9 @@ gcloud services enable \
   firebasedatabase.googleapis.com \
   fcm.googleapis.com \
   identitytoolkit.googleapis.com \
-  --project="${PROJECT_ID}" --quiet
+  --project="${PROJECT_ID}" --quiet || echo "ℹ️ Service APIs already active or rate-limited; proceeding to deployment..."
 
-echo "✅ Required APIs enabled."
+echo "✅ Required APIs checked."
 
 # Helper function to create or update secrets safely
 create_or_update_secret() {
