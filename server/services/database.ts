@@ -1537,24 +1537,46 @@ const AUDIT_LOG_COLUMNS = 'id, admin_id, admin_email, action, target_type, targe
 
 // Supabase-based adapter (production)
 class SupabaseDatabaseAdapter implements DatabaseAdapter {
+  private fallbackAdapter = new JsonDatabaseAdapter();
+
   async getUser(id: string): Promise<any | null> {
     const cached = userCacheById.get(id);
     if (cached && Date.now() < cached.expiresAt) return cached.user;
-    const { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('id', id).maybeSingle();
-    if (error) throw error;
-    const user = data ? this.mapUser(data) : null;
-    if (user) cacheUser(user);
-    return user;
+    try {
+      const { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('id', id).maybeSingle();
+      if (error) throw error;
+      const user = data ? this.mapUser(data) : null;
+      if (user) cacheUser(user);
+      return user;
+    } catch (err: any) {
+      console.warn('Supabase getUser fallback notice:', err?.message || err);
+      const localUser = await this.fallbackAdapter.getUser(id).catch(() => null);
+      if (localUser) {
+        cacheUser(localUser);
+        return localUser;
+      }
+      throw err;
+    }
   }
 
   async getUserByPhone(phone: string): Promise<any | null> {
     const cached = userCacheByPhone.get(phone);
     if (cached && Date.now() < cached.expiresAt) return cached.user;
-    const { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('phone', phone).maybeSingle();
-    if (error) throw error;
-    const user = data ? this.mapUser(data) : null;
-    if (user) cacheUser(user);
-    return user;
+    try {
+      const { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('phone', phone).maybeSingle();
+      if (error) throw error;
+      const user = data ? this.mapUser(data) : null;
+      if (user) cacheUser(user);
+      return user;
+    } catch (err: any) {
+      console.warn('Supabase getUserByPhone fallback notice:', err?.message || err);
+      const localUser = await this.fallbackAdapter.getUserByPhone(phone).catch(() => null);
+      if (localUser) {
+        cacheUser(localUser);
+        return localUser;
+      }
+      throw err;
+    }
   }
 
   async createUser(user: any): Promise<any> {

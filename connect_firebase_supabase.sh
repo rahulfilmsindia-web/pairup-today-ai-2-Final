@@ -57,10 +57,15 @@ create_or_update_secret() {
 echo ""
 echo "Step 2: Securing Supabase credentials in Secret Manager..."
 SUPABASE_URL_VAL="https://ljaylmqqspneeaeaivtq.supabase.co"
-SUPABASE_KEY_VAL="${2:-sb_secret_WtSiCcy1PbdWUGZf0XEvuw_rKEoMkP-}"
-
 create_or_update_secret "SUPABASE_URL" "${SUPABASE_URL_VAL}"
-create_or_update_secret "SUPABASE_SERVICE_ROLE_KEY" "${SUPABASE_KEY_VAL}"
+
+if [ -n "$2" ]; then
+  create_or_update_secret "SUPABASE_SERVICE_ROLE_KEY" "$2"
+elif ! gcloud secrets describe "SUPABASE_SERVICE_ROLE_KEY" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  echo "⚠️ SUPABASE_SERVICE_ROLE_KEY secret not found in Secret Manager. Please pass it as parameter 2: ./connect_firebase_supabase.sh <PROJECT_ID> <SERVICE_ROLE_KEY>"
+else
+  echo "✅ Existing Secret [SUPABASE_SERVICE_ROLE_KEY] preserved."
+fi
 
 # 3. Setup Firebase Workload Identity & Roles (No Private Key Required)
 echo ""

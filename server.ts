@@ -2032,7 +2032,19 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
   }
 
   try {
-    const user = await databaseAdapter.getUserByPhone(normalizedPhone);
+    let user = null;
+    try {
+      user = await databaseAdapter.getUserByPhone(normalizedPhone);
+    } catch (dbErr: any) {
+      console.warn('Primary database lookup error in OTP verify (attempting fallback):', dbErr?.message || dbErr);
+      if (db?.users) {
+        user = Object.values(db.users).find((u: any) => 
+          u.phone === normalizedPhone || 
+          u.phone?.replace(/^\+91/, '') === normalizedPhone.replace(/^\+91/, '')
+        ) || null;
+      }
+      if (!user) throw dbErr;
+    }
     if (!user) {
       return res.status(404).json({ error: 'Account not found. Register using the OTP verification flow.' });
     }
@@ -2149,7 +2161,19 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 
   try {
-    const user = await databaseAdapter.getUserByPhone(normalizedPhone);
+    let user = null;
+    try {
+      user = await databaseAdapter.getUserByPhone(normalizedPhone);
+    } catch (dbErr: any) {
+      console.warn('Primary database lookup error (attempting fallback):', dbErr?.message || dbErr);
+      if (db?.users) {
+        user = Object.values(db.users).find((u: any) => 
+          u.phone === normalizedPhone || 
+          u.phone?.replace(/^\+91/, '') === normalizedPhone.replace(/^\+91/, '')
+        ) || null;
+      }
+      if (!user) throw dbErr;
+    }
     if (!user) {
       return res.status(404).json({
         error: 'Not registered yet? Please Sign In to create your account.',
