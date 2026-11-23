@@ -1930,27 +1930,42 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async getActiveMembership(userId: string): Promise<any | null> {
-    const now = new Date().toISOString();
     const { data, error } = await db.companionMemberships()
       .select('*')
       .eq('user_id', userId)
-      .eq('payment_status', 'PAID')
-      .gt('expiry_date', now)
       .order('expiry_date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
     if (error) throw error;
-    return data ? {
-      ...data,
-      userId: data.user_id,
-      pricePaise: data.amount_paise,
-      startDate: data.start_date,
-      expiryDate: data.expiry_date,
-      paymentOrderId: data.payment_order_id,
-      paymentId: data.payment_id,
-      paymentStatus: data.payment_status,
-      isActive: true
-    } : null;
+    if (!data || data.length === 0) return null;
+
+    const now = new Date();
+    const active = data.find((row: any) => {
+      const status = String(row.payment_status || row.status || '').toUpperCase();
+      const isPaid = status === 'PAID' || status === 'ACTIVE' || status === 'COMPLETED' || status === 'SUCCESS' || Boolean(row.payment_id);
+      const isNotFailed = status !== 'FAILED' && status !== 'CANCELLED';
+      if (!isPaid || !isNotFailed) return false;
+      if (!row.expiry_date) return true;
+      return new Date(row.expiry_date) > now;
+    }) || data[0];
+
+    const status = String(active.payment_status || active.status || '').toUpperCase();
+    const isPaid = status === 'PAID' || status === 'ACTIVE' || status === 'COMPLETED' || status === 'SUCCESS' || Boolean(active.payment_id);
+    const isNotExpired = !active.expiry_date || new Date(active.expiry_date) > now;
+    const isNotFailed = status !== 'FAILED' && status !== 'CANCELLED';
+    const isActive = Boolean(isPaid && isNotExpired && isNotFailed);
+
+    return {
+      ...active,
+      userId: active.user_id,
+      plan: active.plan || 'PROFESSIONAL',
+      pricePaise: active.amount_paise,
+      startDate: active.start_date,
+      expiryDate: active.expiry_date,
+      paymentOrderId: active.payment_order_id,
+      paymentId: active.payment_id,
+      paymentStatus: isPaid ? 'PAID' : (active.payment_status || 'PENDING'),
+      isActive
+    };
   }
 
   async getMembershipByPaymentOrder(orderId: string): Promise<any | null> {
@@ -2024,7 +2039,9 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   async getBankVerification(userId: string): Promise<any | null> {
     const { data, error } = await db.bankVerifications().select('*').eq('user_id', userId).maybeSingle();
     if (error) throw error;
-    return data ? {
+    if (!data) return null;
+    const isVerified = String(data.verification_status || '').toUpperCase() === 'VERIFIED' || data.is_verified === true || Boolean(data.name_matched);
+    return {
       ...data,
       userId: data.user_id,
       accountNumberEncrypted: data.account_number_encrypted,
@@ -2032,12 +2049,13 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       accountNumberLast4: data.account_number_last4,
       bankName: data.bank_name,
       accountHolderName: data.account_holder_name,
-      verificationStatus: data.verification_status,
+      verificationStatus: isVerified ? 'VERIFIED' : (data.verification_status || 'PENDING'),
+      isVerified,
       nameAtBank: data.name_at_bank,
       nameMatched: data.name_matched,
       providerRequestId: data.provider_request_id,
       verifiedAt: data.verified_at
-    } : null;
+    };
   }
 
   async updateBankVerification(userId: string, updates: any): Promise<any> {

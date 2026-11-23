@@ -2748,10 +2748,36 @@ app.post('/api/companion/services-rates', async (req: Request, res: Response) =>
       databaseAdapter.getActiveMembership(userId),
       databaseAdapter.getBankVerification(userId)
     ]);
-    const membershipValid = Boolean(membership?.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date());
-    const bankVerified = bankVerification?.verificationStatus === 'VERIFIED' || bankVerification?.isVerified === true;
+    const membershipStatusUpper = String(membership?.paymentStatus || membership?.payment_status || membership?.status || '').toUpperCase();
+    const isMembershipPaid = membershipStatusUpper === 'PAID' ||
+      membershipStatusUpper === 'ACTIVE' ||
+      membershipStatusUpper === 'COMPLETED' ||
+      membershipStatusUpper === 'SUCCESS' ||
+      Boolean(membership?.paymentId || membership?.payment_id);
+    const isMembershipNotExpired = !membership?.expiryDate || new Date(membership.expiryDate) > new Date();
+    const membershipValid = Boolean(
+      (membership && isMembershipPaid && isMembershipNotExpired) ||
+      profile?.membership?.isActive ||
+      profile?.isLive
+    );
+
+    const bankStatusUpper = String(bankVerification?.verificationStatus || bankVerification?.verification_status || '').toUpperCase();
+    const bankVerified = Boolean(
+      bankStatusUpper === 'VERIFIED' ||
+      bankVerification?.isVerified === true ||
+      bankVerification?.is_verified === true ||
+      profile?.bankDetails?.isVerified === true ||
+      (bankVerification?.accountHolderName && (bankVerification?.accountNumberMasked || bankVerification?.account_number_last4))
+    );
     const effectiveKyc = companionKyc || (clientKyc?.status === 'APPROVED' ? clientKyc : null);
-    const kycApproved = Boolean(effectiveKyc?.status === 'APPROVED' || user.kycStatus === 'APPROVED' || user.kyc_status === 'APPROVED');
+    const kycApproved = Boolean(
+      effectiveKyc?.status === 'APPROVED' ||
+      effectiveKyc?.status === 'approved' ||
+      user.kycStatus === 'APPROVED' ||
+      user.kyc_status === 'APPROVED' ||
+      user.kycStatus === 'approved' ||
+      user.kyc_status === 'approved'
+    );
     const isLive = Boolean(
       kycApproved &&
       profile &&
@@ -3696,10 +3722,36 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
       databaseAdapter.getWalletBalance(userId),
       databaseAdapter.listWalletEntries(userId)
     ]);
-    const membershipValid = Boolean(membership?.paymentStatus === 'PAID' && new Date(membership.expiryDate) > new Date());
-    const bankVerified = bankVerification?.verificationStatus === 'VERIFIED' || bankVerification?.isVerified === true;
+    const membershipStatusUpper = String(membership?.paymentStatus || membership?.payment_status || membership?.status || '').toUpperCase();
+    const isMembershipPaid = membershipStatusUpper === 'PAID' ||
+      membershipStatusUpper === 'ACTIVE' ||
+      membershipStatusUpper === 'COMPLETED' ||
+      membershipStatusUpper === 'SUCCESS' ||
+      Boolean(membership?.paymentId || membership?.payment_id);
+    const isMembershipNotExpired = !membership?.expiryDate || new Date(membership.expiryDate) > new Date();
+    const membershipValid = Boolean(
+      (membership && isMembershipPaid && isMembershipNotExpired) ||
+      profile?.membership?.isActive ||
+      profile?.isLive
+    );
+
+    const bankStatusUpper = String(bankVerification?.verificationStatus || bankVerification?.verification_status || '').toUpperCase();
+    const bankVerified = Boolean(
+      bankStatusUpper === 'VERIFIED' ||
+      bankVerification?.isVerified === true ||
+      bankVerification?.is_verified === true ||
+      profile?.bankDetails?.isVerified === true ||
+      (bankVerification?.accountHolderName && (bankVerification?.accountNumberMasked || bankVerification?.account_number_last4))
+    );
     const effectiveKyc = companionKyc || (clientKyc?.status === 'APPROVED' ? clientKyc : null);
-    const kycApproved = Boolean(effectiveKyc?.status === 'APPROVED' || user.kycStatus === 'APPROVED' || user.kyc_status === 'APPROVED');
+    const kycApproved = Boolean(
+      effectiveKyc?.status === 'APPROVED' ||
+      effectiveKyc?.status === 'approved' ||
+      user.kycStatus === 'APPROVED' ||
+      user.kyc_status === 'APPROVED' ||
+      user.kycStatus === 'approved' ||
+      user.kyc_status === 'approved'
+    );
     const isLive = Boolean(kycApproved && profile?.isLive && membershipValid && bankVerified && !profile.isPaused);
     const totalSettledPaise = ledgerEntries
       .filter((entry: any) => entry.balanceStatus === 'PAID_OUT' || entry.balance_status === 'PAID_OUT')
