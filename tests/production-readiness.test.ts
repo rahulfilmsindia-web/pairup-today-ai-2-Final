@@ -1176,6 +1176,49 @@ await runScenario(41, 'Automated Booking Cancellation, Refund Slabs, APITXT Bank
   assert(transSrc.includes('nameMismatchError'), 'Translations must include nameMismatchError');
 });
 
+await runScenario(42, 'Late-Start Dynamic End-Time, Per-Minute Companion Penalty, Slot Auto-Cancel, and Client Refund Bank Details Queue', async () => {
+  // 42a. Verify Migration 011 exists with required schema elements
+  const migration011Path = path.join(rootDir, 'supabase/migrations/011_updated_late_penalty_dynamic_endtime_refund_requests.sql');
+  assert(fs.existsSync(migration011Path), 'Migration 011 must exist');
+  const migration011Src = fs.readFileSync(migration011Path, 'utf-8');
+  assert(migration011Src.includes('refund_requests'), 'Migration 011 must create refund_requests table');
+  assert(migration011Src.includes('start_booking_session_with_late_penalty'), 'Migration 011 must define start_booking_session_with_late_penalty');
+  assert(migration011Src.includes('auto_cancel_unstarted_expired_slots'), 'Migration 011 must update auto_cancel_unstarted_expired_slots');
+  assert(migration011Src.includes('auto_cancelled_no_show'), 'Migration 011 must support auto_cancelled_no_show');
+
+  // 42b. Verify server.ts dynamic end-time and late penalty deduction
+  const serverSrc = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+  assert(serverSrc.includes('actualEndTime'), 'server.ts must calculate dynamic actualEndTime');
+  assert(serverSrc.includes('latePenaltyPaise'), 'server.ts must calculate latePenaltyPaise');
+  assert(serverSrc.includes('perMinuteRatePaise'), 'server.ts must calculate per-minute rate');
+  assert(serverSrc.includes('refund-bank-details'), 'server.ts must have refund-bank-details endpoint');
+  assert(serverSrc.includes('auto_cancelled_no_show'), 'server.ts must handle auto_cancelled_no_show with companion penalty');
+
+  // 42c. Verify database adapter supports refund_requests
+  const dbSrc = fs.readFileSync(path.join(rootDir, 'server/services/database.ts'), 'utf-8');
+  assert(dbSrc.includes('createRefundRequest'), 'Database adapter must support createRefundRequest');
+  assert(dbSrc.includes('getRefundRequestByBooking'), 'Database adapter must support getRefundRequestByBooking');
+  assert(dbSrc.includes('listRefundRequests'), 'Database adapter must support listRefundRequests');
+  assert(dbSrc.includes('updateRefundRequest'), 'Database adapter must support updateRefundRequest');
+
+  // 42d. Verify client-side live tracking and countdown respect actualEndTime
+  const trackingSrc = fs.readFileSync(path.join(rootDir, 'src/components/ClientLiveTrackingView.tsx'), 'utf-8');
+  assert(trackingSrc.includes('actualEndTime') || trackingSrc.includes('actual_end_time'), 'ClientLiveTrackingView must use dynamic actualEndTime');
+
+  const companionDashSrc = fs.readFileSync(path.join(rootDir, 'src/pages/CompanionDashboard.tsx'), 'utf-8');
+  assert(companionDashSrc.includes('actualEndTime') || companionDashSrc.includes('actual_end_time'), 'CompanionDashboard must use dynamic actualEndTime');
+  assert(companionDashSrc.includes('Late Start:'), 'CompanionDashboard must show late start penalty breakdown');
+
+  // 42e. Verify wallpaper rendering aspect-ratio [4/3] and object-top to prevent head cropping
+  const servicesGridSrc = fs.readFileSync(path.join(rootDir, 'src/components/ServicesGrid.tsx'), 'utf-8');
+  assert(servicesGridSrc.includes('aspect-[4/3]'), 'ServicesGrid must use aspect-[4/3] for proper view');
+  assert(servicesGridSrc.includes('object-top'), 'ServicesGrid must use object-top so heads are not cut off');
+
+  const clientDashSrc = fs.readFileSync(path.join(rootDir, 'src/pages/ClientDashboard.tsx'), 'utf-8');
+  assert(clientDashSrc.includes('aspect-[4/3]'), 'ClientDashboard services tab must use aspect-[4/3]');
+  assert(clientDashSrc.includes('object-top'), 'ClientDashboard services tab must use object-top');
+});
+
 console.log('\n===============================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`  RESULTS: ${passedCount} / ${results.length} SCENARIOS PASSED`);

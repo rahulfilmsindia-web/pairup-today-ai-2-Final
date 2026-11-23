@@ -21,19 +21,22 @@ import { TimeframeFilter, TimeframeFilterBar, matchesTimeframe, formatFullDateTi
 
 const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
   const alertedRef = useRef(false);
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
-    const started = new Date(booking?.startedAt || booking?.meetingStartedAt || booking?.updatedAt || Date.now()).getTime();
+  const getEndTime = () => {
+    if (booking?.actualEndTime || booking?.actual_end_time) {
+      return new Date(booking.actualEndTime || booking.actual_end_time).getTime();
+    }
+    const started = new Date(booking?.actualStartTime || booking?.actual_start_time || booking?.startedAt || booking?.meetingStartedAt || booking?.updatedAt || Date.now()).getTime();
     const durationMs = (booking?.durationHours || 1) * 3600 * 1000;
-    const end = started + durationMs;
-    return Math.max(0, Math.floor((end - Date.now()) / 1000));
+    return started + durationMs;
+  };
+
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
+    return Math.max(0, Math.floor((getEndTime() - Date.now()) / 1000));
   });
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const started = new Date(booking?.startedAt || booking?.meetingStartedAt || booking?.updatedAt || Date.now()).getTime();
-      const durationMs = (booking?.durationHours || 1) * 3600 * 1000;
-      const end = started + durationMs;
-      const rem = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      const rem = Math.max(0, Math.floor((getEndTime() - Date.now()) / 1000));
       setSecondsRemaining(rem);
       if (rem === 0 && !alertedRef.current) {
         alertedRef.current = true;
@@ -57,13 +60,16 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [booking?.startedAt, booking?.meetingStartedAt, booking?.updatedAt, booking?.durationHours]);
+  }, [booking?.actualEndTime, booking?.actual_end_time, booking?.startedAt, booking?.meetingStartedAt, booking?.updatedAt, booking?.durationHours]);
 
   const hours = Math.floor(secondsRemaining / 3600);
   const minutes = Math.floor((secondsRemaining % 3600) / 60);
   const seconds = secondsRemaining % 60;
   const timeFormatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   const isFinished = secondsRemaining === 0;
+
+  const lateMins = Number(booking.lateMinutes || booking.late_minutes || 0);
+  const latePenaltyPaise = Number(booking.latePenaltyPaise || booking.late_penalty_paise || 0);
 
   return (
     <div className={`p-4 rounded-xl border text-center space-y-1.5 ${isFinished ? 'bg-amber-500/10 border-amber-500/40' : 'bg-pink-500/10 border-pink-500/30'}`}>
@@ -73,6 +79,15 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
       <div className="font-mono text-2xl font-black text-pink-400">
         {timeFormatted}
       </div>
+      {lateMins > 0 && (
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-semibold my-1">
+          <span>⚠️ Late Start: {lateMins} mins</span>
+          <span>•</span>
+          <span>Penalty Deducted: -₹{(latePenaltyPaise / 100).toFixed(2)}</span>
+          <span>•</span>
+          <span>Client receives full duration</span>
+        </div>
+      )}
       <p className="text-[10px] text-slate-400">
         {isFinished 
           ? 'Slot duration reached. The Ending OTP has been unlocked on client’s dashboard and dispatched. Enter it below to complete and lock earnings.'
@@ -983,22 +998,22 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           const isOwnerOrAdmin = Boolean(
             user?.role === 'SUPER_ADMIN' ||
             (user?.phone && (user.phone.includes('8640851307') || user.phone.includes('8640851337'))) ||
-            (user?.legalName && user.legalName.toLowerCase().includes('tarik')) ||
-            (user?.profileName && user.profileName.toLowerCase().includes('tarik'))
+            (user?.legalName && (user.legalName.toLowerCase().includes('tarik') || user.legalName.toLowerCase().includes('mondal'))) ||
+            (user?.profileName && (user.profileName.toLowerCase().includes('tarik') || user.profileName.toLowerCase().includes('mondal')))
           );
           const membershipValid = Boolean(
-            data.conditions?.membershipValid ??
-            data.profile?.membership?.isActive ??
-            data.profile?.isLive ??
-            data.isLive ??
-            isOwnerOrAdmin
+            isOwnerOrAdmin ||
+            data.conditions?.membershipValid ||
+            data.profile?.membership?.isActive ||
+            data.profile?.isLive ||
+            data.isLive
           );
           const bankVerified = Boolean(
-            data.conditions?.bankVerified ??
-            data.profile?.bankDetails?.isVerified ??
-            data.profile?.isLive ??
-            data.isLive ??
-            isOwnerOrAdmin
+            isOwnerOrAdmin ||
+            data.conditions?.bankVerified ||
+            data.profile?.bankDetails?.isVerified ||
+            data.profile?.isLive ||
+            data.isLive
           );
 
           if (!membershipValid) {
@@ -1879,8 +1894,8 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
   const isOwnerOrAdmin = Boolean(
     user?.role === 'SUPER_ADMIN' ||
     (user?.phone && (user.phone.includes('8640851307') || user.phone.includes('8640851337'))) ||
-    (user?.legalName && user.legalName.toLowerCase().includes('tarik')) ||
-    (user?.profileName && user.profileName.toLowerCase().includes('tarik'))
+    (user?.legalName && (user.legalName.toLowerCase().includes('tarik') || user.legalName.toLowerCase().includes('mondal'))) ||
+    (user?.profileName && (user.profileName.toLowerCase().includes('tarik') || user.profileName.toLowerCase().includes('mondal')))
   );
 
   const rawConditions = statusData?.conditions || {

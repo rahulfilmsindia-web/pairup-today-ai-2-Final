@@ -291,6 +291,10 @@ export interface DatabaseAdapter {
   reservePaymentRefund(refund: any): Promise<any>;
   listPaymentRefunds(filters?: any): Promise<any[]>;
   updatePaymentRefund(idempotencyKey: string, status: string, providerRefundId?: string): Promise<any>;
+  createRefundRequest(req: any): Promise<any>;
+  getRefundRequestByBooking(bookingId: string): Promise<any | null>;
+  listRefundRequests(filters?: any): Promise<any[]>;
+  updateRefundRequest(id: string, updates: any): Promise<any>;
   processBookingPayout(bookingId: string, adminUserId: string, utrReference: string): Promise<any>;
   claimScheduledJobRun(jobName: string, idempotencyKey: string): Promise<boolean>;
   finishScheduledJobRun(jobName: string, idempotencyKey: string, error?: string): Promise<void>;
@@ -1284,6 +1288,50 @@ class JsonDatabaseAdapter implements DatabaseAdapter {
 
   async updatePaymentRefund(): Promise<any> {
     throw new Error('Payment refunds require Supabase.');
+  }
+
+  async createRefundRequest(req: any): Promise<any> {
+    const id = req.id || `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const record = {
+      id,
+      bookingId: req.bookingId,
+      clientId: req.clientId,
+      refundAmountPaise: Number(req.refundAmountPaise || req.refund_amount_paise || 0),
+      refundReason: req.refundReason || req.refund_reason || 'companion_no_show',
+      accountHolderName: req.accountHolderName || req.account_holder_name || null,
+      bankName: req.bankName || req.bank_name || null,
+      accountNumber: req.accountNumber || req.account_number || null,
+      ifscCode: req.ifscCode || req.ifsc_code || null,
+      upiId: req.upiId || req.upi_id || null,
+      payoutStatus: req.payoutStatus || req.payout_status || 'awaiting_details',
+      adminTransactionRef: req.adminTransactionRef || req.admin_transaction_ref || null,
+      processedAt: req.processedAt || req.processed_at || null,
+      createdAt: req.createdAt || req.created_at || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    (this.db as any).refundRequests = (this.db as any).refundRequests || {};
+    (this.db as any).refundRequests[id] = record;
+    return record;
+  }
+
+  async getRefundRequestByBooking(bookingId: string): Promise<any | null> {
+    const table = (this.db as any).refundRequests || {};
+    return Object.values(table).find((r: any) => r.bookingId === bookingId) || null;
+  }
+
+  async listRefundRequests(filters?: any): Promise<any[]> {
+    const table = (this.db as any).refundRequests || {};
+    let list: any[] = Object.values(table);
+    if (filters?.clientId) list = list.filter((r: any) => r.clientId === filters.clientId);
+    if (filters?.payoutStatus) list = list.filter((r: any) => r.payoutStatus === filters.payoutStatus);
+    return list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async updateRefundRequest(id: string, updates: any): Promise<any> {
+    const table = (this.db as any).refundRequests || {};
+    if (!table[id]) throw new Error('Refund request not found');
+    table[id] = { ...table[id], ...updates, updatedAt: new Date().toISOString() };
+    return table[id];
   }
 
   async processBookingPayout(): Promise<any> {
@@ -3088,6 +3136,121 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     });
     if (error) throw error;
     return data;
+  }
+
+  async createRefundRequest(req: any): Promise<any> {
+    const row = {
+      booking_id: req.bookingId,
+      client_id: req.clientId,
+      refund_amount_paise: Number(req.refundAmountPaise || req.refund_amount_paise || 0),
+      refund_reason: req.refundReason || req.refund_reason || 'companion_no_show',
+      account_holder_name: req.accountHolderName || req.account_holder_name || null,
+      bank_name: req.bankName || req.bank_name || null,
+      account_number: req.accountNumber || req.account_number || null,
+      ifsc_code: req.ifscCode || req.ifsc_code || null,
+      upi_id: req.upiId || req.upi_id || null,
+      payout_status: req.payoutStatus || req.payout_status || 'awaiting_details'
+    };
+    const { data, error } = await db.refundRequests().insert(row).select().single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      bookingId: data.booking_id,
+      clientId: data.client_id,
+      refundAmountPaise: data.refund_amount_paise,
+      refundReason: data.refund_reason,
+      accountHolderName: data.account_holder_name,
+      bankName: data.bank_name,
+      accountNumber: data.account_number,
+      ifscCode: data.ifsc_code,
+      upiId: data.upi_id,
+      payoutStatus: data.payout_status,
+      adminTransactionRef: data.admin_transaction_ref,
+      processedAt: data.processed_at,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+  }
+
+  async getRefundRequestByBooking(bookingId: string): Promise<any | null> {
+    const { data, error } = await db.refundRequests().select('*').eq('booking_id', bookingId).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      id: data.id,
+      bookingId: data.booking_id,
+      clientId: data.client_id,
+      refundAmountPaise: data.refund_amount_paise,
+      refundReason: data.refund_reason,
+      accountHolderName: data.account_holder_name,
+      bankName: data.bank_name,
+      accountNumber: data.account_number,
+      ifscCode: data.ifsc_code,
+      upiId: data.upi_id,
+      payoutStatus: data.payout_status,
+      adminTransactionRef: data.admin_transaction_ref,
+      processedAt: data.processed_at,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+  }
+
+  async listRefundRequests(filters?: any): Promise<any[]> {
+    let query = db.refundRequests().select('*');
+    if (filters?.clientId) query = query.eq('client_id', filters.clientId);
+    if (filters?.payoutStatus) query = query.eq('payout_status', filters.payoutStatus);
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(200);
+    if (error) throw error;
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      bookingId: row.booking_id,
+      clientId: row.client_id,
+      refundAmountPaise: row.refund_amount_paise,
+      refundReason: row.refund_reason,
+      accountHolderName: row.account_holder_name,
+      bankName: row.bank_name,
+      accountNumber: row.account_number,
+      ifscCode: row.ifsc_code,
+      upiId: row.upi_id,
+      payoutStatus: row.payout_status,
+      adminTransactionRef: row.admin_transaction_ref,
+      processedAt: row.processed_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+  }
+
+  async updateRefundRequest(id: string, updates: any): Promise<any> {
+    const payload: any = {};
+    if (updates.accountHolderName !== undefined) payload.account_holder_name = updates.accountHolderName;
+    if (updates.bankName !== undefined) payload.bank_name = updates.bankName;
+    if (updates.accountNumber !== undefined) payload.account_number = updates.accountNumber;
+    if (updates.ifscCode !== undefined) payload.ifsc_code = updates.ifscCode;
+    if (updates.upiId !== undefined) payload.upi_id = updates.upiId;
+    if (updates.payoutStatus !== undefined) payload.payout_status = updates.payoutStatus;
+    if (updates.adminTransactionRef !== undefined) payload.admin_transaction_ref = updates.adminTransactionRef;
+    if (updates.processedAt !== undefined) payload.processed_at = updates.processedAt;
+    payload.updated_at = new Date().toISOString();
+
+    const { data, error } = await db.refundRequests().update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      bookingId: data.booking_id,
+      clientId: data.client_id,
+      refundAmountPaise: data.refund_amount_paise,
+      refundReason: data.refund_reason,
+      accountHolderName: data.account_holder_name,
+      bankName: data.bank_name,
+      accountNumber: data.account_number,
+      ifscCode: data.ifsc_code,
+      upiId: data.upi_id,
+      payoutStatus: data.payout_status,
+      adminTransactionRef: data.admin_transaction_ref,
+      processedAt: data.processed_at,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
   }
 
   async processBookingPayout(bookingId: string, adminUserId: string, utrReference: string): Promise<any> {

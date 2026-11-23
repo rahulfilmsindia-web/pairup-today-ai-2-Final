@@ -293,15 +293,19 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
     }
   };
 
-  // Live Meeting Session Countdown
+  // Live Meeting Session Countdown with Dynamic End-Time
   const isSessionOngoing = ['ONGOING', 'IN_PROGRESS'].includes(bookingStatus);
   const sessionSecondsRemaining = useMemo(() => {
     if (!isSessionOngoing) return 0;
-    const started = new Date(meetingStartedAt || booking.meetingStartedAt || booking.startedAt || Date.now()).getTime();
+    if (booking.actualEndTime || booking.actual_end_time) {
+      const end = new Date(booking.actualEndTime || booking.actual_end_time).getTime();
+      return Math.max(0, Math.floor((end - currentTime) / 1000));
+    }
+    const started = new Date(booking.actualStartTime || booking.actual_start_time || meetingStartedAt || booking.meetingStartedAt || booking.startedAt || Date.now()).getTime();
     const durationMs = (booking.durationHours || 1) * 3600 * 1000;
     const end = started + durationMs;
     return Math.max(0, Math.floor((end - currentTime) / 1000));
-  }, [isSessionOngoing, meetingStartedAt, booking.meetingStartedAt, booking.startedAt, booking.durationHours, currentTime]);
+  }, [isSessionOngoing, meetingStartedAt, booking.actualEndTime, booking.actual_end_time, booking.actualStartTime, booking.actual_start_time, booking.meetingStartedAt, booking.startedAt, booking.durationHours, currentTime]);
 
   const sessionH = Math.floor(sessionSecondsRemaining / 3600);
   const sessionM = Math.floor((sessionSecondsRemaining % 3600) / 60);

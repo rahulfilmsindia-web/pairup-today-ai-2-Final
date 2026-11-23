@@ -188,6 +188,40 @@ export const AdminPortal: React.FC = () => {
       setTimeout(() => setCopiedKey(null), 2000);
     }
   };
+
+  const handleProcessRefundSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRefundForProcess) return;
+    if (!refundUtrInput.trim()) {
+      setRefundProcessError('Bank UTR / Transaction Reference Number is required.');
+      return;
+    }
+    setIsProcessingRefund(true);
+    setRefundProcessError(null);
+    try {
+      const res = await apiFetch(`/api/admin/refunds/${selectedRefundForProcess.id}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminTransactionRef: refundUtrInput.trim(),
+          note: refundNoteInput.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRefundProcessError(data.error || 'Failed to process refund.');
+      } else {
+        setSelectedRefundForProcess(null);
+        setRefundUtrInput('');
+        setRefundNoteInput('');
+        fetchDashboardData();
+      }
+    } catch (err: any) {
+      setRefundProcessError(err.message || 'Error processing refund.');
+    } finally {
+      setIsProcessingRefund(false);
+    }
+  };
   const [paymentsList, setPaymentsList] = useState<any[]>([]);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'ALL' | 'PAID' | 'FAILED' | 'CANCELLED' | 'PENDING'>('ALL');
 

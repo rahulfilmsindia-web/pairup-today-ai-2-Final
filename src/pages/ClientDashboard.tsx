@@ -746,14 +746,32 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
         }
       }
 
-      const res = await apiFetch(`/api/bookings/${cancellingBooking.id}/client-cancel`, {
+      const isAlreadyCancelled = Boolean(
+        cancellingBooking.status?.includes('cancel') ||
+        cancellingBooking.status === 'auto_cancelled_no_show' ||
+        cancellingBooking.status === 'auto_cancelled'
+      );
+
+      const endpoint = isAlreadyCancelled
+        ? `/api/bookings/${cancellingBooking.id}/refund-bank-details`
+        : `/api/bookings/${cancellingBooking.id}/client-cancel`;
+
+      const requestBody = isAlreadyCancelled
+        ? {
+            accountHolderName: bankBeneficiaryName.trim(),
+            accountNumber: bankAccountNumber.trim(),
+            ifscCode: bankIfsc.trim().toUpperCase()
+          }
+        : payload;
+
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(requestBody)
       });
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        setCancelError(data.error || 'Failed to cancel booking.');
+      if (!res.ok || (!data.success && !data.refundRequest)) {
+        setCancelError(data.error || 'Failed to submit details.');
         setCancelLoading(false);
         return;
       }
@@ -2818,11 +2836,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                   }}
                   className="rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-400/40 cursor-pointer transition-all hover:bg-slate-850 flex flex-col justify-between overflow-hidden group shadow-lg"
                 >
-                  <div className="relative h-52 sm:h-56 w-full overflow-hidden bg-slate-950">
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-950">
                     <img
                       src={s.image}
                       alt={s.name}
-                      className="w-full h-full object-cover object-[center_12%] transition-transform duration-500 group-hover:scale-105"
+                      className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
                       loading="lazy"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
@@ -3194,6 +3212,34 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                                 <XCircle className="w-3 h-3" />
                                 <span>{t.cancelBookingBtn}</span>
                               </button>
+                            )}
+
+                            {/* Refund Status & Bank Submission Actions for Cancelled / Auto-Cancelled Bookings */}
+                            {(b.status === 'auto_cancelled_no_show' || b.status === 'auto_cancelled' || (b.status?.includes('cancel') && (b.refundAmount > 0 || b.refundAmountPaise > 0))) && (
+                              <div className="ml-auto flex items-center gap-2">
+                                {b.refundStatus === 'refunded' || b.refundStatus === 'processed' ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                                    ✓ Refunded {b.refundUtr || b.adminRefundTransactionRef ? `(UTR: ${b.refundUtr || b.adminRefundTransactionRef})` : ''}
+                                  </span>
+                                ) : b.refundStatus === 'details_submitted' ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                                    ⏳ Bank Details Submitted · Payout in Progress
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCancellingBooking(b);
+                                      setCancelRefundAmount(b.refundAmount || (b.refundAmountPaise ? b.refundAmountPaise / 100 : ((b.totalPayablePaise || 0) / 100)));
+                                      setCancellationStep('refund_bank');
+                                      setCancelModalOpen(true);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600 hover:text-white font-bold transition flex items-center gap-1 text-[11px] cursor-pointer shadow-sm"
+                                  >
+                                    <span>Submit Bank Details for 100% Refund →</span>
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
 

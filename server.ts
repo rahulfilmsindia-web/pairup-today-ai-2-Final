@@ -3684,8 +3684,8 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
     const isOwnerOrAdmin = Boolean(
       user.role === 'SUPER_ADMIN' ||
       (user.phone && (user.phone.includes('8640851307') || user.phone.includes('8640851337'))) ||
-      (user.legalName && user.legalName.toLowerCase().includes('tarik')) ||
-      (user.profileName && user.profileName.toLowerCase().includes('tarik'))
+      (user.legalName && (user.legalName.toLowerCase().includes('tarik') || user.legalName.toLowerCase().includes('mondal'))) ||
+      (user.profileName && (user.profileName.toLowerCase().includes('tarik') || user.profileName.toLowerCase().includes('mondal')))
     );
     const profile = db.companionProfiles[userId] || null;
     const wallet = db.companionWallets[userId] || {
@@ -3748,8 +3748,8 @@ app.get('/api/companion/status/:userId', async (req: Request, res: Response) => 
     const isOwnerOrAdmin = Boolean(
       user.role === 'SUPER_ADMIN' ||
       (user.phone && (user.phone.includes('8640851307') || user.phone.includes('8640851337'))) ||
-      (user.legalName && user.legalName.toLowerCase().includes('tarik')) ||
-      (user.profileName && user.profileName.toLowerCase().includes('tarik'))
+      (user.legalName && (user.legalName.toLowerCase().includes('tarik') || user.legalName.toLowerCase().includes('mondal'))) ||
+      (user.profileName && (user.profileName.toLowerCase().includes('tarik') || user.profileName.toLowerCase().includes('mondal')))
     );
 
     let [profile, companionKyc, clientKyc, membership, bankVerification, balance, ledgerEntries] = await Promise.all([
@@ -5231,11 +5231,32 @@ app.get('/api/admin/refunds', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN', 
       ? await databaseAdapter.listBookings()
       : Object.values(db.bookings || {});
 
-    const cancelledBookings = allBookings
-      .filter((b: any) => b.status === 'CANCELLED' || b.refundStatus === 'pending' || b.refundStatus === 'refunded')
-      .map((b: any) => {
+    const cancelledBookings = await Promise.all(allBookings
+      .filter((b: any) => 
+        ['CANCELLED', 'auto_cancelled', 'auto_cancelled_no_show', 'cancelled_by_client', 'cancelled_by_companion', 'REJECTED'].includes(b.status) || 
+        b.refundStatus === 'pending' || 
+        b.refundStatus === 'pending_bank_details' || 
+        b.refundStatus === 'details_submitted' || 
+        b.refundStatus === 'refunded'
+      )
+      .map(async (b: any) => {
         const client = db.users?.[b.clientId] || {};
         const companion = db.users?.[b.companionId] || {};
+        const refundReq = await databaseAdapter.getRefundRequestByBooking(b.id).catch(() => null);
+        const refundBank = b.refundBankDetails || (refundReq ? {
+          beneficiaryName: refundReq.accountHolderName,
+          bankName: refundReq.bankName,
+          accountNumber: refundReq.accountNumber,
+          ifscCode: refundReq.ifscCode,
+          upiId: refundReq.upiId
+        } : null);
+
+        const refundAmt = b.refundAmount ?? (b.refundAmountPaise ? b.refundAmountPaise / 100 : (b.totalPayablePaise ? b.totalPayablePaise / 100 : 0));
+        let refStatus = b.refundStatus || (refundAmt > 0 ? 'pending' : 'not_applicable');
+        if (refStatus === 'pending_bank_details' || refStatus === 'details_submitted') {
+          refStatus = 'pending';
+        }
+
         return {
           id: b.id,
           bookingCode: b.bookingCode || b.id.slice(0, 8),
@@ -5254,16 +5275,17 @@ app.get('/api/admin/refunds', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN', 
           cancellationReason: b.cancellationReason || b.rejectionReason || 'Client Cancelled',
           cancellationNote: b.cancellationNote || null,
           hoursBeforeStart: b.hoursBeforeStart ?? null,
-          refundPercentage: b.refundPercentage ?? (b.refundAmount > 0 ? 100 : 0),
-          refundAmount: b.refundAmount ?? 0,
-          refundStatus: b.refundStatus || (b.refundAmount > 0 ? 'pending' : 'not_applicable'),
-          refundBankDetails: b.refundBankDetails || null,
-          refundUtr: b.refundUtr || null,
-          refundedAt: b.refundedAt || null,
+          refundPercentage: b.refundPercentage ?? (refundAmt > 0 ? 100 : 0),
+          refundAmount: refundAmt,
+          refundStatus: refStatus,
+          refundBankDetails: refundBank,
+          refundUtr: b.refundUtr || refundReq?.adminTransactionRef || null,
+          refundedAt: b.refundedAt || refundReq?.processedAt || null,
           refundedByAdmin: b.refundedByAdmin || null
         };
-      })
-      .sort((a: any, b: any) => new Date(b.cancelledAt || 0).getTime() - new Date(a.cancelledAt || 0).getTime());
+      }));
+
+    cancelledBookings.sort((a: any, b: any) => new Date(b.cancelledAt || 0).getTime() - new Date(a.cancelledAt || 0).getTime());
 
     return res.json({ success: true, count: cancelledBookings.length, refunds: cancelledBookings });
   } catch (error: any) {
@@ -5273,36 +5295,57 @@ app.get('/api/admin/refunds', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN', 
 });
 
 // Admin Panel: Mark as Refunded with UTR reference
-app.post('/api/admin/bookings/:id/refund', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'OPERATIONS_ADMIN'), async (req: Request, res: Response) => {
+const handleAdminRefundProcess = async (req: Request, res: Response) => {
   const bookingId = req.params.id;
-  const admin = (req as AuthenticatedRequest).adminUser;
-  const utrNumber = typeof req.body?.utrNumber === 'string' ? req.body.utrNumber.trim() : '';
-  const refundNote = typeof req.body?.refundNote === 'string' ? req.body.refundNote.trim() : '';
+  const admin = (req as AuthenticatedRequest).adminUser || (req as any).authUser;
+  const utrNumber = (typeof req.body?.utrNumber === 'string' ? req.body.utrNumber : (typeof req.body?.adminTransactionRef === 'string' ? req.body.adminTransactionRef : '')).trim();
+  const refundNote = typeof req.body?.refundNote === 'string' ? req.body.refundNote.trim() : (typeof req.body?.note === 'string' ? req.body.note.trim() : '');
 
   if (!utrNumber || utrNumber.length < 4) {
     return res.status(400).json({ error: 'A valid Transaction or UTR reference number is required.' });
   }
 
   try {
-    const booking = getDatabaseType() === 'supabase'
-      ? await databaseAdapter.getBooking(bookingId)
-      : db.bookings[bookingId];
+    let booking: any = null;
+    try {
+      booking = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getBooking(bookingId)
+        : db.bookings[bookingId];
+    } catch {
+      booking = db.bookings ? db.bookings[bookingId] : null;
+    }
+
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
     const updates = {
+      paymentStatus: 'REFUNDED',
+      payment_status: 'REFUNDED',
       refundStatus: 'refunded',
+      refund_status: 'refunded',
       refundUtr: utrNumber,
+      adminRefundTransactionRef: utrNumber,
       refundedAt: new Date().toISOString(),
       refundedByAdmin: admin?.email || admin?.name || 'Admin',
       refundAdminNote: refundNote || null
     };
 
     if (getDatabaseType() === 'supabase') {
-      await databaseAdapter.updateBooking(bookingId, updates);
+      await databaseAdapter.updateBooking(bookingId, updates).catch(() => {});
     } else {
-      if (db.bookings[bookingId]) {
+      if (db.bookings && db.bookings[bookingId]) {
         Object.assign(db.bookings[bookingId], updates);
+        saveDB(db);
       }
+    }
+
+    // Also update refund_requests table
+    const refundReq = await databaseAdapter.getRefundRequestByBooking(bookingId).catch(() => null);
+    if (refundReq) {
+      await databaseAdapter.updateRefundRequest(refundReq.id, {
+        payoutStatus: 'processed',
+        adminTransactionRef: utrNumber,
+        processedAt: new Date().toISOString()
+      }).catch(() => {});
     }
 
     return res.json({ success: true, message: 'Refund marked as processed successfully.', updates });
@@ -5310,7 +5353,10 @@ app.post('/api/admin/bookings/:id/refund', requireAdminRoles('SUPER_ADMIN', 'FIN
     console.error('Failed to mark booking as refunded', error);
     return res.status(500).json({ error: error.message || 'Failed to update refund status.' });
   }
-});
+};
+
+app.post('/api/admin/bookings/:id/refund', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'OPERATIONS_ADMIN'), handleAdminRefundProcess);
+app.post('/api/admin/refunds/:id/process', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'OPERATIONS_ADMIN'), handleAdminRefundProcess);
 
 // Real-time Companion SSE Alert Stream for sub-second booking arrival and instant dismissals
 app.get('/api/companion/alerts/stream', async (req: Request, res: Response) => {
@@ -8096,51 +8142,157 @@ app.post('/api/bookings/:bookingId/verify-session-otp', async (req: Request, res
       return res.status(400).json({ error: 'Invalid 4-digit session OTP. Please check the client screen.' });
     }
 
-    // Success! Update booking status to ONGOING and record started_at
-    const startedAt = new Date().toISOString();
+    // Success! Calculate Dynamic End-Time & Late Penalty Hook
+    const now = new Date();
+    const startedAt = now.toISOString();
+
+    let scheduledStartMs: number = now.getTime();
+    if (booking.scheduledStartTime || booking.scheduled_start_time) {
+      const parsed = new Date(booking.scheduledStartTime || booking.scheduled_start_time).getTime();
+      if (!isNaN(parsed)) scheduledStartMs = parsed;
+    } else if (booking.date && booking.startTime) {
+      const parsed = new Date(`${booking.date}T${booking.startTime.length === 5 ? booking.startTime + ':00' : booking.startTime}`).getTime();
+      if (!isNaN(parsed)) scheduledStartMs = parsed;
+    }
+
+    const durationHours = Number(booking.durationHours || booking.duration_hours || 1);
+    let durationMinutes = Math.max(1, Math.round(durationHours * 60));
+    if (booking.scheduledEndTime || booking.scheduled_end_time) {
+      const endMs = new Date(booking.scheduledEndTime || booking.scheduled_end_time).getTime();
+      if (!isNaN(endMs) && endMs > scheduledStartMs) {
+        durationMinutes = Math.max(1, Math.round((endMs - scheduledStartMs) / 60000));
+      }
+    } else if (booking.date && booking.endTime) {
+      const endMs = new Date(`${booking.date}T${booking.endTime.length === 5 ? booking.endTime + ':00' : booking.endTime}`).getTime();
+      if (!isNaN(endMs) && endMs > scheduledStartMs) {
+        durationMinutes = Math.max(1, Math.round((endMs - scheduledStartMs) / 60000));
+      }
+    }
+
+    // Dynamic End-Time: client receives full duration from actual start
+    const actualEndTime = new Date(now.getTime() + durationMinutes * 60000).toISOString();
+
+    // Per-minute late penalty calculation
+    let lateMinutes = 0;
+    if (now.getTime() > scheduledStartMs) {
+      lateMinutes = Math.max(0, Math.floor((now.getTime() - scheduledStartMs) / 60000));
+    }
+
+    const totalAmountPaise = Number(booking.totalAmountPaise || booking.total_amount_paise || booking.pricePaise || booking.amount_paise || 0);
+    let latePenaltyPaise = 0;
+    if (lateMinutes > 0 && durationMinutes > 0 && totalAmountPaise > 0) {
+      const perMinuteRatePaise = totalAmountPaise / durationMinutes;
+      latePenaltyPaise = Math.min(totalAmountPaise, Math.round(perMinuteRatePaise * lateMinutes));
+    }
+
+    // Update booking row in Supabase or memory
     if (getDatabaseType() === 'supabase') {
       try {
-        await databaseAdapter.updateBooking(bookingId, {
-          status: 'ONGOING',
-          started_at: startedAt,
-          actual_start_time: startedAt,
-          companion_arrived_at: startedAt,
-          companion_current_area: 'Arrived at Meeting Point',
-          companion_eta_text: 'Session Active'
-        });
         const supabaseClient = getSupabaseAdminClient();
+        if (latePenaltyPaise > 0) {
+          try {
+            await supabaseClient.rpc('start_booking_session_with_late_penalty', {
+              p_booking_id: bookingId,
+              p_actual_start: startedAt
+            });
+          } catch (rpcErr) {
+            console.warn('RPC start_booking_session_with_late_penalty fallback:', rpcErr);
+            await databaseAdapter.updateBooking(bookingId, {
+              status: 'ONGOING',
+              started_at: startedAt,
+              actual_start_time: startedAt,
+              actual_end_time: actualEndTime,
+              late_minutes: lateMinutes,
+              late_penalty_paise: latePenaltyPaise,
+              companion_arrived_at: startedAt,
+              companion_current_area: 'Arrived at Meeting Point',
+              companion_eta_text: 'Session Active'
+            });
+          }
+        } else {
+          await databaseAdapter.updateBooking(bookingId, {
+            status: 'ONGOING',
+            started_at: startedAt,
+            actual_start_time: startedAt,
+            actual_end_time: actualEndTime,
+            late_minutes: 0,
+            late_penalty_paise: 0,
+            companion_arrived_at: startedAt,
+            companion_current_area: 'Arrived at Meeting Point',
+            companion_eta_text: 'Session Active'
+          });
+        }
         await supabaseClient.from('companion_live_coords').delete().eq('booking_id', bookingId);
       } catch (err) {
         console.warn('Supabase session start update notice:', err);
       }
     }
 
+    // Update in-memory / JSON representation
     booking.status = 'ONGOING';
     booking.startedAt = startedAt;
     booking.actualStartTime = startedAt;
+    booking.actualEndTime = actualEndTime;
+    booking.lateMinutes = lateMinutes;
+    booking.latePenaltyPaise = latePenaltyPaise;
     booking.companionArrivedAt = startedAt;
     booking.companionCurrentArea = 'Arrived at Meeting Point';
     booking.companionEtaText = 'Session Active';
+
+    if (latePenaltyPaise > 0 && db) {
+      if (db.companionWallets && db.companionWallets[companionId]) {
+        db.companionWallets[companionId].availableBalancePaise = (db.companionWallets[companionId].availableBalancePaise || 0) - latePenaltyPaise;
+        db.companionWallets[companionId].totalPenaltiesPaise = (db.companionWallets[companionId].totalPenaltiesPaise || 0) + latePenaltyPaise;
+      }
+      if (db.walletLedger) {
+        const ledgerId = `led_late_${Date.now()}`;
+        db.walletLedger[ledgerId] = {
+          id: ledgerId,
+          userId: companionId,
+          bookingId,
+          transactionType: 'PENALTY',
+          grossAmountPaise: latePenaltyPaise,
+          penaltyPaise: latePenaltyPaise,
+          netAmountPaise: -latePenaltyPaise,
+          balanceStatus: 'AVAILABLE',
+          description: `Late Start Penalty: ${lateMinutes} minutes late on Booking #${booking.bookingCode || booking.code || 'N/A'}`,
+          createdAt: startedAt
+        };
+      }
+    }
 
     // Broadcast session start to both parties
     pushCompanionAlert(booking.clientId, {
       type: 'SESSION_ONGOING',
       bookingId,
       status: 'ONGOING',
-      startedAt
+      startedAt,
+      actualEndTime,
+      lateMinutes,
+      latePenaltyPaise
     });
     pushCompanionAlert(booking.companionId, {
       type: 'SESSION_ONGOING',
       bookingId,
       status: 'ONGOING',
-      startedAt
+      startedAt,
+      actualEndTime,
+      lateMinutes,
+      latePenaltyPaise
     });
 
     return res.json({
       success: true,
       status: 'ONGOING',
       startedAt,
-      message: 'Session OTP verified successfully! Live tracking is stopped and meeting session is ONGOING.'
+      actualStartTime: startedAt,
+      actualEndTime,
+      lateMinutes,
+      latePenaltyPaise,
+      latePenaltyRupees: latePenaltyPaise / 100,
+      message: lateMinutes > 0
+        ? `Session started with ${lateMinutes} mins late delay. A late penalty of ₹${(latePenaltyPaise / 100).toFixed(2)} has been recorded, and the client session has been extended to ${new Date(actualEndTime).toLocaleTimeString()}.`
+        : 'Session OTP verified successfully! Meeting session is ONGOING with full duration.'
     });
   } catch (err: any) {
     console.error('verify session OTP error:', err);
@@ -8658,24 +8810,61 @@ async function checkAndAutoCancelExpiredSlots(): Promise<number> {
           const endTimeStr = booking.endTime || '23:59';
           const slotEnd = new Date(`${bookingDateStr}T${endTimeStr.length === 5 ? endTimeStr + ':00' : endTimeStr}`);
           if (!isNaN(slotEnd.getTime()) && now > slotEnd) {
-            booking.status = 'auto_cancelled';
-            booking.cancelledBy = 'SYSTEM_TIMEOUT';
+            const totalAmountPaise = Number(booking.totalAmountPaise || booking.total_amount_paise || booking.pricePaise || booking.amount_paise || 0);
+
+            booking.status = 'auto_cancelled_no_show';
+            booking.cancelledBy = 'system_no_show';
             booking.cancelledAt = now.toISOString();
-            booking.cancellationReason = 'Session slot expired without OTP verification start';
+            booking.cancellationReason = 'Slot expired: Session not started within booked slot (Companion no-show)';
             booking.paymentStatus = 'REFUNDED';
-            booking.refundAmount = booking.bookingAmountPaise ? booking.bookingAmountPaise / 100 : 0;
+            booking.refundStatus = 'pending_bank_details';
+            booking.refundAmount = totalAmountPaise ? totalAmountPaise / 100 : 0;
+            booking.refundAmountPaise = totalAmountPaise;
             booking.refundPercentage = 100;
+            booking.penaltyDeductedPaise = totalAmountPaise;
             cancelledCount++;
+
+            // Deduct full amount from companion wallet (allowing negative balance)
+            const companionId = booking.companionId;
+            if (companionId && db.companionWallets && db.companionWallets[companionId]) {
+              db.companionWallets[companionId].availableBalancePaise = (db.companionWallets[companionId].availableBalancePaise || 0) - totalAmountPaise;
+              db.companionWallets[companionId].totalPenaltiesPaise = (db.companionWallets[companionId].totalPenaltiesPaise || 0) + totalAmountPaise;
+            }
+            if (companionId && db.walletLedger) {
+              const ledgerId = `led_noshow_${Date.now()}_${booking.id}`;
+              db.walletLedger[ledgerId] = {
+                id: ledgerId,
+                userId: companionId,
+                bookingId: booking.id,
+                transactionType: 'PENALTY',
+                grossAmountPaise: totalAmountPaise,
+                penaltyPaise: totalAmountPaise,
+                netAmountPaise: -totalAmountPaise,
+                balanceStatus: 'AVAILABLE',
+                description: `No-Show Penalty: Slot expired unstarted on Booking #${booking.bookingCode || booking.code || 'N/A'}`,
+                createdAt: now.toISOString()
+              };
+            }
+
+            // Create refund request awaiting client bank/UPI details
+            await databaseAdapter.createRefundRequest({
+              bookingId: booking.id,
+              clientId: booking.clientId,
+              refundAmountPaise: totalAmountPaise,
+              refundReason: 'companion_no_show',
+              payoutStatus: 'awaiting_details',
+              createdAt: now.toISOString()
+            }).catch(() => {});
 
             pushCompanionAlert(booking.clientId, {
               type: 'BOOKING_AUTO_CANCELLED',
               bookingId: booking.id,
-              message: 'Your booking expired without being started and has been 100% refunded.'
+              message: 'Your booking expired without being started. 100% full refund is initiated! Please submit your bank/UPI details to receive payout.'
             });
             pushCompanionAlert(booking.companionId, {
               type: 'BOOKING_AUTO_CANCELLED',
               bookingId: booking.id,
-              message: 'Booking slot expired without being started.'
+              message: `Booking slot expired without OTP start. A full no-show penalty of ₹${(totalAmountPaise / 100).toFixed(2)} was deducted from your wallet balance.`
             });
           }
         }
@@ -8687,6 +8876,133 @@ async function checkAndAutoCancelExpiredSlots(): Promise<number> {
   }
   return cancelledCount;
 }
+
+// -------------------------------------------------------------
+// CLIENT REFUND BANK / UPI DETAILS SUBMISSION
+// -------------------------------------------------------------
+app.post('/api/bookings/:bookingId/refund-bank-details', async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).authUser.id;
+  const { bookingId } = req.params;
+  const { accountHolderName, bankName, accountNumber, ifscCode, upiId } = req.body || {};
+
+  if (!upiId && (!accountNumber || !ifscCode || !accountHolderName)) {
+    return res.status(400).json({ error: 'Please provide either UPI ID or complete Bank Details (Account Holder, Number & IFSC).' });
+  }
+
+  try {
+    let booking: any = null;
+    try {
+      booking = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getBooking(bookingId)
+        : (db.bookings ? db.bookings[bookingId] : null);
+    } catch {
+      booking = db.bookings ? db.bookings[bookingId] : null;
+    }
+
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.clientId !== userId && (req as AuthenticatedRequest).authUser.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Only the booking client can submit refund payout details.' });
+    }
+
+    const totalAmountPaise = Number(booking.refundAmountPaise || booking.totalAmountPaise || booking.pricePaise || 0);
+
+    // Check existing or create refund request
+    let refundReq = await databaseAdapter.getRefundRequestByBooking(bookingId);
+    if (!refundReq) {
+      refundReq = await databaseAdapter.createRefundRequest({
+        bookingId,
+        clientId: userId,
+        refundAmountPaise: totalAmountPaise,
+        refundReason: booking.status === 'auto_cancelled_no_show' ? 'companion_no_show' : 'client_cancelled',
+        accountHolderName: accountHolderName?.trim() || null,
+        bankName: bankName?.trim() || null,
+        accountNumber: accountNumber?.trim() || null,
+        ifscCode: ifscCode?.trim()?.toUpperCase() || null,
+        upiId: upiId?.trim() || null,
+        payoutStatus: 'pending_admin_payout'
+      });
+    } else {
+      refundReq = await databaseAdapter.updateRefundRequest(refundReq.id, {
+        accountHolderName: accountHolderName?.trim() || refundReq.accountHolderName,
+        bankName: bankName?.trim() || refundReq.bankName,
+        accountNumber: accountNumber?.trim() || refundReq.accountNumber,
+        ifscCode: ifscCode?.trim()?.toUpperCase() || refundReq.ifscCode,
+        upiId: upiId?.trim() || refundReq.upiId,
+        payoutStatus: 'pending_admin_payout'
+      });
+    }
+
+    // Update booking refund_status
+    if (getDatabaseType() === 'supabase') {
+      await databaseAdapter.updateBooking(bookingId, {
+        refund_status: 'details_submitted'
+      }).catch(() => {});
+    }
+    booking.refundStatus = 'details_submitted';
+
+    return res.json({
+      success: true,
+      refundRequest: refundReq,
+      message: 'Refund payout details saved successfully! PairUp admin will process your payout within 24 hours.'
+    });
+  } catch (err: any) {
+    console.error('Save refund bank details error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to submit refund details.' });
+  }
+});
+
+// -------------------------------------------------------------
+// ADMIN REFUND REQUESTS QUEUE & PROCESSING
+// -------------------------------------------------------------
+app.get('/api/admin/refund-requests', async (req: Request, res: Response) => {
+  try {
+    const list = await databaseAdapter.listRefundRequests();
+    return res.json({ success: true, refundRequests: list });
+  } catch (err: any) {
+    console.error('List refund requests error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to load refund requests.' });
+  }
+});
+
+app.post('/api/admin/refund-requests/:id/process', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { adminTransactionRef } = req.body || {};
+
+  if (!adminTransactionRef || typeof adminTransactionRef !== 'string') {
+    return res.status(400).json({ error: 'Bank Transaction ID / UTR reference is required to mark refund as processed.' });
+  }
+
+  try {
+    const updated = await databaseAdapter.updateRefundRequest(id, {
+      payoutStatus: 'processed',
+      adminTransactionRef: adminTransactionRef.trim(),
+      processedAt: new Date().toISOString()
+    });
+
+    if (updated?.bookingId) {
+      if (getDatabaseType() === 'supabase') {
+        await databaseAdapter.updateBooking(updated.bookingId, {
+          payment_status: 'REFUNDED',
+          refund_status: 'processed'
+        }).catch(() => {});
+      } else if (db.bookings && db.bookings[updated.bookingId]) {
+        db.bookings[updated.bookingId].paymentStatus = 'REFUNDED';
+        db.bookings[updated.bookingId].refundStatus = 'processed';
+        db.bookings[updated.bookingId].adminRefundTransactionRef = adminTransactionRef.trim();
+        saveDB(db);
+      }
+    }
+
+    return res.json({
+      success: true,
+      refundRequest: updated,
+      message: `Refund marked as processed with UTR: ${adminTransactionRef.trim()}.`
+    });
+  } catch (err: any) {
+    console.error('Process refund request error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to process refund payout.' });
+  }
+});
 
 // Check every 60 seconds
 setInterval(() => {
