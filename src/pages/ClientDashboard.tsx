@@ -1305,7 +1305,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     { id: 'overview', label: 'Overview', icon: Compass },
     { id: 'profile', label: 'My Profile', icon: User },
     { id: 'kyc-status', label: 'My KYC Status', icon: ShieldCheck, badge: isKycApproved ? '✓' : 'Pending', badgeColor: isKycApproved ? 'bg-emerald-500' : 'bg-amber-500' },
-    { id: 'services', label: '36 Services', icon: Sparkles },
+    { id: 'services', label: '35 Services', icon: Sparkles },
     { id: 'upcoming', label: 'Upcoming Plans', icon: CalendarCheck, badge: upcomingBookings.length > 0 ? upcomingBookings.length : undefined, badgeColor: 'bg-violet-600' },
     { id: 'history', label: 'Booking History', icon: Calendar, badge: successfulBookings.length > 0 ? successfulBookings.length : undefined, badgeColor: 'bg-emerald-500' },
     { id: 'chat', label: 'Secure Chat', icon: MessageSquare, badge: paidChatBookingsCount > 0 ? (paidChatBookingsCount > 9 ? '9+' : paidChatBookingsCount) : undefined, badgeColor: 'bg-pink-500' },
@@ -2783,10 +2783,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           </div>
         )}
 
-        {/* TAB 5: 36 SERVICES CATALOGUE */}
+        {/* TAB 5: 35 SERVICES CATALOGUE */}
         {activeTab === 'services' && (
           <div className="space-y-4">
-            <h3 className="text-lg font-bold text-slate-100">All 36 Authoritative Companionship Services</h3>
+            <h3 className="text-lg font-bold text-slate-100">All 35 Authoritative Companionship Services</h3>
             <p className="text-xs text-slate-400">Click any service to view verified companions providing that category.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {PAIRUP_SERVICES.map(s => (
@@ -4051,7 +4051,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
               return (
                 <form onSubmit={handleCreateBooking} className="space-y-4 text-xs">
-                  {/* Service Selection for this Booking (All 36 Services) */}
+                  {/* Service Selection for this Booking (All 35 Services) */}
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">
                       {language === 'bn' ? 'পরিষেবা নির্বাচন করুন (Choose Service)' : language === 'hi' ? 'सेवा चुनें (Choose Service)' : 'Select Companionship Service'}

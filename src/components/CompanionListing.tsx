@@ -466,7 +466,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                 }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-amber-400 transition-colors cursor-pointer"
               >
-                <option value="all">{t.allServicesLabel || 'All Services'} (36 Services)</option>
+                <option value="all">{t.allServicesLabel || 'All Services'} (35 Services)</option>
                 {PAIRUP_SERVICES.map((srv) => (
                   <option key={srv.id} value={srv.id}>
                     #{srv.id}. {srv.cardTitle || srv.name}
@@ -490,7 +490,7 @@ export const CompanionListing: React.FC<CompanionListingProps> = ({
                   : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/60'
               }`}
             >
-              All Services (36)
+              All Services (35)
             </button>
             {PAIRUP_SERVICES.map((srv) => (
               <button

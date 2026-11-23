@@ -98,7 +98,7 @@ export const ServicesGrid: React.FC<ServicesGridProps> = ({ onSelectService }) =
             <div className="inline-flex items-center gap-1.5 text-xs uppercase font-extrabold tracking-wider text-amber-400 mb-2.5 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/20">
               <Layers className="w-3.5 h-3.5 text-amber-400" />
               <span>
-                {language === 'bn' ? '৩৬টি যাচাইকৃত পরিষেবা' : language === 'hi' ? '36 सत्यापित सेवाएं' : '36 Verified Companion Services'}
+                {language === 'bn' ? '৩৫টি যাচাইকৃত পরিষেবা' : language === 'hi' ? '35 सत्यापित सेवाएं' : '35 Verified Companion Services'}
               </span>
             </div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-100 tracking-tight">
@@ -212,7 +212,7 @@ export const ServicesGrid: React.FC<ServicesGridProps> = ({ onSelectService }) =
             </button>
             <p className="text-[11px] text-slate-500 mt-2">
               {isExpanded 
-                ? (language === 'bn' ? '৩৬টি পরিষেবার সবকটি প্রদর্শিত হচ্ছে' : 'Displaying all 36 companion services')
+                ? (language === 'bn' ? '৩৫টি পরিষেবার সবকটি প্রদর্শিত হচ্ছে' : 'Displaying all 35 companion services')
                 : (language === 'bn' ? 'স্ক্রোল কমাতে শীর্ষ ৮টি জনপ্রিয় পরিষেবা দেখানো হচ্ছে' : 'Showing top 8 popular services to prevent long scrolling')}
             </p>
           </div>

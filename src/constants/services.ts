@@ -14,7 +14,7 @@ export interface ServiceItem {
 }
 
 export const SERVICE_CATEGORIES: { id: 'all' | ServiceCategory; label: string }[] = [
-  { id: 'all', label: 'All 36 Services' },
+  { id: 'all', label: 'All 35 Services' },
   { id: 'social', label: 'Social & Entertainment' },
   { id: 'travel', label: 'Travel & Exploration' },
   { id: 'creator', label: 'Creator & Lifestyle' },
@@ -358,17 +358,6 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
   },
   {
     id: 31,
-    slug: 'astrology-vastu',
-    name: 'Astrology & Vastu Consultation Companion',
-    cardTitle: 'Astrology & Vastu',
-    chipLabel: 'Astrology',
-    description: 'Astrology, tarot, and vastu consultation companionship for insightful horoscope readings and positive home energy guidance.',
-    iconName: 'Compass',
-    category: 'creator',
-    image: 'https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    id: 32,
     slug: 'pet-care-dog-walk',
     name: 'Pet Care & Dog Walking Companion',
     cardTitle: 'Pet Care & Dog Walk',
@@ -379,7 +368,7 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
     image: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=600&q=80'
   },
   {
-    id: 33,
+    id: 32,
     slug: 'study-home-tutor',
     name: 'Study & Home Tutor Companion',
     cardTitle: 'Study & Home Tutor',
@@ -390,7 +379,7 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
     image: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=600&q=80'
   },
   {
-    id: 34,
+    id: 33,
     slug: 'child-care-babysitting',
     name: 'Child Care & Babysitting Companion',
     cardTitle: 'Child Care & Babysitting',
@@ -401,7 +390,7 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
     image: 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?auto=format&fit=crop&w=600&q=80'
   },
   {
-    id: 35,
+    id: 34,
     slug: 'home-cooking-buddy',
     name: 'Home Cooking & Chef Companion',
     cardTitle: 'Home Cooking Buddy',
@@ -412,7 +401,7 @@ export const PAIRUP_SERVICES: ServiceItem[] = [
     image: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=600&q=80'
   },
   {
-    id: 36,
+    id: 35,
     slug: 'event-security-bouncer',
     name: 'Event Security & Bouncer Companion',
     cardTitle: 'Event Security / Bouncer',
