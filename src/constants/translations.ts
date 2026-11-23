@@ -381,6 +381,106 @@ export interface TranslationDictionary {
   allServicesLabel: string;
   viewDetailsAction: string;
   additionalPhotosLabel: string;
+  // Additional Info & Legal Page Keys
+  aboutSlogan: string;
+  hiwClientStepsDesc: string;
+  hiwClientTagline: string;
+  hiwCompanionStepsDesc: string;
+  hiwCompanionTagline: string;
+  safetyEmergencyHeadline: string;
+  policeLabel: string;
+  sosLabel: string;
+  safetyTagline: string;
+
+  // Terms of Service Page (Full 8 Sections)
+  termsBadge: string;
+  termsTitle: string;
+  termsLastUpdated: string;
+  termsIntro: string;
+
+  // Section 1
+  termsSec1Title: string;
+  termsSec1P1Title: string;
+  termsSec1P1Desc: string;
+  termsSec1P2Title: string;
+  termsSec1P2Desc: string;
+  termsSec1P3Title: string;
+  termsSec1P3Desc: string;
+
+  // Section 2
+  termsSec2Title: string;
+  termsSec2P1Title: string;
+  termsSec2P1Desc: string;
+  termsSec2P2Title: string;
+  termsSec2P2Desc: string;
+  termsSec2P3Title: string;
+  termsSec2P3Desc: string;
+
+  // Section 3
+  termsSec3Title: string;
+  termsSec3P1Title: string;
+  termsSec3P1Desc: string;
+  termsSec3P2Title: string;
+  termsSec3P2Desc: string;
+  termsSec3P3Title: string;
+  termsSec3P3Desc: string;
+  termsSec3P4Title: string;
+  termsSec3P4Desc: string;
+
+  // Section 4 (Refund & Cancellation Policy)
+  termsSec4Title: string;
+  termsSec4Intro: string;
+  termsSec4ClientTitle: string;
+  termsSec4ClientDesc: string;
+  termsSec4Slab1: string;
+  termsSec4Slab2: string;
+  termsSec4Slab3: string;
+  termsSec4NoShowClientTitle: string;
+  termsSec4NoShowClientDesc: string;
+  termsSec4NoShowCompTitle: string;
+  termsSec4NoShowCompDesc: string;
+  termsSec4NoShowCompItem1: string;
+  termsSec4NoShowCompItem2: string;
+  termsSec4EarlyEndTitle: string;
+  termsSec4EarlyEndDesc: string;
+  termsSec4TechErrorsTitle: string;
+  termsSec4TechErrorsDesc: string;
+  termsSec4TimelinesTitle: string;
+  termsSec4TimelinesDesc: string;
+  termsSec4TimelineUpi: string;
+  termsSec4TimelineNb: string;
+  termsSec4TimelineCards: string;
+  termsSec4NonRefundTitle: string;
+  termsSec4NonRefundDesc: string;
+  termsSec4SupportTitle: string;
+  termsSec4SupportDesc: string;
+
+  // Section 5
+  termsSec5Title: string;
+  termsSec5P1Title: string;
+  termsSec5P1Desc: string;
+  termsSec5P2Title: string;
+  termsSec5P2Desc: string;
+  termsSec5P3Title: string;
+  termsSec5P3Desc: string;
+
+  // Section 6
+  termsSec6Title: string;
+  termsSec6P1Title: string;
+  termsSec6P1Desc: string;
+  termsSec6P2Title: string;
+  termsSec6P2Desc: string;
+
+  // Section 7
+  termsSec7Title: string;
+  termsSec7P1Title: string;
+  termsSec7P1Desc: string;
+  termsSec7P2Title: string;
+  termsSec7P2Desc: string;
+
+  // Section 8
+  termsSec8Title: string;
+  termsSec8Desc: string;
 }
 
 export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
@@ -735,13 +835,13 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     footerContactWithUs: "Contact With Us",
     footerFacebookLabel: "Facebook",
     footerInstagramLabel: "Instagram",
-    footerEmailLabel: "pairuptoday@gmail.com",
+    footerEmailLabel: "Support@pairuptoday.com",
     footerEmergencyAssistance: "Emergency Assistance",
     footerPoliceEmergency: "Police Emergency",
     footerNationalSos: "National Emergency SOS",
     footerBuiltWithLove: "Better Connections. Brighter Moments.",
     footerCopyEmail: "Copy Email",
-    footerEmailCopied: "Email copied: pairuptoday@gmail.com",
+    footerEmailCopied: "Email copied: Support@pairuptoday.com",
 
     // Common UI Actions
     closeAction: "Close",
@@ -764,7 +864,97 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     filterByServiceLabel: "Filter by Service",
     allServicesLabel: "All 36 Services",
     viewDetailsAction: "View Profile",
-    additionalPhotosLabel: "Additional Photographs"
+    additionalPhotosLabel: "Additional Photographs",
+    aboutSlogan: "PairUpToday — Your Time. Your Choice. Your Companion.",
+    hiwClientStepsDesc: "7 straightforward steps to finding your ideal companion safely.",
+    hiwClientTagline: "Your time. Your choice. Your perfect companion.",
+    hiwCompanionStepsDesc: "6 comprehensive steps to onboard, activate, and receive 85% net earnings safely.",
+    hiwCompanionTagline: "Your time. Your skills. Your earning opportunity.",
+    safetyEmergencyHeadline: "In case of any safety concern during an experience",
+    policeLabel: "Police: 100",
+    sosLabel: "SOS: 112",
+    safetyTagline: "PairUpToday — More Than Company. A Better Experience.",
+
+    termsBadge: "Official Platform Policy",
+    termsTitle: "Terms of Service – Pairup Today",
+    termsLastUpdated: "Last Updated: November 23, 2026",
+    termsIntro: "Welcome to Pairup Today (\"we,\" \"our,\" or \"us\"). Pairup Today is a platform that connects clients with verified companions for platonic social interactions, activities, and friendly company (\"Service\"). By registering, booking, or providing services on Pairup Today, you agree to be legally bound by these Terms of Service (\"Terms\").",
+
+    termsSec1Title: "1. Nature of Service & Strict Anti-Escort Policy",
+    termsSec1P1Title: "Platonic Companionship Only:",
+    termsSec1P1Desc: "Pairup Today is strictly a platform for platonic, friendly, and social companionship (such as dining, attending events, conversations, or sightseeing).",
+    termsSec1P2Title: "No Escort or Adult Services:",
+    termsSec1P2Desc: "Pairup Today strictly does NOT provide escort, dating, sexual, or adult services of any kind.",
+    termsSec1P3Title: "Zero Tolerance & Legal Action:",
+    termsSec1P3Desc: "Any solicitation, promotion, or engagement in sexual favors, human trafficking, fraud, or any illegal activity is strictly forbidden. Any user or companion found violating this rule will face immediate permanent account termination and strict legal action under the applicable laws of India (including reporting to law enforcement authorities).",
+
+    termsSec2Title: "2. Eligibility, Voluntary Participation & Verification",
+    termsSec2P1Title: "Voluntary Registration & Free Will:",
+    termsSec2P1Desc: "Both clients and companions confirm that they are registering, using our platform, and offering or booking services entirely of their own free will and voluntary choice. We have not forced, coerced, misled, or lured any individual through false promises or inducements to join or use this Service.",
+    termsSec2P2Title: "Age Requirement:",
+    termsSec2P2Desc: "Both clients and companions must be at least 18 years old to use Pairup Today.",
+    termsSec2P3Title: "Mandatory Verification:",
+    termsSec2P3Desc: "Users must provide accurate personal details and valid government-issued ID proof when requested. Fake profiles will be permanently banned.",
+
+    termsSec3Title: "3. Bookings, Payments & Platform Fees (15% Commission)",
+    termsSec3P1Title: "Client Payments:",
+    termsSec3P1Desc: "Clients must pay the full booking amount upfront through the Pairup Today platform to confirm a session.",
+    termsSec3P2Title: "Companion Payouts & 15% Platform Fee:",
+    termsSec3P2Desc: "We deduct a 15% platform service fee from the total booking amount earned by the companion. The remaining 85% will be credited to the companion’s registered payout account upon successful completion of the booking.",
+    termsSec3P3Title: "No Off-Platform Transactions:",
+    termsSec3P3Desc: "All bookings and payments must occur strictly within our app. Bypassing the platform to pay or accept cash or direct transfers is a breach of these Terms and will result in account suspension.",
+    termsSec3P4Title: "Activity Expenses:",
+    termsSec3P4Desc: "Unless mutually agreed otherwise, clients are responsible for their own expenses (food, tickets, travel) during in-person meetups.",
+
+    termsSec4Title: "4. Refund & Cancellation Policy",
+    termsSec4Intro: "We understand that plans can change unexpectedly. Below are the terms governing booking cancellations and refunds on Pairup Today:",
+    termsSec4ClientTitle: "Client Cancellation Rules:",
+    termsSec4ClientDesc: "You may cancel a confirmed booking before the scheduled start time based on the following refund slabs:",
+    termsSec4Slab1: "More than 12 hours before scheduled time: 100% full refund of the booking amount.",
+    termsSec4Slab2: "3 to 12 hours before scheduled time: 50% refund of the booking amount.",
+    termsSec4Slab3: "Less than 3 hours before scheduled time: No refund (booking amount is forfeited).",
+    termsSec4NoShowClientTitle: "Client No-Show:",
+    termsSec4NoShowClientDesc: "If a client fails to arrive at the designated booking location at the scheduled time without prior cancellation (and the Start OTP is not verified), no refund will be issued, and the amount will be forfeited to compensate the companion. Repeated no-shows may lead to account suspension.",
+    termsSec4NoShowCompTitle: "Companion No-Show Penalty & Full Refund:",
+    termsSec4NoShowCompDesc: "If the companion fails to arrive at the designated booking location at the scheduled time without reasonable justification:",
+    termsSec4NoShowCompItem1: "The client will immediately receive a 100% full refund of the booking amount.",
+    termsSec4NoShowCompItem2: "The companion will be subject to monetary penalties (deducted from wallet/future payouts) and/or temporary or permanent account suspension.",
+    termsSec4EarlyEndTitle: "Early Departure or Dissatisfaction:",
+    termsSec4EarlyEndDesc: "If a session ends earlier than the booked duration upon mutual agreement or due to client preference, no partial refund will be provided. If ended due to misconduct or rule violation, the incident will be reviewed by support before determining refund eligibility.",
+    termsSec4TechErrorsTitle: "Technical or Platform Errors:",
+    termsSec4TechErrorsDesc: "If an amount is debited but the booking is not confirmed due to network or gateway failure, the full amount will be automatically refunded within 48 hours.",
+    termsSec4TimelinesTitle: "Refund Processing Timelines:",
+    termsSec4TimelinesDesc: "Approved refunds are initiated immediately and credited back to the original payment source:",
+    termsSec4TimelineUpi: "UPI: 1–5 business days",
+    termsSec4TimelineNb: "Net Banking: 3–5 business days",
+    termsSec4TimelineCards: "Credit / Debit Cards: 5–7 business days",
+    termsSec4NonRefundTitle: "Non-Refundable Items:",
+    termsSec4NonRefundDesc: "One-time profile verification fees or premium membership charges (if applicable) are non-refundable once the verification process has begun.",
+    termsSec4SupportTitle: "Contact for Refund Support:",
+    termsSec4SupportDesc: "For any cancellation or refund queries, contact our support team at Support@pairuptoday.com.",
+
+    termsSec5Title: "5. Safety & Code of Conduct",
+    termsSec5P1Title: "Public Venues Only:",
+    termsSec5P1Desc: "All in-person meetups must take place strictly in safe, public locations (e.g., cafes, restaurants, malls, parks, public events). Meetups in private homes, hotel rooms, or isolated areas are strictly prohibited.",
+    termsSec5P2Title: "Mutual Respect:",
+    termsSec5P2Desc: "Both parties must maintain respectful behavior. Harassment, abusive language, intoxication, or unwanted physical contact will lead to immediate session termination and a permanent ban.",
+    termsSec5P3Title: "Emergency Exit:",
+    termsSec5P3Desc: "A companion may immediately end a session if the client violates the platonic policy or behaves inappropriately, without forfeiting their payout (subject to our investigation).",
+
+    termsSec6Title: "6. Data Privacy & Information Security",
+    termsSec6P1Title: "Strict Confidentiality of Personal Data:",
+    termsSec6P1Desc: "All sensitive personal and financial information provided by clients and companions—including Government-issued ID proofs, phone numbers, email addresses, and bank account details—is kept strictly private and encrypted under our security protocols.",
+    termsSec6P2Title: "No Unauthorized Disclosure:",
+    termsSec6P2Desc: "We do not sell, rent, or publicly display your private contact or financial details to other users or unauthorized third parties. Information is used strictly for identity verification, secure payment processing, and legal compliance under Indian law when required by law enforcement authorities.",
+
+    termsSec7Title: "7. Limitation of Liability",
+    termsSec7P1Title: "Independent Companions:",
+    termsSec7P1Desc: "Companions are independent individuals, not employees of Pairup Today. We act solely as a technology facilitator.",
+    termsSec7P2Title: "Personal Responsibility:",
+    termsSec7P2Desc: "Users are solely responsible for their personal safety and interactions during meetups. Pairup Today is not liable for any personal injury, loss, damage, or disputes arising from user interactions.",
+
+    termsSec8Title: "8. Governing Law & Jurisdiction",
+    termsSec8Desc: "These Terms are governed by and construed in accordance with the laws of India. Any disputes, legal claims, or violations arising out of the use of Pairup Today shall be subject to the exclusive jurisdiction of the competent courts in India."
   },
 
   bn: {
@@ -1118,13 +1308,13 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     footerContactWithUs: "যোগাযোগ করুন",
     footerFacebookLabel: "ফেসবুক",
     footerInstagramLabel: "ইনস্টাগ্রাম",
-    footerEmailLabel: "pairuptoday@gmail.com",
+    footerEmailLabel: "Support@pairuptoday.com",
     footerEmergencyAssistance: "জরুরি সহায়তা",
     footerPoliceEmergency: "পুলিশ হেল্পলাইন",
     footerNationalSos: "জাতীয় জরুরি এসওএস",
     footerBuiltWithLove: "উন্নত সংযোগ। উজ্জ্বল মুহূর্ত।",
     footerCopyEmail: "ইমেল কপি করুন",
-    footerEmailCopied: "ইমেল কপি করা হয়েছে: pairuptoday@gmail.com",
+    footerEmailCopied: "ইমেল কপি করা হয়েছে: Support@pairuptoday.com",
 
     // Common UI Actions
     closeAction: "বন্ধ করুন",
@@ -1147,7 +1337,97 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     filterByServiceLabel: "সার্ভিস অনুযায়ী ফিল্টার",
     allServicesLabel: "সকল ৩৬টি সার্ভিস",
     viewDetailsAction: "প্রোফাইল দেখুন",
-    additionalPhotosLabel: "অতিরিক্ত আলোকচিত্র"
+    additionalPhotosLabel: "অতিরিক্ত আলোকচিত্র",
+    aboutSlogan: "PairUpToday — আপনার সময়। আপনার পছন্দ। আপনার সঙ্গী।",
+    hiwClientStepsDesc: "নিরাপদে আপনার আদর্শ সঙ্গী খুঁজে নেওয়ার ৭টি সহজ ধাপ।",
+    hiwClientTagline: "আপনার সময়। আপনার পছন্দ। আপনার নিখুঁত সঙ্গী।",
+    hiwCompanionStepsDesc: "নিরাপদে যুক্ত হওয়া, সক্রিয় হওয়া এবং ৮৫% নেট উপার্জন পাওয়ার ৬টি সম্পূর্ণ ধাপ।",
+    hiwCompanionTagline: "আপনার সময়। আপনার দক্ষতা। আপনার আয়ের সুযোগ।",
+    safetyEmergencyHeadline: "একটি অভিজ্ঞতার সময় যেকোনো নিরাপত্তা উদ্বেগের ক্ষেত্রে",
+    policeLabel: "পুলিশ: ১০০",
+    sosLabel: "জরুরি সাহায্য (SOS): ১১২",
+    safetyTagline: "PairUpToday — শুধুই সঙ্গ নয়। একটি উৎকৃষ্ট অভিজ্ঞতা।",
+
+    termsBadge: "অফিসিয়াল প্ল্যাটফর্ম পলিসি",
+    termsTitle: "শর্তাবলী ও নীতিমালা – Pairup Today",
+    termsLastUpdated: "সর্বশেষ আপডেট: ২৩ নভেম্বর, ২০২৬",
+    termsIntro: "Pairup Today-তে স্বাগতম (\"আমরা\", \"আমাদের\" বা \"আমাদের প্ল্যাটফর্ম\")। Pairup Today এমন একটি প্ল্যাটফর্ম যা নিরীহ সামাজিক মেলামেশা, বন্ধুত্বপূর্ণ কার্যকলাপ ও সাহচর্যের জন্য ক্লায়েন্টদের যাচাইকৃত সঙ্গীদের সাথে যুক্ত করে (\"পরিষেবা\")। Pairup Today-তে নিবন্ধন, বুকিং বা পরিষেবা প্রদান করার মাধ্যমে আপনি এই পরিষেবার শর্তাবলী (\"শর্তাবলী\") দ্বারা আইনত আবদ্ধ হতে সম্মত হন।",
+
+    termsSec1Title: "১. পরিষেবার ধরন ও কঠোর এসকর্ট-বিরোধী নীতি",
+    termsSec1P1Title: "শুধুমাত্র নিষ্পাপ ও বন্ধুত্বপূর্ণ সঙ্গ (Platonic Companionship):",
+    termsSec1P1Desc: "Pairup Today কঠোরভাবে শুধুমাত্র নির্দোষ, বন্ধুত্বপূর্ণ এবং সামাজিক সাহচর্যের (যেমন খাবার খাওয়া, কোনো অনুষ্ঠানে যোগ দেওয়া, কথাবার্তা বা দর্শনীয় স্থান ভ্রমণ) জন্য একটি প্ল্যাটফর্ম।",
+    termsSec1P2Title: "কোনো এসকর্ট বা অ্যাডাল্ট পরিষেবা নয়:",
+    termsSec1P2Desc: "Pairup Today কোনো ধরনের এসকর্ট, ডেটিং, যৌন বা প্রাপ্তবয়স্কদের পরিষেবা কঠোরভাবে প্রদান করে না।",
+    termsSec1P3Title: "শূন্য সহনশীলতা ও কঠোর আইনি ব্যবস্থা:",
+    termsSec1P3Desc: "যৌন সুবিধা চাওয়া বা প্রচার করা, মানব পাচার, প্রতারণা বা যেকোনো বেআইনি কার্যকলাপ সম্পূর্ণরূপে নিষিদ্ধ। এই নিয়ম লঙ্ঘনকারী যেকোনো ব্যবহারকারী বা সঙ্গীর অ্যাকাউন্ট অবিলম্বে স্থায়ীভাবে বাতিল করা হবে এবং ভারতের প্রযোজ্য আইনের অধীনে কঠোর আইনি ব্যবস্থা (আইন প্রয়োগকারী সংস্থার কাছে রিপোর্ট করা সহ) নেওয়া হবে।",
+
+    termsSec2Title: "২. যোগ্যতা, স্বেচ্ছায় অংশগ্রহণ ও যাচাইকরণ",
+    termsSec2P1Title: "স্বেচ্ছায় নিবন্ধন ও স্বাধীন ইচ্ছা:",
+    termsSec2P1Desc: "ক্লায়েন্ট এবং সঙ্গী উভয়ই নিশ্চিত করেন যে তারা সম্পূর্ণ নিজেদের স্বাধীন ইচ্ছা ও পছন্দের ভিত্তিতে আমাদের প্ল্যাটফর্মে নিবন্ধন, বুকিং বা পরিষেবা প্রদান করছেন। আমরা কাউকে কোনো মিথ্যা প্রতিশ্রুতি বা প্রলোভন দেখিয়ে যোগদান করতে বাধ্য করিনি।",
+    termsSec2P2Title: "বয়সের প্রয়োজনীয়তা:",
+    termsSec2P2Desc: "Pairup Today ব্যবহার করার জন্য ক্লায়েন্ট এবং সঙ্গী উভয়েরই বয়স কমপক্ষে ১৮ বছর হতে হবে।",
+    termsSec2P3Title: "বাধ্যতামূলক যাচাইকরণ:",
+    termsSec2P3Desc: "অনুরোধ করা হলে ব্যবহারকারীদের সঠিক ব্যক্তিগত তথ্য এবং বৈধ সরকারি পরিচয়পত্র (ID Proof) প্রদান করতে হবে। ভুয়ো প্রোফাইল স্থায়ীভাবে নিষিদ্ধ করা হবে।",
+
+    termsSec3Title: "৩. বুকিং, পেমেন্ট ও প্ল্যাটফর্ম ফি (১৫% কমিশন)",
+    termsSec3P1Title: "ক্লায়েন্ট পেমেন্ট:",
+    termsSec3P1Desc: "একটি সেশন নিশ্চিত করতে ক্লায়েন্টদের অবশ্যই Pairup Today প্ল্যাটফর্মের মাধ্যমে অগ্রিম পুরো বুকিংয়ের অর্থ প্রদান করতে হবে।",
+    termsSec3P2Title: "সঙ্গীর পারিশ্রমিক ও ১৫% প্ল্যাটফর্ম ফি:",
+    termsSec3P2Desc: "সঙ্গীর মোট উপার্জিত বুকিং অর্থ থেকে আমরা ১৫% প্ল্যাটফর্ম সার্ভিস ফি কর্তন করি। বুকিং সফলভাবে সম্পন্ন হওয়ার পর অবশিষ্ট ৮৫% সঙ্গীর নিবন্ধিত পেআউট অ্যাকাউন্টে জমা হবে।",
+    termsSec3P3Title: "প্ল্যাটফর্মের বাইরে কোনো লেনদেন নয়:",
+    termsSec3P3Desc: "সকল বুকিং এবং পেমেন্ট কঠোরভাবে আমাদের অ্যাপের মাধ্যমে হতে হবে। প্ল্যাটফর্মকে এড়িয়ে নগদ টাকা বা সরাসরি অর্থ আদান-প্রদান করা এই শর্তাবলীর লঙ্ঘন এবং এর ফলে অ্যাকাউন্ট স্থগিত করা হবে।",
+    termsSec3P4Title: "কার্যকলাপের খরচ:",
+    termsSec3P4Desc: "পারস্পরিক সম্মতি ছাড়া, সরাসরি সাক্ষাতের সময় ক্লায়েন্ট তাদের নিজস্ব খরচ (খাবার, টিকিট, ভ্রমণ) বহনের জন্য দায়ী থাকবেন।",
+
+    termsSec4Title: "৪. রিফান্ড ও বাতিলকরণ নীতি (Refund & Cancellation Policy)",
+    termsSec4Intro: "আমরা বুঝি যে অপ্রত্যাশিত কারণে পরিকল্পনা পরিবর্তন হতে পারে। Pairup Today-তে বুকিং বাতিল এবং রিফান্ডের নিয়মাবলী নিচে দেওয়া হলো:",
+    termsSec4ClientTitle: "ক্লায়েন্ট বাতিলকরণ নিয়মাবলী:",
+    termsSec4ClientDesc: "নির্ধারিত সময়ের আগে একটি নিশ্চিত বুকিং বাতিল করলে নিম্নলিখিত স্ল্যাব অনুযায়ী রিফান্ড প্রদান করা হবে:",
+    termsSec4Slab1: "নির্ধারিত সময়ের ১২ ঘণ্টার বেশি পূর্বে বাতিল করলে: বুকিংয়ের ১০০% সম্পূর্ণ অর্থ ফেরত।",
+    termsSec4Slab2: "নির্ধারিত সময়ের ৩ থেকে ১২ ঘণ্টা পূর্বে বাতিল করলে: বুকিংয়ের ৫০% অর্থ ফেরত।",
+    termsSec4Slab3: "নির্ধারিত সময়ের ৩ ঘণ্টার কম সময়ে বাতিল করলে: কোনো অর্থ ফেরত দেওয়া হবে না (বুকিংয়ের অর্থ বাজেয়াপ্ত হবে)।",
+    termsSec4NoShowClientTitle: "ক্লায়েন্ট অনুপস্থিতি (No-Show):",
+    termsSec4NoShowClientDesc: "যদি কোনো ক্লায়েন্ট পূর্ববর্তী বাতিলকরণ ছাড়াই নির্ধারিত সময়ে নির্দিষ্ট স্থানে উপস্থিত হতে ব্যর্থ হন (এবং স্টার্ট ওটিপি যাচাই না হয়), তবে কোনো রিফান্ড দেওয়া হবে না এবং সঙ্গীর ক্ষতিপূরণ হিসেবে অর্থ বাজেয়াপ্ত হবে। বারবার অনুপস্থিতির ফলে অ্যাকাউন্ট স্থগিত হতে পারে।",
+    termsSec4NoShowCompTitle: "সঙ্গীর অনুপস্থিতির জরিমানা ও ১০০% রিফান্ড:",
+    termsSec4NoShowCompDesc: "যদি কোনো সঙ্গী যুক্তিসঙ্গত কারণ ছাড়া নির্ধারিত সময়ে নির্দিষ্ট বুকিং স্থানে পৌঁছাতে ব্যর্থ হন:",
+    termsSec4NoShowCompItem1: "১. ক্লায়েন্ট অবিলম্বে বুকিংয়ের সম্পূর্ণ ১০০% রিফান্ড ফেরত পাবেন।",
+    termsSec4NoShowCompItem2: "২. সঙ্গীর বিরুদ্ধে আর্থিক জরিমানা (ওয়ালেট বা ভবিষ্যৎ পেআউট থেকে কর্তন) এবং/অথবা অ্যাকাউন্ট সাময়িক বা স্থায়ীভাবে স্থগিতের ব্যবস্থা নেওয়া হবে।",
+    termsSec4EarlyEndTitle: "সময়ের পূর্বে প্রস্থান বা অসন্তুষ্টি:",
+    termsSec4EarlyEndDesc: "পারস্পরিক সম্মতি বা ক্লায়েন্টের ইচ্ছায় নির্ধারিত সময়ের আগে সেশন সমাপ্ত হলে কোনো আংশিক রিফান্ড প্রযোজ্য হবে না। তবে কোনো অসদাচরণ বা নিয়ম লঙ্ঘনের কারণে সেশন বন্ধ হলে রিফান্ডের যোগ্যতা নির্ধারণে সাপোর্ট টিম বিষয়টি তদন্ত করবে।",
+    termsSec4TechErrorsTitle: "প্রযুক্তিগত বা প্ল্যাটফর্ম ত্রুটি:",
+    termsSec4TechErrorsDesc: "নেটওয়ার্ক বা গেটওয়ে ব্যর্থতার কারণে অর্থ কেটে নেওয়া হলেও বুকিং নিশ্চিত না হলে, ৪৮ ঘণ্টার মধ্যে পুরো অর্থ স্বয়ংক্রিয়ভাবে ফেরত দেওয়া হবে।",
+    termsSec4TimelinesTitle: "রিফান্ড প্রক্রিয়ার সময়সীমা:",
+    termsSec4TimelinesDesc: "অনুমোদিত রিফান্ড অবিলম্বে শুরু করা হয় এবং মূল পেমেন্ট মাধ্যমে জমা হয়:",
+    termsSec4TimelineUpi: "ইউপিআই (UPI): ১–৫ কার্যদিবস",
+    termsSec4TimelineNb: "নেট ব্যাংকিং (Net Banking): ৩–৫ কার্যদিবস",
+    termsSec4TimelineCards: "ক্রেডিট / ডেবিট কার্ড: ৫–৭ কার্যদিবস",
+    termsSec4NonRefundTitle: "নন-রিফান্ডেবল আইটেম:",
+    termsSec4NonRefundDesc: "ওয়ান-টাইম প্রোফাইল ভেরিফিকেশন ফি বা প্রিমিয়াম মেম্বারশিপ ফি (প্রযোজ্য ক্ষেত্রে) ভেরিফিকেশন প্রক্রিয়া শুরু হওয়ার পর অ-ফেরতযোগ্য।",
+    termsSec4SupportTitle: "রিফান্ড সহায়তার জন্য যোগাযোগ:",
+    termsSec4SupportDesc: "যেকোনো বাতিল বা রিফান্ড সংক্রান্ত প্রশ্নের জন্য আমাদের সহায়তা টিমের সাথে Support@pairuptoday.com-এ যোগাযোগ করুন।",
+
+    termsSec5Title: "৫. নিরাপত্তা ও আচরণবিধি (Safety & Code of Conduct)",
+    termsSec5P1Title: "শুধুমাত্র সার্বজনীন স্থান:",
+    termsSec5P1Desc: "সরাসরি সমস্ত সাক্ষাৎ অবশ্যই নিরাপদ ও সার্বজনীন স্থানে (যেমন ক্যাফে, রেস্তোরাঁ, মল, পার্ক, পাবলিক ইভেন্ট) হতে হবে। ব্যক্তিগত বাড়ি, হোটেল রুম বা নির্জন স্থানে সাক্ষাৎ কঠোরভাবে নিষিদ্ধ।",
+    termsSec5P2Title: "পারস্পরিক শ্রদ্ধা:",
+    termsSec5P2Desc: "উভয় পক্ষকেই শ্রদ্ধাশীল আচরণ বজায় রাখতে হবে। হয়রানি, আপত্তিকর ভাষা, নেশাগ্রস্ত থাকা বা অনাকাঙ্ক্ষিত শারীরিক স্পর্শের কারণে অবিলম্বে সেশন সমাপ্ত হবে এবং স্থায়ী নিষেধাজ্ঞা জারি করা হবে।",
+    termsSec5P3Title: "জরুরি প্রস্থান (Emergency Exit):",
+    termsSec5P3Desc: "ক্লায়েন্ট প্ল্যাটোনিক নীতি লঙ্ঘন করলে বা অনুপযুক্ত আচরণ করলে একজন সঙ্গী তাৎক্ষণিকভাবে সেশন শেষ করতে পারবেন এবং এতে তাদের উপার্জিত পারিশ্রমিক বাতিল হবে না (আমাদের তদন্ত সাপেক্ষে)।",
+
+    termsSec6Title: "৬. ডেটা গোপনীয়তা ও তথ্য নিরাপত্তা",
+    termsSec6P1Title: "ব্যক্তিগত তথ্যের কঠোর গোপনীয়তা:",
+    termsSec6P1Desc: "ক্লায়েন্ট এবং সঙ্গীদের সংবেদনশীল ব্যক্তিগত ও আর্থিক তথ্য—সরকারি আইডি প্রুফ, ফোন নম্বর, ইমেইল এবং ব্যাংক বিবরণী—আমাদের নিরাপত্তা ব্যবস্থার অধীনে কঠোরভাবে গোপন ও এনক্রিপ্ট করা থাকে।",
+    termsSec6P2Title: "অননুমোদিত তথ্য প্রকাশ নয়:",
+    termsSec6P2Desc: "আমরা অন্য কোনো ব্যবহারকারী বা অননুমোদিত তৃতীয় পক্ষের কাছে আপনার ব্যক্তিগত বা আর্থিক তথ্য বিক্রি, ভাড়া বা প্রকাশ করি না। তথ্য শুধুমাত্র পরিচয় যাচাই, নিরাপদ অর্থ লেনদেন এবং আইন প্রয়োগকারী সংস্থার অনুরোধে ভারতীয় আইনের বাধ্যবাধকতা মেনে চলার জন্য ব্যবহৃত হয়।",
+
+    termsSec7Title: "৭. দায়বদ্ধতার সীমাবদ্ধতা (Limitation of Liability)",
+    termsSec7P1Title: "স্বাধীন সঙ্গী (Independent Companions):",
+    termsSec7P1Desc: "সঙ্গীরা স্বতন্ত্র ব্যক্তি, Pairup Today-এর কর্মচারী নন। আমরা শুধুমাত্র প্রযুক্তিগত সুবিধা প্রদানকারী প্ল্যাটফর্ম হিসেবে কাজ করি।",
+    termsSec7P2Title: "ব্যক্তিগত দায়িত্ব:",
+    termsSec7P2Desc: "সাক্ষাতের সময় ব্যবহারকারীরা তাদের ব্যক্তিগত নিরাপত্তা এবং মিথস্ক্রিয়ার জন্য সম্পূর্ণরূপে দায়ী। ব্যবহারকারীদের ব্যক্তিগত সম্পর্কের ফলে উদ্ভূত কোনো আঘাত, ক্ষতি বা বিরোধের জন্য Pairup Today দায়ী থাকবে না।",
+
+    termsSec8Title: "৮. প্রযোজ্য আইন ও বিচারিক এখতিয়ার",
+    termsSec8Desc: "এই শর্তাবলী ভারতের আইন অনুসারে পরিচালিত ও ব্যাখ্যা করা হবে। Pairup Today ব্যবহারের ফলে উদ্ভূত যেকোনো বিরোধ বা আইনি দাবি ভারতের উপযুক্ত আদালতের একচ্ছত্র এখতিয়ারাধীন হবে।"
   },
 
   hi: {
@@ -1501,13 +1781,13 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     footerContactWithUs: "हमसे संपर्क करें",
     footerFacebookLabel: "फ़ेसबुक",
     footerInstagramLabel: "इंस्टाग्राम",
-    footerEmailLabel: "pairuptoday@gmail.com",
+    footerEmailLabel: "Support@pairuptoday.com",
     footerEmergencyAssistance: "आपातकालीन सहायता",
     footerPoliceEmergency: "पुलिस आपातकालीन",
     footerNationalSos: "राष्ट्रीय आपातकालीन एसओएस",
     footerBuiltWithLove: "बेहतर जुड़ाव। उज्जवल पल।",
     footerCopyEmail: "ईमेल कॉपी करें",
-    footerEmailCopied: "ईमेल कॉपी किया गया: pairuptoday@gmail.com",
+    footerEmailCopied: "ईमेल कॉपी किया गया: Support@pairuptoday.com",
 
     // Common UI Actions
     closeAction: "बंद करें",
@@ -1530,6 +1810,96 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     filterByServiceLabel: "सेवा अनुसार फ़िल्टर करें",
     allServicesLabel: "सभी 36 सेवाएँ",
     viewDetailsAction: "प्रोफ़ाइल देखें",
-    additionalPhotosLabel: "अतिरिक्त छायाचित्र"
+    additionalPhotosLabel: "अतिरिक्त छायाचित्र",
+    aboutSlogan: "PairUpToday — आपका समय। आपकी पसंद। आपका साथी।",
+    hiwClientStepsDesc: "सुरक्षित रूप से अपना आदर्श साथी खोजने के लिए ७ आसान चरण।",
+    hiwClientTagline: "आपका समय। आपकी पसंद। आपका आदर्श साथी।",
+    hiwCompanionStepsDesc: "सुरक्षित रूप से ऑनबोर्ड, सक्रिय होने और ८५% शुद्ध कमाई प्राप्त करने के ६ विस्तृत चरण।",
+    hiwCompanionTagline: "आपका समय। आपका कौशल। आपकी कमाई का अवसर।",
+    safetyEmergencyHeadline: "अनुभव के दौरान किसी भी सुरक्षा चिंता के मामले में",
+    policeLabel: "पुलिस: १००",
+    sosLabel: "आपातकालीन सहायता (SOS): ११२",
+    safetyTagline: "PairUpToday — केवल साथ नहीं। एक बेहतर अनुभव।",
+
+    termsBadge: "आधिकारिक प्लेटफ़ॉर्म नीति",
+    termsTitle: "सेवा की शर्तें – Pairup Today",
+    termsLastUpdated: "अंतिम अपडेट: २३ नवंबर, २०२६",
+    termsIntro: "Pairup Today (\"हम\", \"हमारा\" या \"हमारा प्लेटफ़ॉर्म\") में आपका स्वागत है। Pairup Today एक ऐसा प्लेटफ़ॉर्म है जो ग्राहकों को सामाजिक मेलजोल, गतिविधियों और दोस्ताना संगति (\"सेवा\") के लिए सत्यापित साथियों से जोड़ता है। Pairup Today पर पंजीकरण, बुकिंग या सेवा प्रदान करके, आप सेवा की इन शर्तों (\"शर्तें\") से कानूनी रूप से बंधे होने के लिए सहमत होते हैं।",
+
+    termsSec1Title: "१. सेवा की प्रकृति एवं सख्त एस्कॉर्ट-विरोधी नीति",
+    termsSec1P1Title: "केवल दोस्ताना व सामाजिक संगति (Platonic Companionship):",
+    termsSec1P1Desc: "Pairup Today पूरी तरह से केवल निष्कपट, दोस्ताना और सामाजिक साहचर्य (जैसे भोजन करना, कार्यक्रमों में भाग लेना, बातचीत या दर्शनीय स्थलों की यात्रा) के लिए एक मंच है।",
+    termsSec1P2Title: "कोई एस्कॉर्ट या वयस्क सेवाएं नहीं:",
+    termsSec1P2Desc: "Pairup Today किसी भी प्रकार की एस्कॉर्ट, डेटिंग, यौन या वयस्क सेवाएं सख्त रूप से प्रदान नहीं करता है।",
+    termsSec1P3Title: "शून्य सहनशीलता एवं कानूनी कार्रवाई:",
+    termsSec1P3Desc: "यौन अनुग्रह की मांग, मानव तस्करी, धोखाधड़ी या किसी भी गैरकानूनी गतिविधि में शामिल होना पूरी तरह से प्रतिबंधित है। इस नियम का उल्लंघन करने वाले किसी भी उपयोगकर्ता या साथी का खाता तुरंत स्थायी रूप से बंद कर दिया जाएगा और भारत के लागू कानूनों के तहत सख्त कानूनी कार्रवाई की जाएगी।",
+
+    termsSec2Title: "२. पात्रता, स्वैच्छिक भागीदारी एवं सत्यापन",
+    termsSec2P1Title: "स्वैच्छिक पंजीकरण और स्वतंत्र इच्छा:",
+    termsSec2P1Desc: "ग्राहक और साथी दोनों पुष्टि करते हैं कि वे पूरी तरह से अपनी स्वतंत्र इच्छा और पसंद से पंजीकरण कर रहे हैं और सेवाओं की पेशकश या बुकिंग कर रहे हैं। हमने किसी को भी शामिल होने के लिए मजबूर या गुमराह नहीं किया है।",
+    termsSec2P2Title: "आयु आवश्यकता:",
+    termsSec2P2Desc: "Pairup Today का उपयोग करने के लिए ग्राहक और साथी दोनों की आयु कम से कम १८ वर्ष होनी चाहिए।",
+    termsSec2P3Title: "अनिवार्य सत्यापन:",
+    termsSec2P3Desc: "अनुरोध किए जाने पर उपयोगकर्ताओं को सटीक व्यक्तिगत विवरण और वैध सरकारी पहचान पत्र (ID Proof) प्रस्तुत करना होगा। नकली प्रोफाइल को स्थायी रूप से प्रतिबंधित कर दिया जाएगा।",
+
+    termsSec3Title: "३. बुकिंग, भुगतान एवं प्लेटफ़ॉर्म शुल्क (१५% कमीशन)",
+    termsSec3P1Title: "ग्राहक भुगतान:",
+    termsSec3P1Desc: "सत्र की पुष्टि के लिए ग्राहकों को Pairup Today प्लेटफ़ॉर्म के माध्यम से पूरी बुकिंग राशि का अग्रिम भुगतान करना होगा।",
+    termsSec3P2Title: "साथी का भुगतान और १५% प्लेटफ़ॉर्म शुल्क:",
+    termsSec3P2Desc: "हम साथी द्वारा अर्जित कुल बुकिंग राशि में से १५% प्लेटफ़ॉर्म सेवा शुल्क काटते हैं। बुकिंग सफलतापूर्वक पूरी होने पर शेष ८५% साथी के पंजीकृत भुगतान खाते में जमा कर दिया जाएगा।",
+    termsSec3P3Title: "प्लेटफ़ॉर्म से बाहर कोई लेन-देन नहीं:",
+    termsSec3P3Desc: "सभी बुकिंग और भुगतान हमारे ऐप के भीतर ही होने चाहिए। प्लेटफ़ॉर्म को बायपास करके नकद या सीधे पैसे का लेन-देन इन शर्तों का उल्लंघन है और इसके परिणामस्वरूप खाता निलंबित कर दिया जाएगा।",
+    termsSec3P4Title: "गतिविधि के खर्च:",
+    termsSec3P4Desc: "जब तक परस्पर सहमति न हो, व्यक्तिगत मुलाकात के दौरान ग्राहक अपने स्वयं के खर्चों (भोजन, टिकट, यात्रा) के लिए जिम्मेदार होंगे।",
+
+    termsSec4Title: "४. रिफंड एवं रद्दीकरण नीति (Refund & Cancellation Policy)",
+    termsSec4Intro: "हम समझते हैं कि योजनाएं अप्रत्याशित रूप से बदल सकती हैं। Pairup Today पर बुकिंग रद्दीकरण और रिफंड को नियंत्रित करने वाले नियम नीचे दिए गए हैं:",
+    termsSec4ClientTitle: "ग्राहक रद्दीकरण नियम:",
+    termsSec4ClientDesc: "आप निर्धारित समय से पहले निम्नलिखित रिफंड स्लैब के आधार पर अपनी बुकिंग रद्द कर सकते हैं:",
+    termsSec4Slab1: "निर्धारित समय से १२ घंटे से अधिक पहले: १००% पूरा रिफंड वापस।",
+    termsSec4Slab2: "निर्धारित समय से ३ से १२ घंटे पहले: बुकिंग राशि का ५०% रिफंड।",
+    termsSec4Slab3: "निर्धारित समय से ३ घंटे से कम पहले: कोई रिफंड नहीं (बुकिंग राशि जब्त होगी)।",
+    termsSec4NoShowClientTitle: "ग्राहक अनुपस्थिति (No-Show):",
+    termsSec4NoShowClientDesc: "यदि कोई ग्राहक बिना पूर्व सूचना के निर्धारित समय पर नियत स्थान पर पहुंचने में विफल रहता है (और स्टार्ट ओटीपी सत्यापित नहीं होता है), तो कोई रिफंड नहीं दिया जाएगा और साथी को मुआवजा देने के लिए राशि जब्त कर ली जाएगी। बार-बार अनुपस्थिति से खाता निलंबित हो सकता है।",
+    termsSec4NoShowCompTitle: "साथी की अनुपस्थिति पर जुर्माना एवं १००% रिफंड:",
+    termsSec4NoShowCompDesc: "यदि साथी बिना किसी उचित कारण के निर्धारित समय पर बुकिंग स्थान पर पहुंचने में विफल रहता है:",
+    termsSec4NoShowCompItem1: "१. ग्राहक को तुरंत बुकिंग राशि का १००% पूरा रिफंड मिलेगा।",
+    termsSec4NoShowCompItem2: "२. साथी पर वित्तीय जुर्माना (वॉलेट या भविष्य के भुगतान से कटौती) और/या खाता निलंबन की कार्रवाई की जाएगी।",
+    termsSec4EarlyEndTitle: "समय से पहले समाप्ति या असंतोष:",
+    termsSec4EarlyEndDesc: "यदि कोई सत्र आपसी सहमति से या ग्राहक की प्राथमिकता के कारण निर्धारित अवधि से पहले समाप्त होता है, तो कोई आंशिक रिफंड नहीं दिया जाएगा। यदि किसी दुर्व्यवहार या नियम उल्लंघन के कारण सत्र समाप्त होता है, तो रिफंड पात्रता तय करने से पहले सहायता टीम द्वारा जांच की जाएगी।",
+    termsSec4TechErrorsTitle: "तकनीकी या प्लेटफ़ॉर्म त्रुटियां:",
+    termsSec4TechErrorsDesc: "यदि बैंक खाते से राशि कट जाती है लेकिन नेटवर्क विफलता के कारण बुकिंग की पुष्टि नहीं होती है, तो पूरी राशि ४८ घंटों के भीतर स्वचालित रूप से वापस कर दी जाएगी।",
+    termsSec4TimelinesTitle: "रिफंड प्रक्रिया की समयसीमा:",
+    termsSec4TimelinesDesc: "स्वीकृत रिफंड तुरंत शुरू किए जाते हैं और मूल भुगतान माध्यम में वापस जमा किए जाते हैं:",
+    termsSec4TimelineUpi: "यूपीआई (UPI): १–५ कार्य दिवस",
+    termsSec4TimelineNb: "नेट बैंकिंग (Net Banking): ३–५ कार्य दिवस",
+    termsSec4TimelineCards: "क्रेडिट / डेबिट कार्ड: ५–७ कार्य दिवस",
+    termsSec4NonRefundTitle: "गैर-वापसी योग्य वस्तुएं:",
+    termsSec4NonRefundDesc: "सत्यापन प्रक्रिया शुरू होने के बाद एकमुश्त प्रोफ़ाइल सत्यापन शुल्क या प्रीमियम सदस्यता शुल्क गैर-वापसी योग्य हैं।",
+    termsSec4SupportTitle: "रिफंड सहायता के लिए संपर्क:",
+    termsSec4SupportDesc: "किसी भी रद्दीकरण या रिफंड प्रश्न के लिए, हमारी सहायता टीम से Support@pairuptoday.com पर संपर्क करें।",
+
+    termsSec5Title: "५. सुरक्षा एवं आचार संहिता (Safety & Code of Conduct)",
+    termsSec5P1Title: "केवल सार्वजनिक स्थान:",
+    termsSec5P1Desc: "सभी व्यक्तिगत मुलाकातें सुरक्षित और सार्वजनिक स्थानों (जैसे कैफे, रेस्तरां, मॉल, पार्क, सार्वजनिक कार्यक्रम) पर ही होनी चाहिए। निजी घरों, होटल के कमरों या सुनसान क्षेत्रों में मिलना सख्त वर्जित है।",
+    termsSec5P2Title: "आपसी सम्मान:",
+    termsSec5P2Desc: "दोनों पक्षों को सम्मानजनक व्यवहार बनाए रखना चाहिए। उत्पीड़न, अभद्र भाषा, नशा या अवांछित शारीरिक संपर्क के कारण सत्र तुरंत समाप्त हो जाएगा और स्थायी प्रतिबंध लगाया जाएगा।",
+    termsSec5P3Title: "आपातकालीन निकास (Emergency Exit):",
+    termsSec5P3Desc: "यदि ग्राहक प्लेटोनिक नीति का उल्लंघन करता है या अनुचित व्यवहार करता है, तो साथी तुरंत सत्र समाप्त कर सकता है और उसका भुगतान जब्त नहीं होगा (जांच के अधीन)।",
+
+    termsSec6Title: "६. डेटा गोपनीयता एवं सूचना सुरक्षा",
+    termsSec6P1Title: "व्यक्तिगत डेटा की सख्त गोपनीयता:",
+    termsSec6P1Desc: "ग्राहकों और साथियों द्वारा प्रदान की गई सभी संवेदनशील व्यक्तिगत और वित्तीय जानकारी—सरकारी आईडी प्रमाण, फोन नंबर, ईमेल और बैंक विवरण—हमारे सुरक्षा प्रोटोकॉल के तहत गोपनीय और एन्क्रिप्टेड रखी जाती है।",
+    termsSec6P2Title: "कोई अनधिकृत प्रकटीकरण नहीं:",
+    termsSec6P2Desc: "हम अन्य उपयोगकर्ताओं या अनधिकृत तीसरे पक्षों को आपका व्यक्तिगत विवरण नहीं बेचते या प्रदर्शित नहीं करते हैं। जानकारी का उपयोग केवल पहचान सत्यापन, सुरक्षित भुगतान और कानून प्रवर्तन आवश्यकताओं के लिए किया जाता है।",
+
+    termsSec7Title: "७. देयता की सीमा (Limitation of Liability)",
+    termsSec7P1Title: "स्वतंत्र साथी (Independent Companions):",
+    termsSec7P1Desc: "साथी स्वतंत्र व्यक्ति हैं, Pairup Today के कर्मचारी नहीं। हम केवल एक प्रौद्योगिकी सुविधा प्रदाता के रूप में कार्य करते हैं।",
+    termsSec7P2Title: "व्यक्तिगत जिम्मेदारी:",
+    termsSec7P2Desc: "मुलाकात के दौरान उपयोगकर्ता अपनी व्यक्तिगत सुरक्षा और बातचीत के लिए पूरी तरह जिम्मेदार हैं। उपयोगकर्ताओं के बीच बातचीत से उत्पन्न किसी भी चोट, हानि या विवाद के लिए Pairup Today उत्तरदायी नहीं है।",
+
+    termsSec8Title: "८. शासी कानून एवं क्षेत्राधिकार",
+    termsSec8Desc: "ये शर्तें भारत के कानूनों के अनुसार शासित और परिभाषित की जाएंगी। Pairup Today के उपयोग से उत्पन्न होने वाला कोई भी विवाद भारत की सक्षम अदालतों के अनन्य क्षेत्राधिकार के अधीन होगा।"
   }
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CreditCard, Clock, RotateCcw, AlertTriangle, ShieldCheck, Mail, CheckCircle2 } from 'lucide-react';
+import { CreditCard, Clock, RotateCcw, AlertTriangle, ShieldCheck, Mail, CheckCircle2, XCircle } from 'lucide-react';
 
 export const RefundPolicyPage: React.FC = () => {
   return (
@@ -10,16 +10,16 @@ export const RefundPolicyPage: React.FC = () => {
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold mb-4 border border-emerald-500/20">
             <RotateCcw className="w-3.5 h-3.5" />
-            48-Hour Escrow Protection
+            Official Refund &amp; Cancellation Policy
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-100 tracking-tight mb-4">
-            Refund &amp; Cancellation Policy – PairUpToday
+            Refund &amp; Cancellation Policy – Pairup Today
           </h1>
           <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto">
-            Last Updated: November 22, 2026
+            Last Updated: November 23, 2026
           </p>
           <p className="text-xs sm:text-sm text-slate-300 max-w-3xl mx-auto mt-4 leading-relaxed bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-            PairUpToday operates an automated 48-Hour Escrow Protection model for all paid bookings. Client payments are securely held in escrow until the meeting is completed and validated via cryptographic Start &amp; Finish OTPs. Below is our transparent cancellation and refund process.
+            We understand that plans can change unexpectedly. Pairup Today operates a transparent, fair refund and cancellation policy for both clients and companions.
           </p>
         </div>
 
@@ -33,67 +33,88 @@ export const RefundPolicyPage: React.FC = () => {
                 <Clock className="w-5 h-5" />
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-slate-100">
-                1. Client Cancellation Tiers
+                1. Client Cancellation Slabs
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm text-slate-300">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs sm:text-sm text-slate-300">
               <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
                 <div className="flex items-center gap-2 font-bold text-emerald-400 mb-1">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>More than 2 Hours Before Slot</span>
+                  <span>More than 12 Hours</span>
                 </div>
                 <p className="text-slate-400 leading-relaxed">
-                  <strong className="text-slate-200">100% Full Refund:</strong> If you cancel your booking at least 2 hours before the scheduled start time, the entire booking fee is refunded with zero cancellation penalty.
+                  <strong className="text-slate-200">100% Full Refund:</strong> Cancel more than 12 hours before the scheduled session start time for a 100% full refund of the booking amount.
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
                 <div className="flex items-center gap-2 font-bold text-amber-400 mb-1">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>Within 2 Hours of Scheduled Slot</span>
+                  <span>3 to 12 Hours</span>
                 </div>
                 <p className="text-slate-400 leading-relaxed">
-                  <strong className="text-slate-200">Partial Companion Compensation:</strong> Late cancellations within 2 hours incur a 30% slot reservation fee paid directly to the companion to compensate for reserved travel and preparation time. The remaining 70% is refunded to your source payment method.
+                  <strong className="text-slate-200">50% Refund:</strong> Cancel between 3 and 12 hours before the scheduled time to receive a 50% refund of the booking amount.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                <div className="flex items-center gap-2 font-bold text-rose-400 mb-1">
+                  <XCircle className="w-4 h-4 shrink-0" />
+                  <span>Less than 3 Hours</span>
+                </div>
+                <p className="text-slate-400 leading-relaxed">
+                  <strong className="text-slate-200">No Refund (0%):</strong> Cancellations made less than 3 hours prior to the scheduled start time are non-refundable (the booking amount is forfeited).
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Section 2: Companion Cancellation & No-Show */}
+          {/* Section 2: Client & Companion No-Show */}
           <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 hover:border-emerald-500/30 transition-colors">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-slate-100">
-                2. Companion Cancellation or No-Show
+                2. No-Show Policies
               </h2>
             </div>
             <ul className="space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed pl-2 sm:pl-4">
               <li className="flex items-start gap-2">
                 <span className="text-rose-400 font-bold">•</span>
-                <span><strong className="text-slate-100">100% Immediate Refund to Client:</strong> If a companion cancels the booking or fails to arrive at the agreed location within 15 minutes of the start time without mutual agreement, the client receives an automatic 100% full refund.</span>
+                <span><strong className="text-slate-100">Client No-Show:</strong> If a client fails to arrive at the designated booking location at the scheduled time without prior cancellation (and the Start OTP is not verified), no refund will be issued, and the amount will be forfeited to compensate the companion. Repeated no-shows may lead to account suspension.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-rose-400 font-bold">•</span>
-                <span><strong className="text-slate-100">Companion Reliability Penalty:</strong> Repeated cancellations or unexcused no-shows by companions result in profile suspension and forfeiture of platform membership privileges.</span>
+                <span><strong className="text-slate-100">Companion No-Show Penalty &amp; Full Refund:</strong> If the companion fails to arrive at the designated booking location at the scheduled time without reasonable justification: (1) The client will immediately receive a 100% full refund of the booking amount. (2) The companion will be subject to monetary penalties (deducted from wallet/future payouts) and/or temporary or permanent account suspension.</span>
               </li>
             </ul>
           </div>
 
-          {/* Section 3: 48-Hour Escrow & Dispute Resolution */}
+          {/* Section 3: Early Departure & Platform Errors */}
           <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 hover:border-emerald-500/30 transition-colors">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
                 <RotateCcw className="w-5 h-5" />
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-slate-100">
-                3. 48-Hour Escrow Lock &amp; Dispute Period
+                3. Early Departure &amp; Technical Errors
               </h2>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Companion payouts are locked in escrow for 48 hours following completion of the booking. If any safety violation, improper conduct, early departure, or service discrepancy occurred, either party can file an incident report from their dashboard within this 48-hour window. Our Trust &amp; Safety team investigates all evidence and mediates fair resolution or refund prior to releasing funds.
-            </p>
+            <ul className="space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed pl-2 sm:pl-4">
+              <li className="flex items-start gap-2">
+                <span className="text-sky-400 font-bold">•</span>
+                <span><strong className="text-slate-100">Early Departure or Dissatisfaction:</strong> If a session ends earlier than the booked duration upon mutual agreement or due to client preference, no partial refund will be provided. If ended due to misconduct or rule violation, the incident will be reviewed by support before determining refund eligibility.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-sky-400 font-bold">•</span>
+                <span><strong className="text-slate-100">Technical or Platform Errors:</strong> If an amount is debited but the booking is not confirmed due to network or gateway failure, the full amount will be automatically refunded within 48 hours.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-sky-400 font-bold">•</span>
+                <span><strong className="text-slate-100">Non-Refundable Items:</strong> One-time profile verification fees or premium membership charges (if applicable) are non-refundable once the verification process has begun.</span>
+              </li>
+            </ul>
           </div>
 
           {/* Section 4: Refund Processing Timelines */}
@@ -106,14 +127,21 @@ export const RefundPolicyPage: React.FC = () => {
                 4. Refund Processing Timelines
               </h2>
             </div>
-            <ul className="space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed pl-2 sm:pl-4">
-              <li className="flex items-start gap-2">
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-3">
+              Approved refunds are initiated immediately and credited back to the original payment source:
+            </p>
+            <ul className="space-y-2 text-xs sm:text-sm text-slate-300 leading-relaxed pl-2 sm:pl-4">
+              <li className="flex items-center gap-2">
                 <span className="text-amber-400 font-bold">•</span>
-                <span>Refunds are initiated back to the original payment source (UPI, Debit Card, Credit Card, Net Banking) via our payment gateway partner Razorpay.</span>
+                <span><strong>UPI:</strong> 1–5 business days</span>
               </li>
-              <li className="flex items-start gap-2">
+              <li className="flex items-center gap-2">
                 <span className="text-amber-400 font-bold">•</span>
-                <span>UPI refunds typically credit within 24–48 hours. Credit card, debit card, and net banking refunds are credited within 5 to 7 business days according to your bank's clearing cycle.</span>
+                <span><strong>Net Banking:</strong> 3–5 business days</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-amber-400 font-bold">•</span>
+                <span><strong>Credit / Debit Cards:</strong> 5–7 business days</span>
               </li>
             </ul>
           </div>
@@ -125,14 +153,14 @@ export const RefundPolicyPage: React.FC = () => {
                 <Mail className="w-5 h-5" />
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-slate-100">
-                5. Refund Assistance
+                5. Contact for Refund Support
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-3">
-              Need assistance with a cancelled booking or pending refund? Our dedicated support team is available to assist you:
+              For any cancellation or refund queries, contact our dedicated support team:
             </p>
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-1 font-mono">
-              <div><strong className="text-white">Email:</strong> support@pairuptoday.com</div>
+              <div><strong className="text-white">Email:</strong> Support@pairuptoday.com</div>
               <div><strong className="text-white">Subject Format:</strong> "Refund Request - [Booking Code]"</div>
               <div><strong className="text-white">Response Time:</strong> Within 12–24 business hours</div>
             </div>

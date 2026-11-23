@@ -22,7 +22,7 @@ export function openExternalUrl(url: string): void {
   }
 }
 
-export function openMailtoUri(email: string = 'pairuptoday@gmail.com'): boolean {
+export function openMailtoUri(email: string = 'Support@pairuptoday.com'): boolean {
   const mailtoUri = `mailto:${encodeURIComponent(email)}`;
   try {
     const isCapacitor = typeof (window as any).Capacitor !== 'undefined' && 

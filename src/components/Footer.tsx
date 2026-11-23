@@ -13,7 +13,7 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentPage }) => {
 
   const officialFacebookUrl = 'https://www.facebook.com/share/1FEG5wvcBF/';
   const officialInstagramUrl = 'https://www.instagram.com/pairuptoday?exln=MXBtNXhreTBnMWhuNA==';
-  const officialEmail = 'support@pairuptoday.com';
+  const officialEmail = 'Support@pairuptoday.com';
 
   const handleFacebookClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();

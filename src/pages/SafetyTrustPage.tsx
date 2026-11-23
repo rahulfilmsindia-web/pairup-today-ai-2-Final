@@ -141,7 +141,7 @@ export const SafetyTrustPage: React.FC = () => {
                 {t.safetyEmergencyTitle}
               </div>
               <h4 className="text-lg font-bold text-slate-100">
-                In case of any safety concern during an experience
+                {t.safetyEmergencyHeadline}
               </h4>
               <p className="text-xs text-slate-300 mt-1">
                 {t.safetyEmergencyDesc}
@@ -153,13 +153,13 @@ export const SafetyTrustPage: React.FC = () => {
                 href="tel:100"
                 className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-mono font-bold text-sm shadow-lg shadow-rose-600/30 transition-all flex items-center gap-2"
               >
-                <span>Police: 100</span>
+                <span>{t.policeLabel}</span>
               </a>
               <a
                 href="tel:112"
                 className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-bold text-sm shadow-lg shadow-amber-500/30 transition-all flex items-center gap-2"
               >
-                <span>SOS: 112</span>
+                <span>{t.sosLabel}</span>
               </a>
             </div>
           </div>
@@ -168,7 +168,7 @@ export const SafetyTrustPage: React.FC = () => {
         {/* EXACT Tagline */}
         <div className="p-8 rounded-2xl bg-slate-900/50 border border-slate-800 text-center">
           <div className="text-xl sm:text-2xl font-extrabold bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
-            PairUpToday — More Than Company. A Better Experience.
+            {t.safetyTagline}
           </div>
         </div>
 

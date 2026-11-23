@@ -153,7 +153,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onExplore, onJoinCompanion
           </div>
 
           <div className="pt-6 mt-8 border-t border-slate-800 text-base sm:text-lg font-bold bg-gradient-to-r from-amber-300 via-pink-400 to-sky-400 bg-clip-text text-transparent">
-            PairUpToday — Your Time. Your Choice. Your Companion.
+            {t.aboutSlogan}
           </div>
         </div>
 

@@ -653,7 +653,7 @@ await runScenario(24, 'Mobile Viewport Meta, Zero-Horizontal Scroll & Contact Wi
   assert(footerContent.includes('Contact With Us'), 'Footer must contain dedicated "Contact With Us" heading');
   assert(footerContent.includes('https://www.facebook.com/share/1FEG5wvcBF/') || footerContent.includes('https://www.facebook.com/share/1FEG5wvcF/'), 'Footer must contain approved Facebook URL');
   assert(footerContent.includes('https://www.instagram.com/pairuptoday?exln=MXBtNXhreTBnMWhuNA=='), 'Footer must contain approved Instagram URL');
-  assert(footerContent.includes('support@pairuptoday.com') || footerContent.includes('mailto:pairuptoday@gmail.com'), 'Footer must contain approved official email link');
+  assert(footerContent.includes('Support@pairuptoday.com') || footerContent.includes('support@pairuptoday.com'), 'Footer must contain approved official email link');
 
   // Verify exact 24 approved services
   const servicesPath = path.join(rootDir, 'src/constants/services.ts');
@@ -733,6 +733,14 @@ await runScenario(28, 'Multilingual Localization Integrity across English, Benga
   // Check Hindi translations
   assert(transContent.includes('भारतभर में सत्यापित साथी'), 'Hindi title present');
   assert(transContent.includes('यह प्रोफ़ाइल वर्तमान में बुकिंग के लिए उपलब्ध नहीं है।'), 'Hindi unavailable message present');
+
+  // Verify Multilingual Legal & Terms of Service Coverage
+  assert(transContent.includes('termsSec4Title'), 'Terms Section 4 key defined');
+  assert(transContent.includes('Support@pairuptoday.com'), 'Support@pairuptoday.com configured across translations');
+  assert(transContent.includes('শর্তাবলী ও নীতিমালা – Pairup Today'), 'Bengali Terms of Service title present');
+  assert(transContent.includes('सेवा की शर्तें – Pairup Today'), 'Hindi Terms of Service title present');
+  assert(transContent.includes('নির্ধারিত সময়ের ১২ ঘণ্টার বেশি পূর্বে বাতিল করলে'), 'Bengali Refund 12hr slab present');
+  assert(transContent.includes('निर्धारित समय से १२ घंटे से अधिक पहले'), 'Hindi Refund 12hr slab present');
 });
 
 // 29. Anusha Mitra Profile Update & Complete-Photo Quick View Verification

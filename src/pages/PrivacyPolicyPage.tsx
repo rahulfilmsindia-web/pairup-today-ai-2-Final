@@ -150,7 +150,7 @@ export const PrivacyPolicyPage: React.FC = () => {
             </p>
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-1 font-mono">
               <div><strong className="text-white">Organization:</strong> PairUpToday</div>
-              <div><strong className="text-white">Email:</strong> support@pairuptoday.com</div>
+              <div><strong className="text-white">Email:</strong> Support@pairuptoday.com</div>
               <div><strong className="text-white">Jurisdiction:</strong> Kolkata, West Bengal, India</div>
             </div>
           </div>

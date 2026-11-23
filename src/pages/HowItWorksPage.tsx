@@ -137,7 +137,7 @@ export const HowItWorksPage: React.FC<HowItWorksPageProps> = ({
                   {t.hiwClientStepsTitle}
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  7 straightforward steps to finding your ideal companion safely.
+                  {t.hiwClientStepsDesc}
                 </p>
               </div>
               <button
@@ -172,7 +172,7 @@ export const HowItWorksPage: React.FC<HowItWorksPageProps> = ({
             {/* EXACT Client Tagline */}
             <div className="mt-8 p-6 rounded-xl bg-gradient-to-r from-amber-950/20 via-slate-900 to-amber-950/20 border border-amber-500/20 text-center">
               <span className="text-base sm:text-lg font-bold text-amber-300 tracking-wide">
-                Your time. Your choice. Your perfect companion.
+                {t.hiwClientTagline}
               </span>
             </div>
           </div>
@@ -187,7 +187,7 @@ export const HowItWorksPage: React.FC<HowItWorksPageProps> = ({
                   {t.hiwCompanionStepsTitle}
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  6 comprehensive steps to onboard, activate, and receive 85% net earnings safely.
+                  {t.hiwCompanionStepsDesc}
                 </p>
               </div>
               <button
@@ -222,7 +222,7 @@ export const HowItWorksPage: React.FC<HowItWorksPageProps> = ({
             {/* EXACT Companion Tagline */}
             <div className="mt-8 p-6 rounded-xl bg-gradient-to-r from-pink-950/20 via-slate-900 to-pink-950/20 border border-pink-500/20 text-center">
               <span className="text-base sm:text-lg font-bold text-pink-400 tracking-wide">
-                Your time. Your skills. Your earning opportunity.
+                {t.hiwCompanionTagline}
               </span>
             </div>
           </div>
