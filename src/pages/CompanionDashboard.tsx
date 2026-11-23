@@ -1893,15 +1893,16 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                if (window.history.length > 1) {
-                  window.history.back();
+              onClick={async () => {
+                await logout();
+                if (onNavigateToPage) {
+                  onNavigateToPage('home');
                 } else {
                   window.location.href = '/';
                 }
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold shadow-sm active:scale-95"
-              title="Go back to previous page"
+              title="Return to Home"
               aria-label="Back"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-pink-400" />
@@ -1915,13 +1916,29 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               Companion Portal
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={handleSwitchToClientWithCheck}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 hover:text-white transition-all text-xs font-semibold shadow-sm active:scale-95"
+              title="Switch to Client Mode"
+            >
+              <UserCheck className="w-3.5 h-3.5 text-amber-300" />
+              <span>Client Mode ⇄</span>
+            </button>
             <div className="text-right hidden sm:block">
               <p className="text-xs font-semibold text-slate-200">{user?.legalName}</p>
               <p className="text-[11px] text-slate-500">{user?.phone}</p>
             </div>
             <button
-              onClick={() => { if (window.confirm('Log out of PairUpToday?')) logout(); }}
+              onClick={async () => {
+                await logout();
+                if (onNavigateToPage) {
+                  onNavigateToPage('home');
+                } else {
+                  window.location.href = '/';
+                }
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -2050,15 +2067,16 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                if (window.history.length > 1) {
-                  window.history.back();
+              onClick={async () => {
+                await logout();
+                if (onNavigateToPage) {
+                  onNavigateToPage('home');
                 } else {
                   window.location.href = '/';
                 }
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold shadow-sm active:scale-95"
-              title="Go back to previous page"
+              title="Return to Home"
               aria-label="Back"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-pink-400" />
@@ -2072,13 +2090,29 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
               Companion Portal
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={handleSwitchToClientWithCheck}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 hover:text-white transition-all text-xs font-semibold shadow-sm active:scale-95"
+              title="Switch to Client Mode"
+            >
+              <UserCheck className="w-3.5 h-3.5 text-amber-300" />
+              <span>Client Mode ⇄</span>
+            </button>
             <div className="text-right hidden sm:block">
               <p className="text-xs font-semibold text-slate-200">{user?.legalName}</p>
               <p className="text-[11px] text-slate-500">{user?.phone}</p>
             </div>
             <button
-              onClick={() => { if (window.confirm('Log out of PairUpToday?')) logout(); }}
+              onClick={async () => {
+                await logout();
+                if (onNavigateToPage) {
+                  onNavigateToPage('home');
+                } else {
+                  window.location.href = '/';
+                }
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
