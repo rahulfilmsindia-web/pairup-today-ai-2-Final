@@ -21,6 +21,7 @@ import { AdminPortal } from './admin/AdminPortal';
 import { ServiceItem } from './constants/services';
 import { CompanionListing } from './components/CompanionListing';
 import { PartnerRecruitmentBanner } from './components/PartnerRecruitmentBanner';
+import { TrustReviewsAndFaq } from './components/TrustReviewsAndFaq';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalCompanionAlertManager } from './components/GlobalCompanionAlertManager';
 import { apiFetch } from './utils/api';
@@ -536,6 +537,7 @@ const MainAppContent: React.FC = () => {
                 }
               }}
             />
+            <TrustReviewsAndFaq />
           </>
         );
     }

@@ -15,19 +15,16 @@ export const Footer: React.FC<FooterProps> = ({ setCurrentPage }) => {
   const officialInstagramUrl = 'https://www.instagram.com/pairuptoday?exln=MXBtNXhreTBnMWhuNA==';
   const officialEmail = 'Support@pairuptoday.com';
 
-  const handleFacebookClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    openExternalUrl(officialFacebookUrl);
+  const handleFacebookClick = () => {
+    try { openExternalUrl(officialFacebookUrl); } catch { /* allow native href */ }
   };
 
-  const handleInstagramClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    openExternalUrl(officialInstagramUrl);
+  const handleInstagramClick = () => {
+    try { openExternalUrl(officialInstagramUrl); } catch { /* allow native href */ }
   };
 
-  const handleEmailClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    openMailtoUri(officialEmail);
+  const handleEmailClick = () => {
+    try { openMailtoUri(officialEmail); } catch { /* allow native href */ }
   };
 
   const handleCopyEmail = async (e: React.MouseEvent<HTMLButtonElement>) => {

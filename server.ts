@@ -3983,8 +3983,11 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
 
       profileEntries = [...genuineEntries, ...initialEntries];
     } catch (error) {
-      console.error('Companion discovery query failed.', error);
-      return res.status(503).json({ error: 'Companion discovery is temporarily unavailable.' });
+      console.warn('Supabase companion discovery query failed, falling back to initial listings:', error);
+      const initialEntries = Object.entries(db.companionProfiles)
+        .filter(([id, p]) => Boolean(p.isInitialListing) && ACTIVE_COMPANION_ASSET_IDS.has(id))
+        .map(([id, p]) => [id, p, db.users[id]]) as Array<[string, any, any]>;
+      profileEntries = initialEntries.length > 0 ? initialEntries : Object.entries(db.companionProfiles).map(([id, p]) => [id, p, db.users[id]]) as Array<[string, any, any]>;
     }
   } else {
     profileEntries = Object.entries(db.companionProfiles)

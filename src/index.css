@@ -1,16 +1,76 @@
 @import "tailwindcss";
 
+/* Universal Font & Typography Styling with Indic Script Support */
+:root {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color-scheme: dark;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Indic Script Font Support: Hind Siliguri for Bengali */
+html[lang="bn"],
+html[lang="bn"] body,
+[lang="bn"] {
+  font-family: 'Hind Siliguri', 'Plus Jakarta Sans', sans-serif !important;
+  line-height: 1.68 !important; /* Extra vertical space so Bengali vowel signs (matras) never clip */
+}
+
+/* Indic Script Font Support: Noto Sans Devanagari for Hindi */
+html[lang="hi"],
+html[lang="hi"] body,
+[lang="hi"] {
+  font-family: 'Noto Sans Devanagari', 'Plus Jakarta Sans', sans-serif !important;
+  line-height: 1.68 !important; /* Extra vertical space for Hindi top matras & conjuncts */
+}
+
+/* Strict Zero Horizontal Overflow */
 html, body {
   background-color: #020617;
   color: #f8fafc;
   min-height: 100vh;
   margin: 0;
   padding: 0;
+  width: 100%;
   max-width: 100vw;
-  overflow-x: hidden;
+  overflow-x: hidden !important;
   box-sizing: border-box;
+}
+
+#root, main {
+  max-width: 100vw;
+  overflow-x: hidden !important;
 }
 
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+/* Word Breaking & Flexible Containers for Long Indic Words */
+p, span, h1, h2, h3, h4, h5, h6, a, button, label {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+/* High-Readability Accessible Typography Sizing */
+body {
+  font-size: 15px;
+}
+
+@media (min-width: 640px) {
+  body {
+    font-size: 16px;
+  }
+}
+
+/* Smooth Scrollbar for horizontal chips */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

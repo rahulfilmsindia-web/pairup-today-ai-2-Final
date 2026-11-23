@@ -135,36 +135,29 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
             {t.navTerms}
           </button>
 
-          {/* 6. Language Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setLangDropdownOpen(!langDropdownOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900/60 hover:bg-slate-800 text-xs font-semibold text-slate-200 transition-colors"
-              aria-label={t.navLanguage}
-            >
-              <Globe className="w-3.5 h-3.5 text-sky-400" />
-              <span>{languages.find(l => l.code === language)?.label.split(' ')[0]}</span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-
-            {langDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-slate-900 border border-slate-800 rounded-lg shadow-2xl py-1 z-50">
-                {languages.map(l => (
-                  <button
-                    key={l.code}
-                    onClick={() => {
-                      setLanguage(l.code);
-                      setLangDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-slate-800 ${
-                      language === l.code ? 'text-amber-400 font-semibold bg-slate-800/50' : 'text-slate-300'
-                    }`}
-                  >
-                    {l.label}
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* Global Language Selector (1-Click Direct Pill Switcher) */}
+          <div className="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800 shadow-inner">
+            <Globe className="w-3.5 h-3.5 text-sky-400 ml-1.5 mr-1 shrink-0" />
+            <div className="flex items-center gap-1">
+              {[
+                { code: 'en' as Language, label: 'EN' },
+                { code: 'bn' as Language, label: 'বাংলা' },
+                { code: 'hi' as Language, label: 'हिन्दी' }
+              ].map(l => (
+                <button
+                  key={l.code}
+                  type="button"
+                  onClick={() => setLanguage(l.code)}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    language === l.code
+                      ? 'bg-amber-400 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* If NOT authenticated: Unified Sign In Button */}
@@ -284,20 +277,31 @@ export const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) =
             {t.navTerms}
           </button>
 
-          <div className="py-2 border-y border-slate-800/80">
-            <label className="text-xs text-slate-400 block mb-1.5 font-medium">{t.navLanguage}</label>
-            <div className="flex gap-2">
-              {languages.map(l => (
+          <div className="py-2.5 border-y border-slate-800/80">
+            <div className="flex items-center gap-1.5 mb-2 text-xs text-slate-400 font-semibold">
+              <Globe className="w-3.5 h-3.5 text-sky-400" />
+              <span>{t.navLanguage || 'Language / ভাষা / भाषा'}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { code: 'en' as Language, label: 'English' },
+                { code: 'bn' as Language, label: 'বাংলা' },
+                { code: 'hi' as Language, label: 'हिन्दी' }
+              ].map(l => (
                 <button
                   key={l.code}
-                  onClick={() => setLanguage(l.code)}
-                  className={`px-3 py-1.5 text-xs rounded-lg border min-h-[36px] transition-colors ${
+                  type="button"
+                  onClick={() => {
+                    setLanguage(l.code);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`py-2 text-xs rounded-xl border text-center transition-all font-bold cursor-pointer ${
                     language === l.code
-                      ? 'border-amber-400 text-amber-400 bg-amber-400/10 font-bold'
-                      : 'border-slate-700 text-slate-400 hover:text-slate-200'
+                      ? 'border-amber-400 bg-amber-400 text-slate-950 shadow-md'
+                      : 'border-slate-800 bg-slate-900 text-slate-300 hover:text-white'
                   }`}
                 >
-                  {l.label.split(' ')[0]}
+                  {l.label}
                 </button>
               ))}
             </div>

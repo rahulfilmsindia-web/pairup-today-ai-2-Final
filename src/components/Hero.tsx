@@ -20,14 +20,6 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
     <section className="relative overflow-hidden pt-10 pb-16 lg:pt-16 lg:pb-24 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
       {/* Tasteful glowing ambient background elements (Pure CSS/SVG - zero network egress) */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-tr from-pink-600/15 via-rose-500/10 to-sky-600/15 blur-[120px] rounded-full pointer-events-none -z-0" />
-      
-      {/* Floating subtle ambient heart geometry */}
-      <div className="absolute top-16 left-8 md:left-24 opacity-20 pointer-events-none animate-pulse">
-        <Heart className="w-16 h-16 text-pink-400 stroke-1" />
-      </div>
-      <div className="absolute bottom-24 right-8 md:right-32 opacity-15 pointer-events-none animate-pulse delay-700">
-        <Heart className="w-20 h-20 text-sky-400 stroke-1" />
-      </div>
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         
@@ -36,7 +28,7 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
           <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           <span>{t.heroKicker || "India's Premier Verified Companion Network"}</span>
           <span className="text-slate-600">|</span>
-          <span className="text-pink-400 font-medium">{t.heroFreeBadge || "100% Free For Clients"}</span>
+          <span className="text-amber-400 font-bold">{t.heroFreeBadge || "Zero Platform Fee for Clients"}</span>
         </div>
 
         {/* Exact Headline: "Find Your Perfect Companion, Anytime, Anywhere." */}
@@ -55,29 +47,28 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
         {/* Main CTA Section */}
         <div className="flex flex-col items-center justify-center space-y-3">
           
-          {/* Main CTA */}
+          {/* Primary CTA: Explore Verified Companions */}
           <button
-            onClick={handleCompanionCta}
-            className="group relative inline-flex items-center justify-center px-8 py-4 sm:px-10 sm:py-4 text-sm sm:text-base font-extrabold uppercase tracking-wide text-slate-950 rounded-xl bg-gradient-to-r from-amber-400 via-rose-400 to-sky-400 shadow-xl shadow-pink-500/25 transition-all duration-300 hover:shadow-pink-500/40 hover:scale-[1.03] active:scale-95 cursor-pointer"
+            onClick={onExploreCompanions}
+            className="group relative inline-flex items-center justify-center gap-2.5 px-8 py-4 sm:px-10 sm:py-4.5 text-sm sm:text-base font-extrabold uppercase tracking-wide text-slate-950 rounded-2xl bg-amber-400 hover:bg-amber-300 shadow-xl shadow-amber-400/25 transition-all duration-300 hover:shadow-amber-400/40 hover:scale-[1.03] active:scale-95 cursor-pointer"
           >
-            <span>{t.heroCta || "Join as a Companion"}</span>
+            <span>{t.heroExploreButton || "Explore Verified Companions in your City →"}</span>
           </button>
 
-          {/* Supporting Text */}
-          <p className="text-xs sm:text-sm text-slate-400 font-medium">
-            {t.heroSupportingText || "Earn up to ₹1 Lakh/month on your own schedule with zero listing fees."}
-          </p>
-
-          {/* Client Discover Button */}
-          <div className="pt-2">
+          {/* Secondary Outline CTA: Join as a Companion */}
+          <div className="pt-1">
             <button
-              onClick={onExploreCompanions}
-              className="inline-flex items-center gap-2 text-xs sm:text-sm text-slate-300 hover:text-amber-400 transition-colors py-2 px-5 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer"
+              onClick={handleCompanionCta}
+              className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-300 hover:text-white py-2.5 px-6 rounded-xl bg-slate-900/80 border border-slate-700 hover:border-slate-500 transition-all cursor-pointer"
             >
-              <span>{t.heroExploreButton || "Explore Verified Companions"}</span>
-              <ArrowRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-1 transition-transform" />
+              <span>{t.heroCta || "Join as a Companion"}</span>
             </button>
           </div>
+
+          {/* Supporting Text */}
+          <p className="text-xs sm:text-sm text-slate-400 font-medium pt-1">
+            {t.heroSupportingText || "Earn up to ₹1 Lakh/month on your own schedule with zero listing fees."}
+          </p>
         </div>
 
         {/* 4-Step "How It Works" Horizontal Strip */}
@@ -111,7 +102,7 @@ export const Hero: React.FC<HeroProps> = ({ onExploreCompanions }) => {
                 <div className="font-semibold text-slate-200 text-sm">Choose Service &amp; Companion</div>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Filter across 36 categories by city, ratings, rates, and schedule.
+                Filter across 35 categories by city, ratings, rates, and schedule.
               </p>
             </div>
 

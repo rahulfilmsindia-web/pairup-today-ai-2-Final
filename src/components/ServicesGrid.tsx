@@ -63,7 +63,7 @@ export const ServicesGrid: React.FC<ServicesGridProps> = ({ onSelectService }) =
   const { language } = useLanguage();
 
   const categoryLabels: Record<'all' | ServiceCategory, { en: string; bn: string; hi: string }> = {
-    all: { en: 'All (36)', bn: 'সব (৩৬)', hi: 'सभी (36)' },
+    all: { en: 'All (35)', bn: 'সব (৩৫)', hi: 'सभी (35)' },
     social: { en: 'Social & Entertainment', bn: 'সামাজিক ও বিনোদন', hi: 'सामाजिक एवं मनोरंजन' },
     travel: { en: 'Travel & Exploration', bn: 'ভ্রমণ ও শহর দেখা', hi: 'यात्रा एवं पर्यटन' },
     creator: { en: 'Creator & Lifestyle', bn: 'কনটেন্ট ও লাইফস্টাইল', hi: 'क्रिएटर व लाइफस्टाइल' },
@@ -210,11 +210,6 @@ export const ServicesGrid: React.FC<ServicesGridProps> = ({ onSelectService }) =
                 </>
               )}
             </button>
-            <p className="text-[11px] text-slate-500 mt-2">
-              {isExpanded 
-                ? (language === 'bn' ? '৩৫টি পরিষেবার সবকটি প্রদর্শিত হচ্ছে' : 'Displaying all 35 companion services')
-                : (language === 'bn' ? 'স্ক্রোল কমাতে শীর্ষ ৮টি জনপ্রিয় পরিষেবা দেখানো হচ্ছে' : 'Showing top 8 popular services to prevent long scrolling')}
-            </p>
           </div>
         )}
 
