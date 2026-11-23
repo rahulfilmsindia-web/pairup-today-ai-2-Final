@@ -2219,7 +2219,29 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       bookingLat: 'booking_lat',
       booking_lat: 'booking_lat',
       bookingLng: 'booking_lng',
-      booking_lng: 'booking_lng'
+      booking_lng: 'booking_lng',
+      cancellationReason: 'cancellation_reason',
+      cancellation_reason: 'cancellation_reason',
+      cancellationNote: 'cancellation_note',
+      cancellation_note: 'cancellation_note',
+      cancelledAt: 'cancelled_at',
+      cancelled_at: 'cancelled_at',
+      hoursBeforeStart: 'hours_before_start',
+      hours_before_start: 'hours_before_start',
+      refundPercentage: 'refund_percentage',
+      refund_percentage: 'refund_percentage',
+      refundAmount: 'refund_amount',
+      refund_amount: 'refund_amount',
+      refundStatus: 'refund_status',
+      refund_status: 'refund_status',
+      refundBankDetails: 'refund_bank_details',
+      refund_bank_details: 'refund_bank_details',
+      refundUtr: 'refund_utr',
+      refund_utr: 'refund_utr',
+      refundedAt: 'refunded_at',
+      refunded_at: 'refunded_at',
+      refundedByAdmin: 'refunded_by_admin',
+      refunded_by_admin: 'refunded_by_admin'
     };
     const nonDbColumns = new Set([
       'companion_accepted',
@@ -2228,7 +2250,18 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       'companion_eta_text',
       'companion_current_area',
       'last_eta_updated_at',
-      'session_otp'
+      'session_otp',
+      'cancellation_reason',
+      'cancellation_note',
+      'cancelled_at',
+      'hours_before_start',
+      'refund_percentage',
+      'refund_amount',
+      'refund_status',
+      'refund_bank_details',
+      'refund_utr',
+      'refunded_at',
+      'refunded_by_admin'
     ]);
     const rowUpdates = Object.fromEntries(
       Object.entries(updates)

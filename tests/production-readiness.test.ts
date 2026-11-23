@@ -1106,6 +1106,76 @@ await runScenario(40, 'Smart India location autocomplete component and integrati
   assert(componentSrc.includes('AbortController'), 'Must use AbortController to cancel in-flight Nominatim requests');
 });
 
+// ─────────────────────────────────────────────────────────
+// SCENARIO 41 — Automated Booking Cancellation, Refund Calculation, APITXT Bank Verification & Admin Refunds Desk
+// ─────────────────────────────────────────────────────────
+await runScenario(41, 'Automated Booking Cancellation, Refund Slabs, APITXT Bank Verification, & Admin Desk', () => {
+  // 41a. Verify Server Endpoints exist in server.ts
+  const serverSrc = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+  assert(serverSrc.includes("POST /api/bookings/:id/client-cancel") || serverSrc.includes("app.post('/api/bookings/:id/client-cancel'"), 'Server must have client cancellation endpoint');
+  assert(serverSrc.includes("GET /api/client/bank/saved") || serverSrc.includes("app.get('/api/client/bank/saved'"), 'Server must have saved bank endpoint');
+  assert(serverSrc.includes("POST /api/client/bank/verify") || serverSrc.includes("app.post('/api/client/bank/verify'"), 'Server must have bank verification endpoint');
+  assert(serverSrc.includes("GET /api/admin/refunds") || serverSrc.includes("app.get('/api/admin/refunds'"), 'Server must have admin refunds listing endpoint');
+  assert(serverSrc.includes("POST /api/admin/bookings/:id/refund") || serverSrc.includes("app.post('/api/admin/bookings/:id/refund'"), 'Server must have admin refund processing endpoint');
+
+  // 41b. Verify Refund Slabs Calculation Logic
+  // > 12h: 100%, 3-12h: 50%, < 3h: 0%
+  assert(serverSrc.includes('hoursBeforeStart > 12'), 'Server must implement > 12h slab');
+  assert(serverSrc.includes('hoursBeforeStart >= 3'), 'Server must implement 3-12h slab');
+  assert(serverSrc.includes('refundPercentage = 100'), 'Must grant 100% refund for > 12h');
+  assert(serverSrc.includes('refundPercentage = 50'), 'Must grant 50% refund for 3-12h');
+  assert(serverSrc.includes('refundPercentage = 0'), 'Must grant 0% refund for < 3h');
+
+  // 41c. Verify APITXT Bank Verification & Name Match Rule
+  assert(serverSrc.includes('verifyApitxtBankAccount'), 'Server must call verifyApitxtBankAccount for APITXT verification');
+  assert(serverSrc.includes('compareLegalAndBankNames'), 'Server must call compareLegalAndBankNames to verify Government ID name match');
+  assert(
+    serverSrc.includes('Bank beneficiary name must match your verified Government ID name'),
+    'Server must reject mismatched bank names with the exact mandatory error'
+  );
+
+  // 41d. Verify Database adapter supports nonDbColumns for refund fields without schema errors
+  const dbAdapterSrc = fs.readFileSync(path.join(rootDir, 'server/services/database.ts'), 'utf-8');
+  assert(dbAdapterSrc.includes('cancellation_reason'), 'Database adapter must handle cancellation_reason');
+  assert(dbAdapterSrc.includes('refund_amount'), 'Database adapter must handle refund_amount');
+  assert(dbAdapterSrc.includes('refund_bank_details'), 'Database adapter must handle refund_bank_details');
+  assert(dbAdapterSrc.includes('refund_utr'), 'Database adapter must handle refund_utr');
+
+  // 41e. Verify ClientDashboard has cancellation modal and visibility guard
+  const clientDashSrc = fs.readFileSync(path.join(rootDir, 'src/pages/ClientDashboard.tsx'), 'utf-8');
+  assert(clientDashSrc.includes('canCancelBooking'), 'ClientDashboard must have canCancelBooking guard');
+  assert(clientDashSrc.includes('cancelModalOpen'), 'ClientDashboard must have cancellation modal state');
+  assert(clientDashSrc.includes('handleConfirmCancellation'), 'ClientDashboard must handle cancellation submission');
+  assert(clientDashSrc.includes('Change of plans'), 'ClientDashboard must include predefined cancellation reasons');
+  assert(clientDashSrc.includes('Scheduling / time conflict'), 'ClientDashboard must include scheduling conflict reason');
+  assert(clientDashSrc.includes('Personal or medical emergency'), 'ClientDashboard must include medical emergency reason');
+  assert(clientDashSrc.includes('Booked by mistake'), 'ClientDashboard must include booked by mistake reason');
+
+  // 41f. Verify AdminPortal has refunds desk and 1-click copy
+  const adminPortalSrc = fs.readFileSync(path.join(rootDir, 'src/admin/AdminPortal.tsx'), 'utf-8');
+  assert(adminPortalSrc.includes("'refunds'"), 'AdminPortal AdminModule must include refunds');
+  assert(adminPortalSrc.includes('handleProcessRefundSubmit'), 'AdminPortal must have handleProcessRefundSubmit');
+  assert(adminPortalSrc.includes('handleCopyText'), 'AdminPortal must provide 1-click copy helper');
+  assert(adminPortalSrc.includes('Cancelled Bookings & Refund Desk'), 'AdminPortal must render Cancelled Bookings & Refund Desk');
+  assert(adminPortalSrc.includes('Verified via APITXT') || adminPortalSrc.includes('APITXT'), 'AdminPortal must display APITXT verification badge');
+
+  // 41g. Verify Multilingual Translations in en, bn, and hi
+  const transSrc = fs.readFileSync(path.join(rootDir, 'src/constants/translations.ts'), 'utf-8');
+  assert(transSrc.includes('cancelBookingBtn'), 'Translations must include cancelBookingBtn');
+  assert(transSrc.includes('cancelBookingModalTitle'), 'Translations must include cancelBookingModalTitle');
+  assert(transSrc.includes('selectReasonLabel'), 'Translations must include selectReasonLabel');
+  assert(transSrc.includes('reasonChangeOfPlans'), 'Translations must include reasonChangeOfPlans');
+  assert(transSrc.includes('reasonScheduleConflict'), 'Translations must include reasonScheduleConflict');
+  assert(transSrc.includes('reasonEmergency'), 'Translations must include reasonEmergency');
+  assert(transSrc.includes('reasonBookedByMistake'), 'Translations must include reasonBookedByMistake');
+  assert(transSrc.includes('reasonOther'), 'Translations must include reasonOther');
+  assert(transSrc.includes('applicableRefundSlab'), 'Translations must include applicableRefundSlab');
+  assert(transSrc.includes('refundSlab100'), 'Translations must include refundSlab100');
+  assert(transSrc.includes('refundSlab50'), 'Translations must include refundSlab50');
+  assert(transSrc.includes('refundSlab0'), 'Translations must include refundSlab0');
+  assert(transSrc.includes('nameMismatchError'), 'Translations must include nameMismatchError');
+});
+
 console.log('\n===============================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`  RESULTS: ${passedCount} / ${results.length} SCENARIOS PASSED`);

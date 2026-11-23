@@ -15,7 +15,7 @@ import {
   CreditCard, KeyRound, AlertTriangle, ChevronRight, UserCheck, X,
   Bell, Settings, LifeBuoy, LogOut, Heart, Sparkles, User, FileText,
   DollarSign, Compass, CheckCircle2, Sliders, Shield, Eye, ChevronLeft,
-  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users, ChevronDown, Home
+  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users, ChevronDown, Home, XCircle, RotateCcw, Building2, Copy
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -590,6 +590,175 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       setReportLoading(false);
     }
   };
+
+  // Automated Booking Cancellation & Refund state
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancellingBooking, setCancellingBooking] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState<string>('Change of plans');
+  const [customCancelNote, setCustomCancelNote] = useState<string>('');
+  const [cancellationStep, setCancellationStep] = useState<'reason' | 'refund_bank' | 'success'>('reason');
+  
+  const [cancelHoursBefore, setCancelHoursBefore] = useState<number>(0);
+  const [cancelRefundPercent, setCancelRefundPercent] = useState<number>(0);
+  const [cancelRefundAmount, setCancelRefundAmount] = useState<number>(0);
+  const [cancelTotalAmount, setCancelTotalAmount] = useState<number>(0);
+
+  const [savedBank, setSavedBank] = useState<any | null>(null);
+  const [isChangingBank, setIsChangingBank] = useState<boolean>(false);
+  const [bankBeneficiaryName, setBankBeneficiaryName] = useState<string>('');
+  const [bankAccountNumber, setBankAccountNumber] = useState<string>('');
+  const [bankConfirmAccount, setBankConfirmAccount] = useState<string>('');
+  const [bankIfsc, setBankIfsc] = useState<string>('');
+
+  const [cancelLoading, setCancelLoading] = useState<boolean>(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancellationResult, setCancellationResult] = useState<any | null>(null);
+
+  const canCancelBooking = (b: any) => {
+    if (!b) return false;
+    const isPaid = b.paymentStatus === 'PAID';
+    const isConfirmed = b.status === 'CONFIRMED' || b.status === 'CONFIRMED_PAID' || isPaid;
+    const notStarted = !b.startOtpVerified && b.status !== 'IN_PROGRESS' && b.status !== 'COMPLETED' && b.status !== 'COMPANION_ARRIVED';
+    const notCancelled = b.status !== 'CANCELLED' && b.status !== 'REJECTED';
+    return isConfirmed && notStarted && notCancelled;
+  };
+
+  const openCancelBookingModal = async (b: any) => {
+    setCancellingBooking(b);
+    setCancelReason('Change of plans');
+    setCustomCancelNote('');
+    setCancellationStep('reason');
+    setCancelError(null);
+    setCancellationResult(null);
+    setIsChangingBank(false);
+
+    let scheduledStartTime: Date;
+    if (b.scheduledStartTime) {
+      scheduledStartTime = new Date(b.scheduledStartTime);
+    } else if (b.date && b.startTime) {
+      const [y, m, d] = String(b.date).split('-').map(Number);
+      const [h, min] = String(b.startTime).split(':').map(Number);
+      scheduledStartTime = new Date(y, (m || 1) - 1, d || 1, h || 0, min || 0);
+    } else {
+      scheduledStartTime = new Date();
+    }
+
+    const now = new Date();
+    const diffMs = scheduledStartTime.getTime() - now.getTime();
+    const hours = Math.max(0, Number((diffMs / (1000 * 60 * 60)).toFixed(1)));
+    setCancelHoursBefore(hours);
+
+    let pct = 0;
+    if (hours > 12) {
+      pct = 100;
+    } else if (hours >= 3) {
+      pct = 50;
+    } else {
+      pct = 0;
+    }
+    setCancelRefundPercent(pct);
+
+    const totalPaid = Number(((b.totalPayablePaise || b.bookingAmountPaise || b.amountPaise || 0) / 100).toFixed(2));
+    setCancelTotalAmount(totalPaid);
+    const refundAmt = Number((totalPaid * (pct / 100)).toFixed(2));
+    setCancelRefundAmount(refundAmt);
+
+    try {
+      const res = await apiFetch('/api/client/bank/saved');
+      if (res.ok) {
+        const bankData = await res.json();
+        if (bankData.hasSavedBank && bankData.bankDetails) {
+          setSavedBank(bankData.bankDetails);
+          setBankBeneficiaryName(bankData.bankDetails.beneficiaryName || '');
+          setBankIfsc(bankData.bankDetails.ifsc || '');
+          setBankAccountNumber(bankData.bankDetails.accountNumber || '');
+        } else {
+          setSavedBank(null);
+          setBankBeneficiaryName(user?.legalName || user?.name || '');
+          setBankIfsc('');
+          setBankAccountNumber('');
+        }
+      }
+    } catch {
+      setSavedBank(null);
+    }
+
+    setCancelModalOpen(true);
+  };
+
+  const handleConfirmCancellation = async (useSaved = false) => {
+    if (!cancellingBooking) return;
+    setCancelLoading(true);
+    setCancelError(null);
+
+    try {
+      const payload: any = {
+        cancellationReason: cancelReason === 'Other' && customCancelNote.trim() ? `Other: ${customCancelNote.trim()}` : cancelReason,
+        cancellationNote: customCancelNote.trim() || undefined
+      };
+
+      if (cancelRefundAmount > 0) {
+        if (useSaved && savedBank && !isChangingBank) {
+          payload.useSavedBank = true;
+        } else {
+          if (!bankBeneficiaryName.trim()) {
+            setCancelError(t.beneficiaryNameLabel + ' is required.');
+            setCancelLoading(false);
+            return;
+          }
+          if (!bankAccountNumber.trim() || bankAccountNumber.trim().length < 6) {
+            setCancelError(t.accountNumberLabel + ' is invalid.');
+            setCancelLoading(false);
+            return;
+          }
+          if (bankConfirmAccount.trim() && bankConfirmAccount.trim() !== bankAccountNumber.trim()) {
+            setCancelError('Bank account numbers do not match.');
+            setCancelLoading(false);
+            return;
+          }
+          if (!/^[A-Z]{4}0[A-Z0-9]{6,7}$/.test(bankIfsc.trim().toUpperCase())) {
+            setCancelError(t.ifscCodeLabel + ' format is invalid (e.g. HDFC0001234).');
+            setCancelLoading(false);
+            return;
+          }
+
+          payload.bankDetails = {
+            beneficiaryName: bankBeneficiaryName.trim(),
+            accountNumber: bankAccountNumber.trim(),
+            ifsc: bankIfsc.trim().toUpperCase()
+          };
+        }
+      }
+
+      const res = await apiFetch(`/api/bookings/${cancellingBooking.id}/client-cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setCancelError(data.error || 'Failed to cancel booking.');
+        setCancelLoading(false);
+        return;
+      }
+
+      setCancellationResult(data);
+      setCancellationStep('success');
+      fetchMyBookings();
+    } catch (err: any) {
+      setCancelError(err.message || 'An error occurred while processing cancellation.');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  const cancellationReasons = [
+    { id: 'Change of plans', label: t.reasonChangeOfPlans },
+    { id: 'Scheduling / time conflict', label: t.reasonScheduleConflict },
+    { id: 'Personal or medical emergency', label: t.reasonEmergency },
+    { id: 'Booked by mistake', label: t.reasonBookedByMistake },
+    { id: 'Other', label: t.reasonOther }
+  ];
 
   // Countdown timers
   useEffect(() => {
@@ -1973,6 +2142,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                             <MessageSquare className="w-3.5 h-3.5" />
                             <span>Chat</span>
                           </button>
+                          {canCancelBooking(b) && (
+                            <button
+                              type="button"
+                              onClick={() => openCancelBookingModal(b)}
+                              className="px-3.5 py-2 rounded-xl bg-rose-600/30 hover:bg-rose-600 text-rose-200 hover:text-white font-bold text-xs border border-rose-500/40 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>{t.cancelBookingBtn}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -2839,6 +3018,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                       >
                         Chat
                       </button>
+                      {canCancelBooking(b) && (
+                        <button
+                          type="button"
+                          onClick={() => openCancelBookingModal(b)}
+                          className="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-600 hover:text-white font-bold transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>{t.cancelBookingBtn}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2976,6 +3165,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadgeClass}`}>
                               {b.status}
                             </span>
+                            {canCancelBooking(b) && (
+                              <button
+                                type="button"
+                                onClick={() => openCancelBookingModal(b)}
+                                className="ml-auto px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-600 hover:text-white font-bold transition flex items-center gap-1 text-[11px] cursor-pointer"
+                              >
+                                <XCircle className="w-3 h-3" />
+                                <span>{t.cancelBookingBtn}</span>
+                              </button>
+                            )}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-400 text-[11px]">
@@ -4505,6 +4704,402 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* BOOKING CANCELLATION & REFUND MODAL */}
+      {cancelModalOpen && cancellingBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 text-slate-100 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-rose-400" />
+                <h3 className="text-sm font-bold text-slate-100">
+                  {t.cancelBookingModalTitle}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCancelModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Error banner */}
+            {cancelError && (
+              <div className="p-3.5 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{cancelError}</span>
+              </div>
+            )}
+
+            {/* Step 1: Reason Selection */}
+            {cancellationStep === 'reason' && (
+              <div className="space-y-4 text-xs">
+                {/* Warning note */}
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 leading-relaxed text-[11px] flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <span>{t.cancelBookingWarning}</span>
+                </div>
+
+                {/* Booking summary */}
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-200">{cancellingBooking.serviceName || 'Session'}</span>
+                    <span className="font-mono text-amber-400">#{cancellingBooking.bookingCode}</span>
+                  </div>
+                  <div className="text-slate-400">
+                    Host: <strong className="text-slate-300">{cancellingBooking.companionName}</strong> · 📅 {cancellingBooking.date} ({cancellingBooking.startTime} - {cancellingBooking.endTime})
+                  </div>
+                  <div className="text-slate-400">
+                    {t.originalPaidAmount}: <strong className="text-emerald-400">₹{cancelTotalAmount}</strong>
+                  </div>
+                </div>
+
+                {/* Reason Selection */}
+                <div>
+                  <label className="block text-slate-300 font-bold mb-2">
+                    {t.selectReasonLabel} *
+                  </label>
+                  <div className="space-y-2">
+                    {cancellationReasons.map(r => (
+                      <label
+                        key={r.id}
+                        onClick={() => setCancelReason(r.id)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                          cancelReason === r.id
+                            ? 'bg-rose-500/15 border-rose-500/50 text-white font-semibold'
+                            : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="cancellationReason"
+                          checked={cancelReason === r.id}
+                          onChange={() => setCancelReason(r.id)}
+                          className="w-4 h-4 text-rose-500 border-slate-700 focus:ring-rose-500"
+                        />
+                        <span>{r.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Note for Other */}
+                {cancelReason === 'Other' && (
+                  <div className="animate-fade-in">
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      Custom Details (Optional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={customCancelNote}
+                      onChange={e => setCustomCancelNote(e.target.value)}
+                      placeholder={t.customReasonPlaceholder}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-rose-400 resize-none"
+                    />
+                  </div>
+                )}
+
+                {/* Footer Action */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setCancelModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold cursor-pointer"
+                  >
+                    {t.closeBtn}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!cancelReason) {
+                        setCancelError(t.selectReasonLabel);
+                        return;
+                      }
+                      setCancelError(null);
+                      setCancellationStep('refund_bank');
+                    }}
+                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition shadow-md shadow-rose-600/30 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Continue to Refund Calculation</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Refund Calculation & Bank Details */}
+            {cancellationStep === 'refund_bank' && (
+              <div className="space-y-4 text-xs">
+                {/* Time & Refund Slab Card */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">{t.timeRemainingLabel}:</span>
+                    <span className="font-mono font-bold text-slate-200">
+                      {cancelHoursBefore > 0 ? `${cancelHoursBefore} hours` : '0 hours'}
+                    </span>
+                  </div>
+
+                  {/* Slab Badge */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                    <span className="text-slate-400">{t.applicableRefundSlab}:</span>
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                      cancelRefundPercent === 100
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : cancelRefundPercent === 50
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    }`}>
+                      {cancelRefundPercent === 100 ? t.refundSlab100 : cancelRefundPercent === 50 ? t.refundSlab50 : t.refundSlab0}
+                    </span>
+                  </div>
+
+                  {/* Amounts */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                    <span className="text-slate-400">{t.originalPaidAmount}:</span>
+                    <span className="font-mono text-slate-300">₹{cancelTotalAmount}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm font-bold pt-1 border-t border-slate-800">
+                    <span className="text-slate-200">{t.refundableAmount}:</span>
+                    <span className={`font-mono text-base ${cancelRefundAmount > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      ₹{cancelRefundAmount} ({cancelRefundPercent}%)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Case 1: 0% Refund -> No Bank Needed */}
+                {cancelRefundAmount === 0 ? (
+                  <div className="space-y-3">
+                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-[11px] leading-relaxed">
+                      {t.noRefundNotice}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setCancellationStep('reason')}
+                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold cursor-pointer flex items-center gap-1"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        <span>Back</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={cancelLoading}
+                        onClick={() => handleConfirmCancellation(false)}
+                        className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition shadow-md shadow-rose-600/30 cursor-pointer disabled:opacity-50"
+                      >
+                        {cancelLoading ? 'Cancelling...' : t.confirmZeroRefundBtn}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Case 2: Refund > 0 -> Bank details required */
+                  <div className="space-y-3">
+                    {/* Subcase A: Saved Verified Bank Account */}
+                    {savedBank && !isChangingBank ? (
+                      <div className="space-y-3">
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 border border-emerald-500/40 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] uppercase font-bold tracking-wider text-emerald-400 flex items-center gap-1.5">
+                              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                              <span>{t.savedBankTitle}</span>
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                              {t.savedBankVerifiedBadge}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                            <div>
+                              <span className="text-slate-500 block">{t.beneficiaryNameLabel}</span>
+                              <span className="font-bold text-slate-200">{savedBank.beneficiaryName}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">{t.ifscCodeLabel}</span>
+                              <span className="font-mono font-bold text-slate-200">{savedBank.ifsc}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-slate-500 block">{t.accountNumberLabel}</span>
+                              <span className="font-mono font-bold text-amber-300">{savedBank.accountNumberMasked || savedBank.accountNumber}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setIsChangingBank(true)}
+                            className="text-pink-400 hover:text-pink-300 text-xs font-semibold underline underline-offset-4 cursor-pointer"
+                          >
+                            {t.changeBankBtn}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => setCancellationStep('reason')}
+                            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold cursor-pointer flex items-center gap-1"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            <span>Back</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={cancelLoading}
+                            onClick={() => handleConfirmCancellation(true)}
+                            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-bold transition shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+                          >
+                            {cancelLoading ? 'Processing Cancellation...' : t.confirmCancellationBtn}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Subcase B: New Bank Form */
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                            <Building2 className="w-4 h-4 text-pink-400" />
+                            <span>{t.newBankFormTitle}</span>
+                          </h4>
+                          {savedBank && (
+                            <button
+                              type="button"
+                              onClick={() => setIsChangingBank(false)}
+                              className="text-slate-400 hover:text-slate-200 text-[11px] underline cursor-pointer"
+                            >
+                              Use Saved Bank Instead
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-300 text-[11px]">
+                          {t.nameMatchNote}
+                        </div>
+
+                        <div className="space-y-2.5">
+                          <div>
+                            <label className="block text-slate-400 text-[11px] mb-1 font-semibold">
+                              {t.beneficiaryNameLabel} *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={bankBeneficiaryName}
+                              onChange={e => setBankBeneficiaryName(e.target.value)}
+                              placeholder="Name as per Government ID"
+                              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-pink-400"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-slate-400 text-[11px] mb-1 font-semibold">
+                                {t.accountNumberLabel} *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={bankAccountNumber}
+                                onChange={e => setBankAccountNumber(e.target.value)}
+                                placeholder="Bank Account Number"
+                                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-pink-400 font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-slate-400 text-[11px] mb-1 font-semibold">
+                                Confirm Account Number *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={bankConfirmAccount}
+                                onChange={e => setBankConfirmAccount(e.target.value)}
+                                placeholder="Re-enter Account Number"
+                                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-pink-400 font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-slate-400 text-[11px] mb-1 font-semibold">
+                              {t.ifscCodeLabel} *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={bankIfsc}
+                              onChange={e => setBankIfsc(e.target.value.toUpperCase())}
+                              placeholder="e.g. HDFC0001234"
+                              maxLength={11}
+                              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-pink-400 font-mono uppercase"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                          <button
+                            type="button"
+                            onClick={() => setCancellationStep('reason')}
+                            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold cursor-pointer flex items-center gap-1"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            <span>Back</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={cancelLoading}
+                            onClick={() => handleConfirmCancellation(false)}
+                            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold transition shadow-lg shadow-pink-500/20 cursor-pointer disabled:opacity-50"
+                          >
+                            {cancelLoading ? 'Verifying with APITXT...' : t.verifyAndCancelBtn}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Success Confirmation */}
+            {cancellationStep === 'success' && (
+              <div className="py-6 text-center space-y-4 animate-fade-in text-xs">
+                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <h4 className="text-base font-extrabold text-slate-100">
+                  {t.cancellationSuccessTitle}
+                </h4>
+                {cancelRefundAmount > 0 ? (
+                  <p className="text-slate-300 max-w-sm mx-auto leading-relaxed">
+                    {t.refundProcessingNotice.replace('{amount}', String(cancelRefundAmount))}
+                  </p>
+                ) : (
+                  <p className="text-slate-400 max-w-sm mx-auto leading-relaxed">
+                    Your session booking has been cancelled and your reserved slot has been released.
+                  </p>
+                )}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCancelModalOpen(false);
+                      setCancellationResult(null);
+                    }}
+                    className="px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold transition shadow-md cursor-pointer"
+                  >
+                    {t.closeBtn}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -481,6 +481,41 @@ export interface TranslationDictionary {
   // Section 8
   termsSec8Title: string;
   termsSec8Desc: string;
+
+  // Booking Cancellation & Refund Workflow Keys
+  cancelBookingBtn: string;
+  cancelBookingModalTitle: string;
+  cancelBookingWarning: string;
+  selectReasonLabel: string;
+  reasonChangeOfPlans: string;
+  reasonScheduleConflict: string;
+  reasonEmergency: string;
+  reasonBookedByMistake: string;
+  reasonOther: string;
+  customReasonPlaceholder: string;
+  timeRemainingLabel: string;
+  applicableRefundSlab: string;
+  refundSlab100: string;
+  refundSlab50: string;
+  refundSlab0: string;
+  originalPaidAmount: string;
+  refundableAmount: string;
+  noRefundNotice: string;
+  confirmZeroRefundBtn: string;
+  savedBankTitle: string;
+  savedBankVerifiedBadge: string;
+  beneficiaryNameLabel: string;
+  accountNumberLabel: string;
+  ifscCodeLabel: string;
+  changeBankBtn: string;
+  confirmCancellationBtn: string;
+  newBankFormTitle: string;
+  nameMatchNote: string;
+  verifyAndCancelBtn: string;
+  nameMismatchError: string;
+  cancellationSuccessTitle: string;
+  refundProcessingNotice: string;
+  closeBtn: string;
 }
 
 export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
@@ -954,7 +989,42 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     termsSec7P2Desc: "Users are solely responsible for their personal safety and interactions during meetups. Pairup Today is not liable for any personal injury, loss, damage, or disputes arising from user interactions.",
 
     termsSec8Title: "8. Governing Law & Jurisdiction",
-    termsSec8Desc: "These Terms are governed by and construed in accordance with the laws of India. Any disputes, legal claims, or violations arising out of the use of Pairup Today shall be subject to the exclusive jurisdiction of the competent courts in India."
+    termsSec8Desc: "These Terms are governed by and construed in accordance with the laws of India. Any disputes, legal claims, or violations arising out of the use of Pairup Today shall be subject to the exclusive jurisdiction of the competent courts in India.",
+
+    // Cancellation & Refund Workflow
+    cancelBookingBtn: "Cancel Booking",
+    cancelBookingModalTitle: "Cancel Booking & Refund Request",
+    cancelBookingWarning: "Please review the cancellation policy before confirming. Once cancelled, your session slot will be released.",
+    selectReasonLabel: "Select Cancellation Reason",
+    reasonChangeOfPlans: "Change of plans",
+    reasonScheduleConflict: "Scheduling / time conflict",
+    reasonEmergency: "Personal or medical emergency",
+    reasonBookedByMistake: "Booked by mistake",
+    reasonOther: "Other",
+    customReasonPlaceholder: "Please describe your cancellation reason (optional)...",
+    timeRemainingLabel: "Time Remaining Before Session",
+    applicableRefundSlab: "Applicable Refund Policy",
+    refundSlab100: "100% Full Refund (> 12 hours before scheduled start)",
+    refundSlab50: "50% Partial Refund (3 to 12 hours before scheduled start)",
+    refundSlab0: "0% No Refund (< 3 hours before scheduled start)",
+    originalPaidAmount: "Original Paid Amount",
+    refundableAmount: "Calculated Refundable Amount",
+    noRefundNotice: "According to our platform policy, cancellations within 3 hours of scheduled time are non-refundable. No bank account details are needed.",
+    confirmZeroRefundBtn: "Confirm & Cancel Booking (No Refund)",
+    savedBankTitle: "Verified Bank Account for Refund Payout",
+    savedBankVerifiedBadge: "Verified via APITXT",
+    beneficiaryNameLabel: "Beneficiary Name",
+    accountNumberLabel: "Bank Account Number",
+    ifscCodeLabel: "IFSC Code",
+    changeBankBtn: "Change Bank Account",
+    confirmCancellationBtn: "Confirm & Submit Cancellation",
+    newBankFormTitle: "Enter Bank Details for Refund",
+    nameMatchNote: "Beneficiary name must strictly match your verified Government ID name.",
+    verifyAndCancelBtn: "Verify Bank via APITXT & Cancel Booking",
+    nameMismatchError: "Bank beneficiary name must match your verified Government ID name.",
+    cancellationSuccessTitle: "Booking Cancelled Successfully",
+    refundProcessingNotice: "Your refund of ₹{amount} has been submitted and will be credited to your verified bank account within 1–5 business days.",
+    closeBtn: "Close"
   },
 
   bn: {
@@ -1427,7 +1497,42 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     termsSec7P2Desc: "সাক্ষাতের সময় ব্যবহারকারীরা তাদের ব্যক্তিগত নিরাপত্তা এবং মিথস্ক্রিয়ার জন্য সম্পূর্ণরূপে দায়ী। ব্যবহারকারীদের ব্যক্তিগত সম্পর্কের ফলে উদ্ভূত কোনো আঘাত, ক্ষতি বা বিরোধের জন্য Pairup Today দায়ী থাকবে না।",
 
     termsSec8Title: "৮. প্রযোজ্য আইন ও বিচারিক এখতিয়ার",
-    termsSec8Desc: "এই শর্তাবলী ভারতের আইন অনুসারে পরিচালিত ও ব্যাখ্যা করা হবে। Pairup Today ব্যবহারের ফলে উদ্ভূত যেকোনো বিরোধ বা আইনি দাবি ভারতের উপযুক্ত আদালতের একচ্ছত্র এখতিয়ারাধীন হবে।"
+    termsSec8Desc: "এই শর্তাবলী ভারতের আইন অনুসারে পরিচালিত ও ব্যাখ্যা করা হবে। Pairup Today ব্যবহারের ফলে উদ্ভূত যেকোনো বিরোধ বা আইনি দাবি ভারতের উপযুক্ত আদালতের একচ্ছত্র এখতিয়ারাধীন হবে।",
+
+    // Cancellation & Refund Workflow
+    cancelBookingBtn: "বুকিং বাতিল করুন",
+    cancelBookingModalTitle: "বুকিং বাতিলকরণ ও রিফান্ডের আবেদন",
+    cancelBookingWarning: "নিশ্চিত করার পূর্বে বাতিলকরণ নীতিমালা দেখে নিন। একবার বাতিল সম্পন্ন হলে আপনার স্লটটি উন্মুক্ত হয়ে যাবে।",
+    selectReasonLabel: "বাতিল করার কারণ নির্বাচন করুন",
+    reasonChangeOfPlans: "পরিকল্পনা পরিবর্তন",
+    reasonScheduleConflict: "সময়সূচী / সময়ের দ্বন্দ্ব",
+    reasonEmergency: "ব্যক্তিগত বা চিকিৎসা সংক্রান্ত জরুরি অবস্থা",
+    reasonBookedByMistake: "ভুলবশত বুক করা হয়েছে",
+    reasonOther: "অন্যান্য",
+    customReasonPlaceholder: "বাতিল করার কারণ সংক্ষেপে লিখুন (ঐচ্ছিক)...",
+    timeRemainingLabel: "সেশনের পূর্বে অবশিষ্ট সময়",
+    applicableRefundSlab: "প্রযোজ্য রিফান্ড নীতি",
+    refundSlab100: "১০০% সম্পূর্ণ ফেরত (শুরুর ১২ ঘণ্টার বেশি পূর্বে)",
+    refundSlab50: "৫০% আংশিক ফেরত (শুরুর ৩ থেকে ১২ ঘণ্টা পূর্বে)",
+    refundSlab0: "০% কোনো ফেরত নয় (শুরুর ৩ ঘণ্টার কম সময়ে)",
+    originalPaidAmount: "মূল প্রদত্ত অর্থ",
+    refundableAmount: "হিসাবকৃত ফেরতযোগ্য অর্থ",
+    noRefundNotice: "আমাদের নীতিমালা অনুযায়ী, নির্ধারিত সময়ের ৩ ঘণ্টার মধ্যে বাতিল করলে কোনো অর্থ ফেরতযোগ্য নয়। কোনো ব্যাংক তথ্যের প্রয়োজন নেই।",
+    confirmZeroRefundBtn: "নিশ্চিত ও বাতিল করুন (কোনো রিফান্ড ছাড়াই)",
+    savedBankTitle: "রিফান্ড জমার জন্য যাচাইকৃত ব্যাংক অ্যাকাউন্ট",
+    savedBankVerifiedBadge: "APITXT দ্বারা যাচাইকৃত",
+    beneficiaryNameLabel: "গ্রাহকের নাম (বেনিফিশিয়ারি)",
+    accountNumberLabel: "ব্যাংক অ্যাকাউন্ট নম্বর",
+    ifscCodeLabel: "আইএফএসসি কোড (IFSC)",
+    changeBankBtn: "অন্য ব্যাংক অ্যাকাউন্ট দিন",
+    confirmCancellationBtn: "নিশ্চিত ও বাতিল সম্পন্ন করুন",
+    newBankFormTitle: "রিফান্ডের জন্য ব্যাংকের বিবরণ দিন",
+    nameMatchNote: "বেনিফিশিয়ারির নাম অবশ্যই আপনার যাচাইকৃত সরকারি পরিচয়পত্রের নামের সাথে মিলতে হবে।",
+    verifyAndCancelBtn: "APITXT দিয়ে ব্যাংক যাচাই করুন ও বাতিল করুন",
+    nameMismatchError: "ব্যাংক বেনিফিশিয়ারির নাম অবশ্যই আপনার যাচাইকৃত সরকারি পরিচয়পত্রের নামের সাথে মিলতে হবে।",
+    cancellationSuccessTitle: "বুকিং সফলভাবে বাতিল করা হয়েছে",
+    refundProcessingNotice: "আপনার ₹{amount} রিফান্ড প্রক্রিয়া শুরু হয়েছে এবং ১–৫ কার্যদিবসের মধ্যে আপনার যাচাইকৃত অ্যাকাউন্টে জমা হবে।",
+    closeBtn: "বন্ধ করুন"
   },
 
   hi: {
@@ -1900,6 +2005,41 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     termsSec7P2Desc: "मुलाकात के दौरान उपयोगकर्ता अपनी व्यक्तिगत सुरक्षा और बातचीत के लिए पूरी तरह जिम्मेदार हैं। उपयोगकर्ताओं के बीच बातचीत से उत्पन्न किसी भी चोट, हानि या विवाद के लिए Pairup Today उत्तरदायी नहीं है।",
 
     termsSec8Title: "८. शासी कानून एवं क्षेत्राधिकार",
-    termsSec8Desc: "ये शर्तें भारत के कानूनों के अनुसार शासित और परिभाषित की जाएंगी। Pairup Today के उपयोग से उत्पन्न होने वाला कोई भी विवाद भारत की सक्षम अदालतों के अनन्य क्षेत्राधिकार के अधीन होगा।"
+    termsSec8Desc: "ये शर्तें भारत के कानूनों के अनुसार शासित और परिभाषित की जाएंगी। Pairup Today के उपयोग से उत्पन्न होने वाला कोई भी विवाद भारत की सक्षम अदालतों के अनन्य क्षेत्राधिकार के अधीन होगा।",
+
+    // Cancellation & Refund Workflow
+    cancelBookingBtn: "बुकिंग रद्द करें",
+    cancelBookingModalTitle: "बुकिंग रद्दीकरण एवं रिफ़ंड अनुरोध",
+    cancelBookingWarning: "कृपया पुष्टि करने से पहले रद्दीकरण नीति की समीक्षा करें। एक बार रद्द होने पर आपका स्लॉट रिलीज़ हो जाएगा।",
+    selectReasonLabel: "रद्दीकरण का कारण चुनें",
+    reasonChangeOfPlans: "योजना में बदलाव",
+    reasonScheduleConflict: "समय / शेड्यूल का टकराव",
+    reasonEmergency: "व्यक्तिगत या चिकित्सीय आपातकाल",
+    reasonBookedByMistake: "गलती से बुक हो गया",
+    reasonOther: "अन्य",
+    customReasonPlaceholder: "कृपया रद्दीकरण का कारण संक्षेप में लिखें (वैकल्पिक)...",
+    timeRemainingLabel: "सत्र से पहले शेष समय",
+    applicableRefundSlab: "लागू रिफ़ंड नीति",
+    refundSlab100: "100% पूरा रिफ़ंड (शुरू होने से 12 घंटे से अधिक पहले)",
+    refundSlab50: "50% आंशिक रिफ़ंड (शुरू होने से 3 से 12 घंटे पहले)",
+    refundSlab0: "0% कोई रिफ़ंड नहीं (शुरू होने से 3 घंटे से कम पहले)",
+    originalPaidAmount: "मूल भुगतान राशि",
+    refundableAmount: "परिकलित वापसी योग्य राशि",
+    noRefundNotice: "हमारी प्लेटफ़ॉर्म नीति के अनुसार, निर्धारित समय के 3 घंटे के भीतर रद्दीकरण गैर-वापसी योग्य है। बैंक विवरण की आवश्यकता नहीं है।",
+    confirmZeroRefundBtn: "पुष्टि करें और रद्द करें (बिना रिफ़ंड)",
+    savedBankTitle: "रिफ़ंड भुगतान के लिए सत्यापित बैंक खाता",
+    savedBankVerifiedBadge: "APITXT द्वारा सत्यापित",
+    beneficiaryNameLabel: "लाभार्थी का नाम",
+    accountNumberLabel: "बैंक खाता संख्या",
+    ifscCodeLabel: "आईएफएससी कोड (IFSC)",
+    changeBankBtn: "दूसरा बैंक खाता चुनें",
+    confirmCancellationBtn: "रद्दीकरण की पुष्टि करें और जमा करें",
+    newBankFormTitle: "रिफ़ंड के लिए बैंक विवरण दर्ज करें",
+    nameMatchNote: "लाभार्थी का नाम आपके सत्यापित सरकारी पहचान पत्र के नाम से मेल खाना चाहिए।",
+    verifyAndCancelBtn: "APITXT द्वारा बैंक सत्यापित करें और रद्द करें",
+    nameMismatchError: "बैंक लाभार्थी का नाम आपके सत्यापित सरकारी पहचान पत्र के नाम से मेल खाना चाहिए।",
+    cancellationSuccessTitle: "बुकिंग सफलतापूर्वक रद्द कर दी गई",
+    refundProcessingNotice: "आपका ₹{amount} का रिफ़ंड शुरू कर दिया गया है और 1–5 कार्य दिवसों में आपके बैंक खाते में जमा होगा।",
+    closeBtn: "बंद करें"
   }
 };

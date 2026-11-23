@@ -7,7 +7,7 @@ import {
   Users, DollarSign, FileCheck, Shield, Eye, EyeOff, 
   Search, RefreshCw, Send, Check, X, LogOut, ChevronRight,
   UserCheck, CreditCard, Calendar, Clock, Sliders, Settings,
-  CheckCircle2, AlertTriangle, FileText, Landmark, Trash2
+  CheckCircle2, AlertTriangle, FileText, Landmark, Trash2, RotateCcw, Building2, Copy
 } from 'lucide-react';
 
 // 17 Admin Modules
@@ -23,6 +23,7 @@ export type AdminModule =
   | 'memberships'
   | 'bookings'
   | 'payments'
+  | 'refunds'
   | 'finance'
   | 'manual-payout'
   | 'support'
@@ -44,6 +45,7 @@ export const ROLE_ALLOWED_MODULES: Record<AdminRole, AdminModule[]> = {
     'memberships',
     'bookings',
     'payments',
+    'refunds',
     'finance',
     'manual-payout',
     'audit',
@@ -61,13 +63,15 @@ export const ROLE_ALLOWED_MODULES: Record<AdminRole, AdminModule[]> = {
     'manual-payout',
     'payments',
     'memberships',
-    'bookings'
+    'bookings',
+    'refunds'
   ],
   SUPPORT_ADMIN: [
     'reports',
     'clients',
     'companions',
-    'bookings'
+    'bookings',
+    'refunds'
   ],
   AUDITOR: [
     'audit',
@@ -75,7 +79,8 @@ export const ROLE_ALLOWED_MODULES: Record<AdminRole, AdminModule[]> = {
     'payments',
     'memberships',
     'bookings',
-    'reports'
+    'reports',
+    'refunds'
   ]
 };
 
@@ -167,6 +172,22 @@ export const AdminPortal: React.FC = () => {
   const [companionsList, setCompanionsList] = useState<any[]>([]);
   const [membershipsList, setMembershipsList] = useState<any[]>([]);
   const [bookingsList, setBookingsList] = useState<any[]>([]);
+  const [refundsList, setRefundsList] = useState<any[]>([]);
+  const [refundStatusFilter, setRefundStatusFilter] = useState<'ALL' | 'PENDING' | 'REFUNDED' | 'NOT_APPLICABLE'>('ALL');
+  const [selectedRefundForProcess, setSelectedRefundForProcess] = useState<any | null>(null);
+  const [refundUtrInput, setRefundUtrInput] = useState('');
+  const [refundNoteInput, setRefundNoteInput] = useState('');
+  const [isProcessingRefund, setIsProcessingRefund] = useState(false);
+  const [refundProcessError, setRefundProcessError] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, key: string) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    }
+  };
   const [paymentsList, setPaymentsList] = useState<any[]>([]);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'ALL' | 'PAID' | 'FAILED' | 'CANCELLED' | 'PENDING'>('ALL');
 
@@ -233,6 +254,7 @@ export const AdminPortal: React.FC = () => {
       const canMemberships = role === 'SUPER_ADMIN' || role === 'FINANCE_ADMIN' || role === 'AUDITOR';
       const canPayments = role === 'SUPER_ADMIN' || role === 'FINANCE_ADMIN' || role === 'AUDITOR';
       const canBookings = role === 'SUPER_ADMIN' || role === 'FINANCE_ADMIN' || role === 'SUPPORT_ADMIN' || role === 'AUDITOR';
+      const canRefunds = role === 'SUPER_ADMIN' || role === 'FINANCE_ADMIN' || role === 'SUPPORT_ADMIN' || role === 'AUDITOR';
       const canClients = role === 'SUPER_ADMIN' || role === 'SUPPORT_ADMIN';
       const canCompanions = role === 'SUPER_ADMIN' || role === 'SUPPORT_ADMIN';
       const canReports = role === 'SUPER_ADMIN' || role === 'SUPPORT_ADMIN' || role === 'AUDITOR';
@@ -242,7 +264,7 @@ export const AdminPortal: React.FC = () => {
 
       const [
         overviewData, clientsKycData, compsKycData, finData, staffData, logsData,
-        clientsData, compsData, memsData, bksData, paysData, supportData, reportsData
+        clientsData, compsData, memsData, bksData, paysData, supportData, reportsData, refundsData
       ] = await Promise.all([
         canOverview ? fetchJson('/api/admin/overview') : Promise.resolve(null),
         canKyc ? fetchJson('/api/admin/kyc/list?userType=CLIENT') : Promise.resolve(null),
@@ -256,7 +278,8 @@ export const AdminPortal: React.FC = () => {
         canBookings ? fetchJson('/api/admin/bookings') : Promise.resolve(null),
         canPayments ? fetchJson('/api/admin/payments') : Promise.resolve(null),
         canSupport ? fetchJson('/api/admin/support/conversations') : Promise.resolve(null),
-        canReports ? fetchJson('/api/admin/reports') : Promise.resolve(null)
+        canReports ? fetchJson('/api/admin/reports') : Promise.resolve(null),
+        canRefunds ? fetchJson('/api/admin/refunds') : Promise.resolve(null)
       ]);
 
       if (overviewData) setStats(overviewData);
@@ -272,6 +295,7 @@ export const AdminPortal: React.FC = () => {
       if (paysData?.payments) setPaymentsList(paysData.payments);
       if (supportData?.conversations) setSupportConversations(supportData.conversations);
       if (reportsData?.reports) setReportsList(reportsData.reports);
+      if (refundsData?.refunds) setRefundsList(refundsData.refunds);
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastSyncedTime(timeStr);
@@ -857,6 +881,9 @@ export const AdminPortal: React.FC = () => {
           {isModuleAllowedForRole(admin.role, 'bookings') && (
             <option value="bookings">Booking Management ({bookingsList.length})</option>
           )}
+          {isModuleAllowedForRole(admin.role, 'refunds') && (
+            <option value="refunds">Cancelled & Refunds ({refundsList.filter(r => r.refundStatus === 'pending').length} pending)</option>
+          )}
           {isModuleAllowedForRole(admin.role, 'audit') && (
             <option value="audit">Audit Logs</option>
           )}
@@ -1068,6 +1095,29 @@ export const AdminPortal: React.FC = () => {
                 <span>Booking Management</span>
               </div>
               <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">{bookingsList.length}</span>
+            </button>
+          )}
+
+          {isModuleAllowedForRole(admin.role, 'refunds') && (
+            <button
+              onClick={() => setCurrentSection('refunds')}
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentSection === 'refunds' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <RotateCcw className="w-4 h-4" />
+                <span>Cancelled & Refunds</span>
+              </div>
+              {refundsList.filter(r => r.refundStatus === 'pending').length > 0 ? (
+                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500 text-slate-950">
+                  {refundsList.filter(r => r.refundStatus === 'pending').length}
+                </span>
+              ) : (
+                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                  {refundsList.length}
+                </span>
+              )}
             </button>
           )}
 
@@ -1741,6 +1791,359 @@ export const AdminPortal: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* REFUNDS MANAGEMENT DESK */}
+          {currentSection === 'refunds' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                    <RotateCcw className="w-5 h-5 text-amber-400" />
+                    Cancelled Bookings & Refund Desk
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Review cancellation reasons, automated time-slab refunds, APITXT verified bank accounts, and disburse bank transfers.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs overflow-x-auto">
+                  {(['ALL', 'PENDING', 'REFUNDED', 'NOT_APPLICABLE'] as const).map(tab => {
+                    const label = tab === 'ALL'
+                      ? `All (${refundsList.length})`
+                      : tab === 'PENDING'
+                      ? `Pending (${refundsList.filter(r => r.refundStatus === 'pending').length})`
+                      : tab === 'REFUNDED'
+                      ? `Refunded (${refundsList.filter(r => r.refundStatus === 'refunded').length})`
+                      : `0% Slab (${refundsList.filter(r => r.refundStatus === 'not_applicable' || r.refundAmount === 0).length})`;
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => setRefundStatusFilter(tab)}
+                        className={`px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+                          refundStatusFilter === tab
+                            ? 'bg-amber-400 text-slate-950 shadow'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Summary KPIs */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Total Cancellations</span>
+                  <div className="text-xl font-black text-slate-100 mt-1">{refundsList.length}</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                  <span className="text-[11px] text-amber-300 uppercase font-semibold">Pending Refunds</span>
+                  <div className="text-xl font-black text-amber-400 mt-1">
+                    ₹{refundsList.filter(r => r.refundStatus === 'pending').reduce((sum, r) => sum + (r.refundAmount || 0), 0).toLocaleString()}
+                    <span className="text-xs font-normal text-amber-300 ml-1.5">
+                      ({refundsList.filter(r => r.refundStatus === 'pending').length})
+                    </span>
+                  </div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                  <span className="text-[11px] text-emerald-300 uppercase font-semibold">Total Refunded</span>
+                  <div className="text-xl font-black text-emerald-400 mt-1">
+                    ₹{refundsList.filter(r => r.refundStatus === 'refunded').reduce((sum, r) => sum + (r.refundAmount || 0), 0).toLocaleString()}
+                    <span className="text-xs font-normal text-emerald-300 ml-1.5">
+                      ({refundsList.filter(r => r.refundStatus === 'refunded').length})
+                    </span>
+                  </div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 uppercase font-semibold">0% / Non-Refundable</span>
+                  <div className="text-xl font-black text-slate-300 mt-1">
+                    {refundsList.filter(r => r.refundStatus === 'not_applicable' || r.refundAmount === 0).length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Refunds Table */}
+              <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-x-auto">
+                <table className="w-full text-left text-xs whitespace-nowrap">
+                  <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+                    <tr>
+                      <th className="p-3">Booking & Service</th>
+                      <th className="p-3">Client & Companion</th>
+                      <th className="p-3">Cancellation Details</th>
+                      <th className="p-3">Timing & Slab</th>
+                      <th className="p-3">Refund Amount</th>
+                      <th className="p-3">Bank Details (APITXT Verified)</th>
+                      <th className="p-3">Status & Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {refundsList
+                      .filter(item => {
+                        if (refundStatusFilter === 'PENDING') return item.refundStatus === 'pending';
+                        if (refundStatusFilter === 'REFUNDED') return item.refundStatus === 'refunded';
+                        if (refundStatusFilter === 'NOT_APPLICABLE') return item.refundStatus === 'not_applicable' || item.refundAmount === 0;
+                        return true;
+                      })
+                      .map(item => {
+                        const hours = item.hoursBeforeStart;
+                        let slabBadge = (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            &lt; 3h before (0% Refund)
+                          </span>
+                        );
+                        if (hours !== null && hours !== undefined) {
+                          if (hours > 12) {
+                            slabBadge = (
+                              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                &gt; 12h before (100% Refund)
+                              </span>
+                            );
+                          } else if (hours >= 3) {
+                            slabBadge = (
+                              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                3–12h before (50% Refund)
+                              </span>
+                            );
+                          }
+                        }
+
+                        const bank = item.refundBankDetails;
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-800/40">
+                            <td className="p-3">
+                              <div className="font-mono font-bold text-amber-400">{item.bookingCode}</div>
+                              <div className="font-semibold text-slate-200">{item.serviceName}</div>
+                              <div className="text-[11px] text-slate-400">{item.date} {item.startTime}</div>
+                            </td>
+                            <td className="p-3">
+                              <div className="font-semibold text-slate-200">{item.clientName}</div>
+                              <div className="text-[11px] text-slate-400">{item.clientPhone}</div>
+                              <div className="text-[11px] text-slate-400 mt-1">Companion: <span className="text-slate-300 font-medium">{item.companionName}</span></div>
+                            </td>
+                            <td className="p-3 max-w-xs">
+                              <div className="font-medium text-slate-200 text-wrap break-words">{item.cancellationReason}</div>
+                              {item.cancellationNote && (
+                                <div className="text-[11px] text-slate-400 italic mt-0.5 text-wrap break-words">"{item.cancellationNote}"</div>
+                              )}
+                              <div className="text-[10px] text-slate-500 mt-1 font-mono">
+                                {new Date(item.cancelledAt).toLocaleString()}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              {slabBadge}
+                              <div className="text-[11px] text-slate-400 mt-1">
+                                {hours !== null && hours !== undefined ? `${hours.toFixed(1)} hrs remaining` : 'Immediate'}
+                              </div>
+                            </td>
+                            <td className="p-3 font-mono">
+                              <div className="text-xs text-slate-400 line-through">₹{item.totalPaidAmount}</div>
+                              <div className="text-sm font-bold text-emerald-400">₹{item.refundAmount}</div>
+                              <div className="text-[10px] text-slate-400">({item.refundPercentage}%)</div>
+                            </td>
+                            <td className="p-3">
+                              {bank ? (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-semibold text-slate-200">{bank.beneficiaryName}</span>
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                      <CheckCircle2 className="w-3 h-3" /> APITXT
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 font-mono text-[11px] text-slate-300">
+                                    <span>A/C: {bank.accountNumber}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyText(bank.accountNumber, `ac_${item.id}`)}
+                                      className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                                      title="Copy Account Number"
+                                    >
+                                      {copiedKey === `ac_${item.id}` ? (
+                                        <Check className="w-3 h-3 text-emerald-400" />
+                                      ) : (
+                                        <Copy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center gap-2 font-mono text-[11px] text-slate-300">
+                                    <span>IFSC: {bank.ifscCode}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyText(bank.ifscCode, `ifsc_${item.id}`)}
+                                      className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                                      title="Copy IFSC Code"
+                                    >
+                                      {copiedKey === `ifsc_${item.id}` ? (
+                                        <Check className="w-3 h-3 text-emerald-400" />
+                                      ) : (
+                                        <Copy className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                  </div>
+                                  {bank.bankName && (
+                                    <div className="text-[10px] text-slate-400">{bank.bankName}</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-slate-500 italic">No bank required (₹0)</span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              {item.refundStatus === 'refunded' ? (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                    <CheckCircle className="w-3 h-3" /> Refunded
+                                  </span>
+                                  <div className="font-mono text-[10px] text-slate-300">
+                                    UTR: <span className="text-amber-300 font-bold">{item.refundUtr}</span>
+                                  </div>
+                                  {item.refundedAt && (
+                                    <div className="text-[10px] text-slate-500">
+                                      {new Date(item.refundedAt).toLocaleDateString()} by {item.refundedByAdmin || 'Admin'}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : item.refundStatus === 'pending' ? (
+                                <div className="space-y-1.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                    <Clock className="w-3 h-3" /> Pending Refund
+                                  </span>
+                                  <div>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedRefundForProcess(item);
+                                        setRefundUtrInput('');
+                                        setRefundNoteInput('');
+                                        setRefundProcessError(null);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition-colors shadow"
+                                    >
+                                      Mark as Refunded
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400">
+                                  Non-refundable
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {refundsList.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-slate-500">
+                          No cancelled bookings or refund requests found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Mark as Refunded Modal */}
+          {selectedRefundForProcess && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl relative space-y-4">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRefundForProcess(null)}
+                  className="absolute top-5 right-5 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
+                <div>
+                  <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-amber-400" />
+                    Record Completed Bank Refund
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Enter the bank UTR / IMPS transaction reference after transferring the funds.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Booking Code:</span>
+                    <span className="font-mono font-bold text-amber-400">{selectedRefundForProcess.bookingCode}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Client:</span>
+                    <span className="font-semibold text-slate-200">{selectedRefundForProcess.clientName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Refund Amount:</span>
+                    <span className="font-mono font-bold text-emerald-400 text-sm">₹{selectedRefundForProcess.refundAmount}</span>
+                  </div>
+                  {selectedRefundForProcess.refundBankDetails && (
+                    <div className="pt-2 border-t border-slate-800/80 space-y-1">
+                      <div className="text-[11px] text-slate-400">Beneficiary: <span className="text-slate-200 font-semibold">{selectedRefundForProcess.refundBankDetails.beneficiaryName}</span></div>
+                      <div className="text-[11px] font-mono text-slate-300">A/C: {selectedRefundForProcess.refundBankDetails.accountNumber}</div>
+                      <div className="text-[11px] font-mono text-slate-300">IFSC: {selectedRefundForProcess.refundBankDetails.ifscCode}</div>
+                    </div>
+                  )}
+                </div>
+
+                <form onSubmit={handleProcessRefundSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Bank UTR / Transaction Reference Number <span className="text-amber-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 239014582918"
+                      value={refundUtrInput}
+                      onChange={e => setRefundUtrInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-amber-400 font-mono text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Internal Admin Note (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Processed via HDFC Corporate NetBanking"
+                      value={refundNoteInput}
+                      onChange={e => setRefundNoteInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-amber-400 text-xs"
+                    />
+                  </div>
+
+                  {refundProcessError && (
+                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{refundProcessError}</span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRefundForProcess(null)}
+                      className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isProcessingRefund}
+                      className="flex-1 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition-colors shadow disabled:opacity-50"
+                    >
+                      {isProcessingRefund ? 'Processing...' : 'Confirm & Mark Refunded'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}

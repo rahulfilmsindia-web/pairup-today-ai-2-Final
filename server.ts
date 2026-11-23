@@ -1502,7 +1502,7 @@ function hasApplicationRole(user: any, role: 'CLIENT' | 'COMPANION'): boolean {
 
 function apiRequiresRole(req: Request): 'CLIENT' | 'COMPANION' | null {
   const route = `${req.method} ${req.originalUrl.split('?')[0]}`;
-  if (route === 'POST /api/bookings/create') return 'CLIENT';
+  if (route === 'POST /api/bookings/create' || route.endsWith('/client-cancel')) return 'CLIENT';
 
   // Membership onboarding, companion status checks, rates & bank verification
   // are open to any authenticated user (client upgrading to companion or dual)
@@ -1629,7 +1629,11 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     /^GET \/api\/chat\/[^/]+\/stream$/.test(route) ||
     route === 'GET /api/companion/alerts/stream' ||
     route === 'POST /api/companion/live-coords' ||
-    /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|verify-session-otp|complete|accept|reject|cancel|review|messages)$/.test(route) ||
+    route === 'GET /api/client/bank/saved' ||
+    route === 'POST /api/client/bank/verify' ||
+    route === 'GET /api/admin/refunds' ||
+    /^POST \/api\/admin\/bookings\/[^/]+\/refund$/.test(route) ||
+    /^POST \/api\/bookings\/[^/]+\/(arrived|verify-start-otp|verify-session-otp|complete|accept|reject|cancel|client-cancel|review|messages)$/.test(route) ||
     /^GET \/api\/bookings\/[^/]+\/(status|messages)$/.test(route) ||
     /^GET \/api\/bookings\/my\/[^/]+$/.test(route) ||
     /^GET \/api\/companion\/status\/[^/]+$/.test(route) ||
@@ -4752,6 +4756,425 @@ app.post('/api/bookings/:id/cancel', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Failed to cancel booking', error);
     return res.status(500).json({ error: error.message || 'Failed to cancel booking.' });
+  }
+});
+
+// Client Bank Details Management for Refunds
+app.get('/api/client/bank/saved', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const user = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getUser(authUser.id)
+      : db.users[authUser.id];
+    
+    let bankDetails = user?.bankDetails || null;
+    if (!bankDetails && getDatabaseType() === 'supabase') {
+      const bv = await databaseAdapter.getBankVerification(authUser.id).catch(() => null);
+      if (bv && (bv.verificationStatus === 'VERIFIED' || bv.isVerified)) {
+        bankDetails = {
+          beneficiaryName: bv.accountHolderName,
+          accountNumber: bv.accountNumberEncrypted ? decryptBankAccount(bv.accountNumberEncrypted) : ('••••' + bv.accountNumberLast4),
+          accountNumberMasked: bv.accountNumberMasked || ('••••' + bv.accountNumberLast4),
+          ifsc: bv.ifsc,
+          bankName: bv.bankName || 'Verified Bank',
+          isVerified: true
+        };
+      }
+    }
+    
+    if (bankDetails && (bankDetails.isVerified || bankDetails.verificationStatus === 'VERIFIED')) {
+      const acc = bankDetails.accountNumber || bankDetails.accountNumberMasked || '';
+      return res.json({
+        hasSavedBank: true,
+        bankDetails: {
+          beneficiaryName: bankDetails.beneficiaryName || bankDetails.accountHolderName || user?.name || 'Verified Beneficiary',
+          accountNumber: acc,
+          accountNumberMasked: bankDetails.accountNumberMasked || (acc.length >= 4 ? '••••' + acc.slice(-4) : acc),
+          ifsc: bankDetails.ifsc,
+          bankName: bankDetails.bankName || 'Verified Bank',
+          isVerified: true
+        }
+      });
+    }
+    return res.json({ hasSavedBank: false, bankDetails: null });
+  } catch (error: any) {
+    console.error('Failed to get saved bank details', error);
+    return res.status(500).json({ error: 'Failed to fetch saved bank details.' });
+  }
+});
+
+app.post('/api/client/bank/verify', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const beneficiaryName = typeof req.body?.beneficiaryName === 'string' ? req.body.beneficiaryName.trim() : '';
+  const accountNumber = typeof req.body?.accountNumber === 'string' ? req.body.accountNumber.trim() : '';
+  const ifsc = typeof req.body?.ifsc === 'string' ? req.body.ifsc.trim().toUpperCase() : '';
+
+  if (!beneficiaryName || beneficiaryName.length < 2) {
+    return res.status(400).json({ error: 'Beneficiary name is required.' });
+  }
+  if (!/^[A-Za-z0-9-]{6,40}$/.test(accountNumber)) {
+    return res.status(400).json({ error: 'Invalid bank account number format.' });
+  }
+  if (!/^[A-Z]{4}0[A-Z0-9]{6,7}$/.test(ifsc)) {
+    return res.status(400).json({ error: 'Invalid IFSC code format (e.g. HDFC0001234).' });
+  }
+
+  try {
+    const user = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getUser(authUser.id)
+      : db.users[authUser.id];
+    if (!user) return res.status(404).json({ error: 'User profile not found.' });
+
+    // Client's verified Government ID Name
+    const kycSubmission = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getUserKycSubmission(authUser.id, 'CLIENT').catch(() => null)
+      : Object.values(db.kycSubmissions || {}).find((k: any) => k.userId === authUser.id);
+    
+    const govtIdName = (kycSubmission?.legalName || user.legalName || user.name || '').trim();
+
+    // Mandatory Name Match Rule: Compare beneficiary name against Government ID name
+    const nameMatches = compareLegalAndBankNames(govtIdName, beneficiaryName);
+    if (!nameMatches) {
+      return res.status(422).json({
+        success: false,
+        nameMatched: false,
+        error: 'Bank beneficiary name must match your verified Government ID name.'
+      });
+    }
+
+    // Verify via APITXT if live key is present
+    let bankName = 'Verified Bank';
+    let verifiedName = beneficiaryName;
+    if (isApitxtConfigured()) {
+      const apitxtRes = await verifyApitxtBankAccount({
+        ifsc,
+        accountNumber,
+        accountHolderName: beneficiaryName,
+        mobile: user.phone || '9876543210',
+        kycLegalName: govtIdName
+      });
+      if (!apitxtRes.success) {
+        return res.status(422).json({
+          success: false,
+          error: apitxtRes.error || 'Bank account verification failed with APITXT.',
+          errorCode: apitxtRes.errorCode
+        });
+      }
+      if (apitxtRes.nameAtBank) verifiedName = apitxtRes.nameAtBank;
+      if (apitxtRes.message) bankName = apitxtRes.message;
+    }
+
+    const verifiedBankDetails = {
+      beneficiaryName: verifiedName,
+      accountNumber,
+      accountNumberMasked: '••••' + accountNumber.slice(-4),
+      ifsc,
+      bankName,
+      isVerified: true,
+      verifiedAt: new Date().toISOString(),
+      verifiedVia: 'APITXT'
+    };
+
+    // Save to user profile for future reuse
+    if (db.users && db.users[authUser.id]) {
+      db.users[authUser.id].bankDetails = verifiedBankDetails;
+    }
+    if (getDatabaseType() === 'supabase') {
+      await databaseAdapter.updateUser(authUser.id, { bankDetails: verifiedBankDetails }).catch(() => null);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Bank account verified successfully via APITXT.',
+      bankDetails: verifiedBankDetails
+    });
+  } catch (error: any) {
+    console.error('Error verifying bank details', error);
+    return res.status(500).json({ error: error.message || 'Failed to verify bank details.' });
+  }
+});
+
+// Automated Paid/Confirmed Booking Cancellation & Refund Calculation
+app.post('/api/bookings/:id/client-cancel', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const bookingId = req.params.id;
+  if (!authUser?.id) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { cancellationReason, cancellationNote, bankDetails, useSavedBank } = req.body || {};
+  if (!cancellationReason || typeof cancellationReason !== 'string') {
+    return res.status(400).json({ error: 'A cancellation reason is required.' });
+  }
+
+  try {
+    const booking = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getBooking(bookingId)
+      : db.bookings[bookingId];
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+    if (booking.clientId !== authUser.id && authUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'You are not authorized to cancel this booking.' });
+    }
+
+    // Check status: only allow cancelling confirmed/paid sessions that haven't started yet
+    const isPaid = booking.paymentStatus === 'PAID';
+    const isConfirmed = booking.status === 'CONFIRMED' || booking.status === 'CONFIRMED_PAID' || isPaid;
+    if (!isConfirmed) {
+      return res.status(400).json({ error: 'Only confirmed and paid bookings can be cancelled through this flow.' });
+    }
+    if (booking.status === 'CANCELLED' || booking.status === 'REJECTED') {
+      return res.status(400).json({ error: 'This booking has already been cancelled.' });
+    }
+    if (booking.startOtpVerified || booking.status === 'IN_PROGRESS' || booking.status === 'COMPLETED') {
+      return res.status(400).json({ error: 'Cannot cancel a session that is already in progress or completed.' });
+    }
+
+    // Calculate time difference between cancelled_at and scheduled_start_time
+    let scheduledStartTime: Date;
+    if (booking.scheduledStartTime) {
+      scheduledStartTime = new Date(booking.scheduledStartTime);
+    } else if (booking.date && booking.startTime) {
+      const [y, m, d] = String(booking.date).split('-').map(Number);
+      const [h, min] = String(booking.startTime).split(':').map(Number);
+      scheduledStartTime = new Date(y, (m || 1) - 1, d || 1, h || 0, min || 0);
+    } else {
+      scheduledStartTime = new Date();
+    }
+
+    const cancelledAt = new Date();
+    const diffMs = scheduledStartTime.getTime() - cancelledAt.getTime();
+    const hoursBeforeStart = Number((diffMs / (1000 * 60 * 60)).toFixed(2));
+
+    // Refund slabs:
+    // > 12 hours: 100%
+    // 3 to 12 hours: 50%
+    // < 3 hours (or after start): 0%
+    let refundPercentage = 0;
+    if (hoursBeforeStart > 12) {
+      refundPercentage = 100;
+    } else if (hoursBeforeStart >= 3) {
+      refundPercentage = 50;
+    } else {
+      refundPercentage = 0;
+    }
+
+    const totalPaidPaise = Number(booking.totalPayablePaise || booking.bookingAmountPaise || booking.amountPaise || 0);
+    const refundAmountPaise = Math.round(totalPaidPaise * (refundPercentage / 100));
+    const refundAmount = Number((refundAmountPaise / 100).toFixed(2));
+    const totalBookingAmount = Number((totalPaidPaise / 100).toFixed(2));
+
+    let finalBankDetails: any = null;
+    let refundStatus: 'pending' | 'not_applicable' = 'not_applicable';
+
+    if (refundAmount > 0) {
+      refundStatus = 'pending';
+      const user = getDatabaseType() === 'supabase'
+        ? await databaseAdapter.getUser(authUser.id)
+        : db.users[authUser.id];
+
+      if (useSavedBank) {
+        if (!user?.bankDetails?.isVerified) {
+          return res.status(400).json({ error: 'No verified saved bank account found. Please provide bank details.' });
+        }
+        finalBankDetails = user.bankDetails;
+      } else if (bankDetails) {
+        const beneficiaryName = (bankDetails.beneficiaryName || '').trim();
+        const accountNumber = (bankDetails.accountNumber || '').trim();
+        const ifsc = (bankDetails.ifsc || '').trim().toUpperCase();
+
+        if (!beneficiaryName || !accountNumber || !ifsc) {
+          return res.status(400).json({ error: 'Beneficiary Name, Account Number, and IFSC Code are required.' });
+        }
+
+        const kycSubmission = getDatabaseType() === 'supabase'
+          ? await databaseAdapter.getUserKycSubmission(authUser.id, 'CLIENT').catch(() => null)
+          : Object.values(db.kycSubmissions || {}).find((k: any) => k.userId === authUser.id);
+        const govtIdName = (kycSubmission?.legalName || user?.legalName || user?.name || '').trim();
+
+        const nameMatches = compareLegalAndBankNames(govtIdName, beneficiaryName);
+        if (!nameMatches) {
+          return res.status(422).json({
+            success: false,
+            nameMatched: false,
+            error: 'Bank beneficiary name must match your verified Government ID name.'
+          });
+        }
+
+        let bankName = 'Verified Bank';
+        let verifiedName = beneficiaryName;
+        if (isApitxtConfigured()) {
+          const apitxtRes = await verifyApitxtBankAccount({
+            ifsc,
+            accountNumber,
+            accountHolderName: beneficiaryName,
+            mobile: user?.phone || '9876543210',
+            kycLegalName: govtIdName
+          });
+          if (!apitxtRes.success) {
+            return res.status(422).json({
+              success: false,
+              error: apitxtRes.error || 'Bank account verification failed with APITXT.'
+            });
+          }
+          if (apitxtRes.nameAtBank) verifiedName = apitxtRes.nameAtBank;
+          if (apitxtRes.message) bankName = apitxtRes.message;
+        }
+
+        finalBankDetails = {
+          beneficiaryName: verifiedName,
+          accountNumber,
+          accountNumberMasked: '••••' + accountNumber.slice(-4),
+          ifsc,
+          bankName,
+          isVerified: true,
+          verifiedAt: new Date().toISOString(),
+          verifiedVia: 'APITXT'
+        };
+
+        if (db.users && db.users[authUser.id]) {
+          db.users[authUser.id].bankDetails = finalBankDetails;
+        }
+        if (getDatabaseType() === 'supabase') {
+          await databaseAdapter.updateUser(authUser.id, { bankDetails: finalBankDetails }).catch(() => null);
+        }
+      } else {
+        return res.status(400).json({ error: 'Verified bank account details are required for refund processing.' });
+      }
+    }
+
+    const updates = {
+      status: 'CANCELLED',
+      cancellationReason,
+      cancellationNote: cancellationNote || null,
+      cancelledAt: cancelledAt.toISOString(),
+      hoursBeforeStart,
+      refundPercentage,
+      refundAmount,
+      refundAmountPaise,
+      totalBookingAmount,
+      refundStatus,
+      refundBankDetails: finalBankDetails,
+      companionAccepted: false
+    };
+
+    if (getDatabaseType() === 'supabase') {
+      await databaseAdapter.updateBooking(bookingId, updates);
+    } else {
+      if (db.bookings[bookingId]) {
+        Object.assign(db.bookings[bookingId], updates);
+      }
+    }
+
+    pushCompanionAlert(booking.companionId, {
+      type: 'BOOKING_CANCELLED',
+      bookingId,
+      reason: cancellationReason
+    });
+
+    return res.json({
+      success: true,
+      bookingId,
+      status: 'CANCELLED',
+      cancellationReason,
+      hoursBeforeStart,
+      refundPercentage,
+      refundAmount,
+      refundStatus,
+      refundBankDetails: finalBankDetails
+    });
+  } catch (error: any) {
+    console.error('Failed to cancel booking with refund', error);
+    return res.status(500).json({ error: error.message || 'Failed to cancel booking.' });
+  }
+});
+
+// Admin Panel: List Cancelled Bookings & Refunds
+app.get('/api/admin/refunds', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'OPERATIONS_ADMIN'), async (req: Request, res: Response) => {
+  try {
+    const allBookings = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.listBookings()
+      : Object.values(db.bookings || {});
+
+    const cancelledBookings = allBookings
+      .filter((b: any) => b.status === 'CANCELLED' || b.refundStatus === 'pending' || b.refundStatus === 'refunded')
+      .map((b: any) => {
+        const client = db.users?.[b.clientId] || {};
+        const companion = db.users?.[b.companionId] || {};
+        return {
+          id: b.id,
+          bookingCode: b.bookingCode || b.id.slice(0, 8),
+          clientId: b.clientId,
+          clientName: b.clientName || client.name || 'Client',
+          clientPhone: b.clientPhone || client.phone || 'N/A',
+          companionId: b.companionId,
+          companionName: b.companionName || companion.name || 'Companion',
+          serviceName: b.serviceName || 'Session',
+          date: b.date,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          meetingLocation: b.meetingLocation,
+          totalPaidAmount: b.totalBookingAmount || Number(((b.totalPayablePaise || b.bookingAmountPaise || 0) / 100).toFixed(2)),
+          cancelledAt: b.cancelledAt || b.updatedAt || b.createdAt,
+          cancellationReason: b.cancellationReason || b.rejectionReason || 'Client Cancelled',
+          cancellationNote: b.cancellationNote || null,
+          hoursBeforeStart: b.hoursBeforeStart ?? null,
+          refundPercentage: b.refundPercentage ?? (b.refundAmount > 0 ? 100 : 0),
+          refundAmount: b.refundAmount ?? 0,
+          refundStatus: b.refundStatus || (b.refundAmount > 0 ? 'pending' : 'not_applicable'),
+          refundBankDetails: b.refundBankDetails || null,
+          refundUtr: b.refundUtr || null,
+          refundedAt: b.refundedAt || null,
+          refundedByAdmin: b.refundedByAdmin || null
+        };
+      })
+      .sort((a: any, b: any) => new Date(b.cancelledAt || 0).getTime() - new Date(a.cancelledAt || 0).getTime());
+
+    return res.json({ success: true, count: cancelledBookings.length, refunds: cancelledBookings });
+  } catch (error: any) {
+    console.error('Failed to list refunds', error);
+    return res.status(500).json({ error: 'Failed to retrieve refunds list.' });
+  }
+});
+
+// Admin Panel: Mark as Refunded with UTR reference
+app.post('/api/admin/bookings/:id/refund', requireAdminRoles('SUPER_ADMIN', 'FINANCE_ADMIN', 'SUPPORT_ADMIN', 'OPERATIONS_ADMIN'), async (req: Request, res: Response) => {
+  const bookingId = req.params.id;
+  const admin = (req as AuthenticatedRequest).adminUser;
+  const utrNumber = typeof req.body?.utrNumber === 'string' ? req.body.utrNumber.trim() : '';
+  const refundNote = typeof req.body?.refundNote === 'string' ? req.body.refundNote.trim() : '';
+
+  if (!utrNumber || utrNumber.length < 4) {
+    return res.status(400).json({ error: 'A valid Transaction or UTR reference number is required.' });
+  }
+
+  try {
+    const booking = getDatabaseType() === 'supabase'
+      ? await databaseAdapter.getBooking(bookingId)
+      : db.bookings[bookingId];
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+    const updates = {
+      refundStatus: 'refunded',
+      refundUtr: utrNumber,
+      refundedAt: new Date().toISOString(),
+      refundedByAdmin: admin?.email || admin?.name || 'Admin',
+      refundAdminNote: refundNote || null
+    };
+
+    if (getDatabaseType() === 'supabase') {
+      await databaseAdapter.updateBooking(bookingId, updates);
+    } else {
+      if (db.bookings[bookingId]) {
+        Object.assign(db.bookings[bookingId], updates);
+      }
+    }
+
+    return res.json({ success: true, message: 'Refund marked as processed successfully.', updates });
+  } catch (error: any) {
+    console.error('Failed to mark booking as refunded', error);
+    return res.status(500).json({ error: error.message || 'Failed to update refund status.' });
   }
 });
 
