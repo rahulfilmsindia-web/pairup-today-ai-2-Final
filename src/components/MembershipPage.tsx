@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { 
   Sparkles, CheckCircle2, Crown, Clock, Gift, 
   ArrowRight, AlertCircle, Check, RefreshCw, Zap, Award
 } from 'lucide-react';
 import { 
   purchaseCompanionMembership, 
-  isNativePlatform, 
   MEMBERSHIP_TIERS,
   CompanionMembershipPlan,
   MEMBERSHIP_PRICE_INR
@@ -38,7 +38,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
     isTrialPhoneUsed: false
   });
 
-  const isNative = isNativePlatform();
+  const isNative = Capacitor.isNativePlatform();
 
   // Load anti-fraud trial status
   useEffect(() => {
@@ -272,7 +272,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
               </>
             ) : (
               <>
-                <span>{isNative ? 'Subscribe via Google Play' : 'Subscribe STARTER'}</span>
+                <span>{isNative ? 'Subscribe STARTER (₹449)' : 'Subscribe STARTER (₹449)'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
@@ -327,7 +327,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
               </>
             ) : (
               <>
-                <span>{isNative ? 'Subscribe via Google Play' : 'Subscribe PROFESSIONAL'}</span>
+                <span>{isNative ? 'Subscribe PROFESSIONAL (₹1,099)' : 'Subscribe PROFESSIONAL (₹1,099)'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
@@ -376,7 +376,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
               </>
             ) : (
               <>
-                <span>{isNative ? 'Subscribe via Google Play' : 'Subscribe PREMIUM'}</span>
+                <span>{isNative ? 'Subscribe PREMIUM (₹5,999)' : 'Subscribe PREMIUM (₹5,999)'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
