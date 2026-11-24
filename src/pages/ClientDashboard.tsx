@@ -3024,64 +3024,109 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
 
         {/* TAB 9: UPCOMING BOOKINGS */}
         {activeTab === 'upcoming' && (
-          <div className="space-y-4">
-            <h3 className="text-base font-bold text-slate-100">Upcoming & Active Sessions</h3>
+          <div className="space-y-4 max-w-4xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                  <CalendarCheck className="w-5 h-5 text-[#6D28D9]" />
+                  <span>Upcoming & Active Sessions</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Live sessions, companion arrival tracking, and verified meeting OTPs.
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-purple-50 text-[#6D28D9] border border-purple-200 text-xs font-bold">
+                {upcomingBookings.length} Active
+              </span>
+            </div>
+
             {upcomingBookings.length === 0 ? (
-              <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-xs text-slate-400">
-                No active or upcoming bookings right now.
+              <div className="p-12 text-center rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 text-xs text-slate-500 shadow-sm space-y-2">
+                <Calendar className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="font-bold text-slate-700 text-sm">No active or upcoming bookings right now.</p>
+                <p className="text-slate-400">Book a verified companion from nearby matches to start your session.</p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('discover')}
+                  className="mt-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs shadow-md shadow-pink-500/20 cursor-pointer min-h-[44px]"
+                >
+                  Explore Nearby Companions
+                </button>
               </div>
             ) : (
               upcomingBookings.map(b => (
-                <div key={b.id} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 text-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                    <div>
-                      <span className="font-bold text-slate-100 text-sm block">{b.serviceName} ({b.bookingCode})</span>
-                      <span className="text-slate-400">Host: {b.companionName} · {b.date} ({b.startTime} - {b.endTime})</span>
+                <div key={b.id} className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-all space-y-4 text-xs">
+                  {/* Card Header & Status */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-extrabold text-slate-900 text-sm sm:text-base">{b.serviceName}</span>
+                        <span className="font-mono text-[11px] text-slate-400 font-bold">#{b.bookingCode || b.id?.slice(0, 8)}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] border ${
+                          b.status === 'CONFIRMED' || b.status === 'CONFIRMED_PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' :
+                          b.status === 'IN_PROGRESS' || b.status === 'ONGOING' ? 'bg-purple-50 text-purple-700 border-purple-300 animate-pulse' :
+                          b.status === 'COMPANION_ARRIVED' ? 'bg-amber-50 text-amber-700 border-amber-300' :
+                          'bg-sky-50 text-sky-700 border-sky-300'
+                        }`}>
+                          {b.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-500 text-xs">
+                        <span className="font-semibold text-slate-700">Host: {b.companionName}</span>
+                        <span>•</span>
+                        <span>📅 {b.date} ({b.startTime} - {b.endTime})</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-bold">{b.status}</span>
+
+                    {/* Action Buttons with Thumb-Friendly >= 44px Heights */}
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => {
                           setTrackedBooking(b);
                           setActiveTab('tracking');
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold hover:from-pink-600 hover:to-rose-600 flex items-center gap-1 shadow-sm cursor-pointer"
+                        className="flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-extrabold hover:from-pink-600 hover:to-rose-600 flex items-center justify-center gap-1.5 shadow-md shadow-pink-500/20 cursor-pointer active:scale-95 transition"
                       >
-                        <Navigation className="w-3 h-3" />
+                        <Navigation className="w-4 h-4" />
                         <span>Track Arrival</span>
                       </button>
                       <button
                         onClick={() => setActiveChatBooking(b)}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 cursor-pointer"
+                        className="flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-extrabold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition"
                       >
-                        Chat
+                        <MessageSquare className="w-4 h-4" />
+                        <span>Chat</span>
                       </button>
                       {canCancelBooking(b) && (
                         <button
                           type="button"
                           onClick={() => openCancelBookingModal(b)}
-                          className="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-600 hover:text-white font-bold transition flex items-center gap-1 cursor-pointer"
+                          className="min-h-[44px] px-3.5 py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-extrabold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                         >
-                          <XCircle className="w-3.5 h-3.5" />
+                          <XCircle className="w-4 h-4" />
                           <span>{t.cancelBookingBtn}</span>
                         </button>
                       )}
                     </div>
                   </div>
+
+                  {/* Information Grid: Venue & High-Contrast OTP Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                      <span className="text-slate-500 block mb-1">Meeting Venue</span>
-                      <span className="font-medium text-slate-200">{b.meetingLocation}</span>
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">Meeting Venue</span>
+                      <span className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-2">{b.meetingLocation}</span>
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/30">
-                      <span className="text-amber-400 block mb-1">1. Start OTP (Give verbally on arrival)</span>
-                      <span className="font-mono text-base font-bold text-amber-300">
+
+                    <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-300 flex flex-col justify-between">
+                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider block mb-1">1. Start OTP (Give verbally on arrival)</span>
+                      <span className="font-mono text-base sm:text-lg font-black text-amber-950">
                         {b.startOtpVerified ? 'Verified ✓' : (b.status === 'COMPANION_ARRIVED' || b.status === 'IN_PROGRESS' ? (b.startOtp || 'Available on arrival') : 'Locked until arrival')}
                       </span>
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/30">
-                      <span className="text-emerald-400 block mb-1">2. Completion OTP (Give at session end)</span>
-                      <span className="font-mono text-base font-bold text-emerald-300">
+
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-300 flex flex-col justify-between">
+                      <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-wider block mb-1">2. Completion OTP (Give at session end)</span>
+                      <span className="font-mono text-base sm:text-lg font-black text-emerald-950">
                         {b.endOtpVerified ? 'Verified ✓' : (b.startOtpVerified ? (b.endOtp || 'Available in progress') : (b.endOtp || 'Unlocks after Start'))}
                       </span>
                     </div>

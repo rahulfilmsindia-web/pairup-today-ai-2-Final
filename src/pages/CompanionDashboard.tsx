@@ -72,15 +72,15 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
   const latePenaltyPaise = Number(booking.latePenaltyPaise || booking.late_penalty_paise || 0);
 
   return (
-    <div className={`p-4 rounded-xl border text-center space-y-1.5 ${isFinished ? 'bg-amber-500/10 border-amber-500/40' : 'bg-pink-500/10 border-pink-500/30'}`}>
-      <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+    <div className={`p-4 sm:p-5 rounded-2xl border text-center space-y-2 shadow-xs ${isFinished ? 'bg-amber-50 border-amber-300 text-amber-950' : 'bg-purple-50 border-purple-200 text-purple-950'}`}>
+      <span className="text-xs font-extrabold uppercase tracking-wider block text-slate-700">
         {isFinished ? '⏰ Scheduled Slot Completed — Ready to End Session' : '⏱️ Official Meeting in Progress'}
       </span>
-      <div className="font-mono text-2xl font-black text-pink-400">
+      <div className="font-mono text-3xl font-black text-[#6D28D9]">
         {timeFormatted}
       </div>
       {lateMins > 0 && (
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-semibold my-1">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold my-1 shadow-xs">
           <span>⚠️ Late Start: {lateMins} mins</span>
           <span>•</span>
           <span>Penalty Deducted: -₹{(latePenaltyPaise / 100).toFixed(2)}</span>
@@ -88,11 +88,79 @@ const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
           <span>Client receives full duration</span>
         </div>
       )}
-      <p className="text-[10px] text-slate-400">
+      <p className="text-xs text-slate-600">
         {isFinished 
           ? 'Slot duration reached. The Ending OTP has been unlocked on client’s dashboard and dispatched. Enter it below to complete and lock earnings.'
           : `Session active for ${booking.durationHours || 1} hour(s). Live synchronized countdown timer.`}
       </p>
+    </div>
+  );
+};
+
+// 4 Individual Auto-Focusing Numeric OTP Input Boxes (Native App UX)
+const FourDigitOtpInput: React.FC<{
+  value: string;
+  onChange: (val: string) => void;
+  disabled?: boolean;
+}> = ({ value, onChange, disabled }) => {
+  const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
+  const digits = useMemo(() => {
+    const chars = (value || '').split('').slice(0, 4);
+    while (chars.length < 4) chars.push('');
+    return chars;
+  }, [value]);
+
+  const handleChange = (index: number, char: string) => {
+    const clean = char.replace(/\D/g, '');
+    const next = [...digits];
+    if (!clean) {
+      next[index] = '';
+      onChange(next.join(''));
+      return;
+    }
+    next[index] = clean[clean.length - 1];
+    onChange(next.join(''));
+
+    if (index < 3) {
+      inputsRef.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !digits[index] && index > 0) {
+      inputsRef.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+    if (pasted) {
+      onChange(pasted);
+      const targetIndex = Math.min(pasted.length, 3);
+      inputsRef.current[targetIndex]?.focus();
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center gap-2.5 sm:gap-3 py-1">
+      {[0, 1, 2, 3].map((idx) => (
+        <input
+          key={idx}
+          ref={(el) => { inputsRef.current[idx] = el; }}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={1}
+          value={digits[idx] || ''}
+          disabled={disabled}
+          onChange={(e) => handleChange(idx, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(idx, e)}
+          onPaste={handlePaste}
+          className="w-12 h-14 sm:w-14 sm:h-16 text-center font-mono font-black text-2xl sm:text-3xl rounded-xl sm:rounded-2xl bg-white border-2 border-purple-300 focus:border-[#6D28D9] focus:ring-4 focus:ring-purple-100 text-slate-900 shadow-sm transition-all outline-none"
+          placeholder="•"
+        />
+      ))}
     </div>
   );
 };
@@ -2872,68 +2940,77 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                 </div>
               </div>
 
-              {/* MOBILE VIEW (< sm): Clean Stack so the Artwork is 100% visible & faces are NEVER covered */}
+              {/* MOBILE VIEW (< sm): Clean, Sleek, High-Contrast Status Header with Prominent Rapido-Style Online/Offline Toggle */}
               <div className="sm:hidden space-y-3">
-                <div className="relative w-full rounded-2xl overflow-hidden shadow-md border border-pink-200/60 bg-pink-50">
-                  <img
-                    src="/assets/companion_welcome_banner.png"
-                    alt="Companion Welcome Artwork"
-                    className="w-full aspect-[3/1] object-cover object-left"
-                  />
-                  <div className="absolute top-2 right-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-pink-500/90 text-white text-[10px] font-extrabold shadow">
-                      {language === 'bn' ? 'আনন্দ ছড়ান ❤️🌹' : language === 'hi' ? 'खुशियां फैलाएं ❤️🌹' : 'Spread Happiness ❤️🌹'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-white/95 backdrop-blur-md border border-purple-100/80 rounded-2xl p-4 shadow-sm space-y-3 text-left">
+                <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm space-y-3.5 text-left">
+                  {/* Profile & Name Row */}
                   <div className="flex items-center gap-3">
                     <div className="relative shrink-0">
                       <img
                         src={user?.profilePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'}
                         alt={user?.legalName}
-                        className="w-14 h-14 rounded-full object-cover ring-2 ring-pink-400 shadow-md"
+                        className="w-14 h-14 rounded-full object-cover ring-2 ring-pink-500 shadow-sm"
                       />
-                      <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white ${!isAvailabilityPaused ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                      <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white shadow-xs ${!isAvailabilityPaused ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h2 className="text-base font-extrabold text-[#191040] flex items-center gap-1 truncate">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-pink-50 text-pink-700 text-[10px] font-extrabold border border-pink-200 mb-1">
+                        <span>✨ Verified Host</span>
+                      </div>
+                      <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-1 truncate">
                         <span>{language === 'bn' ? 'স্বাগতম, ' : language === 'hi' ? 'स्वागत है, ' : 'Welcome Back, '}<span className="text-pink-600">{userFirstName}!</span></span>
                         <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-sky-500 text-white text-[9px] font-bold">✓</span>
                       </h2>
                       <p className="text-[11px] text-slate-500 line-clamp-1">
-                        {language === 'bn' ? 'আপনি একজন অসাধারণ কম্প্যানিয়ন। ইতিবাচকতা ছড়াতে থাকুন!' : language === 'hi' ? 'आप एक अद्भुत साथी हैं। सकारात्मकता फैलाते रहें!' : "You're an amazing companion. Keep spreading positivity!"}
+                        {!isAvailabilityPaused ? 'Ready to accept incoming booking requests' : 'Currently offline • Turn on to receive bookings'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="pt-1 flex items-center justify-between gap-2 border-t border-purple-50">
-                    <div className="inline-flex items-center gap-1.5 text-xs font-black text-white bg-slate-950/90 px-3 py-1.5 rounded-xl border border-slate-700 shadow-sm">
-                      <span className="text-slate-300">{language === 'bn' ? 'আমার স্ট্যাটাস:' : language === 'hi' ? 'मेरी स्थिति:' : 'My Status:'}</span>
-                      <span className={!isAvailabilityPaused ? 'text-emerald-400 font-black' : 'text-slate-300 font-bold'}>
-                        {!isAvailabilityPaused ? (language === 'bn' ? 'অনলাইন 🟢' : language === 'hi' ? 'ऑनलाइन 🟢' : 'Online 🟢') : (language === 'bn' ? 'অফলাইন ⚪' : language === 'hi' ? 'ऑफलाइन ⚪' : 'Offline ⚪')}
+                  {/* Prominent Rapido-Style Online / Offline Toggle Switch */}
+                  <button
+                    type="button"
+                    onClick={handleToggleAvailabilityPause}
+                    disabled={togglingOnline}
+                    className={`w-full min-h-[48px] px-4 py-3 rounded-xl font-extrabold text-xs transition-all flex items-center justify-between cursor-pointer active:scale-95 shadow-xs ${
+                      !isAvailabilityPaused
+                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/40'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full shrink-0 ${!isAvailabilityPaused ? 'bg-white animate-ping' : 'bg-slate-400'}`} />
+                      <span className="tracking-wide text-xs">
+                        {!isAvailabilityPaused ? '● YOU ARE ONLINE (LIVE)' : '○ YOU ARE OFFLINE'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={handleToggleAvailabilityPause}
-                        disabled={togglingOnline}
-                        className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold shadow-sm ${
-                          !isAvailabilityPaused
-                            ? 'bg-amber-500 text-slate-950'
-                            : 'bg-emerald-600 text-white'
-                        }`}
-                      >
-                        {!isAvailabilityPaused ? (language === 'bn' ? 'অফলাইন' : 'Offline') : (language === 'bn' ? 'অনলাইন' : 'Online')}
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('requests')}
-                        className="px-3 py-1.5 rounded-xl bg-purple-700 text-white text-[11px] font-bold"
-                      >
-                        {language === 'bn' ? 'অনুরোধ' : 'Requests'} ({pendingBookings.length})
-                      </button>
+
+                    <div className={`px-3 py-1 rounded-lg text-[11px] font-black tracking-wider uppercase transition-all ${
+                      !isAvailabilityPaused
+                        ? 'bg-white/20 text-white border border-white/40'
+                        : 'bg-slate-800 text-white shadow-xs'
+                    }`}>
+                      {!isAvailabilityPaused ? 'Tap to Go Offline' : 'Tap to Go Live'}
                     </div>
+                  </button>
+
+                  {/* Quick Action Chips Row */}
+                  <div className="pt-1 flex items-center justify-between gap-2 border-t border-slate-100">
+                    <button
+                      onClick={() => setActiveTab('requests')}
+                      className="flex-1 min-h-[44px] px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                      <span>{language === 'bn' ? 'অনুরোধ' : language === 'hi' ? 'अनুরোধ' : 'Requests'} ({pendingBookings.length})</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('upcoming')}
+                      className="flex-1 min-h-[44px] px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Sessions</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -3183,37 +3260,39 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                         </div>
                       </div>
 
-                      {/* 3 Action Buttons (Chat with Client, Get Booking Location, Enter OTP) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveChatBooking(b);
-                            setActiveTab('chat');
-                          }}
-                          className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-xs shadow-md shadow-pink-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          <span>💬 Chat with {(b.clientName || 'Client').split(' ')[0]}</span>
-                        </button>
+                      {/* Mobile-First Action Buttons: Row 1: Chat + Location (grid-cols-2), Row 2: Enter OTP (full-width) */}
+                      <div className="space-y-2 pt-1">
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveChatBooking(b);
+                              setActiveTab('chat');
+                            }}
+                            className="min-h-[44px] py-2.5 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-xs shadow-md shadow-pink-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">💬 Chat</span>
+                          </button>
 
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.meetingLocation || 'Meeting Venue')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 text-center"
-                        >
-                          <Navigation className="w-3.5 h-3.5" />
-                          <span>📍 Get Booking Location</span>
-                        </a>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.meetingLocation || 'Meeting Venue')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-h-[44px] py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 text-center"
+                          >
+                            <Navigation className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">📍 Location</span>
+                          </a>
+                        </div>
 
                         <button
                           type="button"
                           onClick={() => setActiveTab('upcoming')}
-                          className="py-2.5 px-3 rounded-xl bg-[#6D28D9] hover:bg-purple-800 text-white font-extrabold text-xs shadow-md shadow-purple-900/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                          className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-[#6D28D9] hover:bg-purple-800 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-purple-900/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                         >
-                          <Play className="w-3.5 h-3.5" />
-                          <span>🚶 Enter OTP & Start</span>
+                          <Play className="w-4 h-4 fill-white" />
+                          <span>🚶 Enter OTP & Start Session</span>
                         </button>
                       </div>
                     </div>
@@ -4337,62 +4416,69 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
             )}
 
             {upcomingBookings.length === 0 ? (
-              <div className="p-8 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400">
-                No active or upcoming meetings found. Confirmed bookings will appear here once accepted and paid.
+              <div className="p-12 text-center rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 text-slate-500 shadow-sm space-y-2">
+                <Calendar className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="font-bold text-slate-800 text-sm">No active or upcoming meetings found.</p>
+                <p className="text-xs text-slate-400">Confirmed bookings will appear here once accepted and paid by the client.</p>
               </div>
             ) : (
               upcomingBookings.map(b => (
-                <div key={b.id} className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                <div key={b.id} className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-all space-y-4 text-slate-800">
                   {/* CLIENT PROFILE & BOOKING HEADER */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-3.5">
                       <img
                         src={b.clientPhoto || '/assets/aistudio/image_AIIEuv.png_bc62f6e1.png'}
                         alt={b.clientName || 'Client'}
-                        className="w-12 h-12 rounded-full object-cover border-2 border-pink-500 shadow-md shrink-0"
+                        className="w-13 h-13 rounded-full object-cover ring-2 ring-pink-500 shadow-sm shrink-0"
                       />
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-slate-100 text-sm">{b.clientName || 'Client'}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold text-[10px] border border-pink-500/30">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-slate-900 text-base">{b.clientName || 'Client'}</span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-pink-50 text-pink-700 font-extrabold text-[10px] border border-pink-200">
                             {b.serviceName}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-400 block font-mono">
-                          Booking ID: {b.bookingCode || b.id?.slice(0, 8)}
+                        <span className="text-[11px] text-slate-400 block font-mono font-bold mt-0.5">
+                          Booking ID: #{b.bookingCode || b.id?.slice(0, 8)}
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 self-start sm:self-center">
-                      <span className="px-3 py-1 rounded-full bg-sky-500/20 text-sky-300 font-extrabold text-xs border border-sky-500/30">
+                      <span className={`px-3 py-1 rounded-full font-extrabold text-xs border ${
+                        b.status === 'CONFIRMED' || b.status === 'CONFIRMED_PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' :
+                        b.status === 'IN_PROGRESS' || b.status === 'ONGOING' ? 'bg-purple-50 text-purple-700 border-purple-300 animate-pulse' :
+                        b.status === 'COMPANION_ARRIVED' ? 'bg-amber-50 text-amber-700 border-amber-300' :
+                        'bg-sky-50 text-sky-700 border-sky-300'
+                      }`}>
                         {b.status}
                       </span>
                     </div>
                   </div>
 
-                  {/* SCHEDULE TIME, DURATION & CLIENT DETAILS */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-pink-400 shrink-0" />
+                  {/* SCHEDULE TIME, DURATION & EARNINGS BREAKDOWN */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-purple-50/60 border border-purple-100 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <Calendar className="w-4 h-4 text-purple-600 shrink-0" />
                       <div>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Schedule Slot</span>
-                        <span className="font-bold text-slate-200">{b.date} • {b.startTime} - {b.endTime}</span>
+                        <span className="text-[10px] text-purple-700 uppercase font-extrabold tracking-wider block">Schedule Slot</span>
+                        <span className="font-bold text-slate-900">{b.date} • {b.startTime} - {b.endTime}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div className="flex items-center gap-2.5">
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                       <div>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Duration</span>
-                        <span className="font-bold text-slate-200">{b.durationHours || 1} Hour(s) Session</span>
+                        <span className="text-[10px] text-amber-700 uppercase font-extrabold tracking-wider block">Duration</span>
+                        <span className="font-bold text-slate-900">{b.durationHours || 1} Hour(s) Session</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div className="flex items-center gap-2.5">
+                      <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
                       <div>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Your Net Earnings (85%)</span>
-                        <span className="font-bold text-emerald-400">
+                        <span className="text-[10px] text-emerald-700 uppercase font-extrabold tracking-wider block">Your Net Earnings (85%)</span>
+                        <span className="font-extrabold text-emerald-700 text-sm">
                           ₹{(((Number(b.companionNetSharePaise) || Math.round((Number(b.bookingAmountPaise || b.amountPaise || b.baseAmountPaise) || 49900) * 0.85)) / 100)).toFixed(2)}
                         </span>
                       </div>
@@ -4400,46 +4486,55 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                   </div>
 
                   {b.notes && (
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-300 italic">
-                      <span className="font-semibold text-slate-400 not-italic block text-[10px] uppercase mb-0.5">Client Note:</span>
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 italic">
+                      <span className="font-bold text-slate-500 not-italic block text-[10px] uppercase mb-0.5">Client Note:</span>
                       "{b.notes}"
                     </div>
                   )}
 
-                  {/* ACTION TABS: GET BOOKING LOCATION & CHAT WITH CLIENT */}
-                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-950 to-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Booked Meeting Venue</span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <MapPin className="w-4 h-4 text-pink-500 shrink-0" />
-                        <span className="text-xs font-bold text-slate-100 truncate">{b.meetingLocation || b.bookingLocationName || b.booking_location_name || 'Specified Meeting Venue'}</span>
+                  {/* MEETING VENUE & MOBILE-FIRST ACTION BUTTONS */}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-pink-600 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Booked Meeting Venue</span>
+                        <span className="text-xs font-bold text-slate-900 truncate block">
+                          {b.meetingLocation || b.bookingLocationName || b.booking_location_name || 'Specified Meeting Venue'}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {(b.meetingLocation || b.bookingLocationName || b.booking_location_name) && (
-                        <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation || b.bookingLocationName || b.booking_location_name)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+                    {/* Action Buttons: Row 1: Chat + Location (grid-cols-2), Row 2: Cancel (if unverified) */}
+                    <div className="space-y-2 pt-1">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveChatBooking(b);
+                            setActiveTab('chat');
+                          }}
+                          className="min-h-[44px] py-2.5 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-xs shadow-md shadow-pink-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                         >
-                          <Navigation className="w-3.5 h-3.5" />
-                          <span>Get Booking Location</span>
-                        </a>
-                      )}
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">Chat with Client</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveChatBooking(b);
-                          setActiveTab('chat');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white text-xs font-bold shadow-lg shadow-pink-500/20 transition-all cursor-pointer"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Chat with Client</span>
-                      </button>
+                        {(b.meetingLocation || b.bookingLocationName || b.booking_location_name) ? (
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation || b.bookingLocationName || b.booking_location_name)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-h-[44px] py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 text-center"
+                          >
+                            <Navigation className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">Get Location</span>
+                          </a>
+                        ) : (
+                          <div className="min-h-[44px] py-2.5 px-3 rounded-xl bg-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center">
+                            No Venue Coords
+                          </div>
+                        )}
+                      </div>
 
                       {!b.startOtpVerified && b.status !== 'ONGOING' && b.status !== 'COMPLETED' && (
                         <button
@@ -4448,9 +4543,9 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                             setCancellingBooking(b);
                             setCancellationError(null);
                           }}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold transition-all cursor-pointer"
+                          className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
                           <span>Cancel Booking</span>
                         </button>
                       )}
@@ -4459,38 +4554,47 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
 
                   {/* 0. ARRIVAL TRIGGER (If still in CONFIRMED status) */}
                   {b.status === 'CONFIRMED' && (
-                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <span className="text-xs text-amber-300">
-                        Have you arrived at the venue? Click to record your arrival and dispatch the 6-digit Start OTP to the client's registered phone.
-                      </span>
+                    <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="space-y-0.5">
+                        <span className="font-extrabold text-amber-950 block">Have you arrived at the venue?</span>
+                        <span className="text-amber-800 text-[11px]">
+                          Click to record your arrival and notify the client to prepare their 4-digit session OTP.
+                        </span>
+                      </div>
                       <button
                         onClick={() => handleSlideMeetingArrived(b.id)}
-                        className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 font-bold hover:bg-amber-500 shrink-0 text-xs transition-colors"
+                        className="min-h-[44px] px-5 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-black hover:bg-amber-500 shrink-0 text-xs transition-colors shadow-sm cursor-pointer active:scale-95"
                       >
                         I Have Arrived at Location
                       </button>
                     </div>
                   )}
 
-                  {/* 1. START OTP INPUT FORM */}
+                  {/* 1. START OTP INPUT FORM WITH 4 INDIVIDUAL AUTO-FOCUS BOXES */}
                   {!b.startOtpVerified && (
-                    <div className="p-4 rounded-xl bg-slate-950 border border-amber-500/30 space-y-3">
+                    <div className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-purple-50/80 border-2 border-purple-200 shadow-sm space-y-4">
                       <div className="flex items-center gap-2">
-                        <KeyRound className="w-4 h-4 text-amber-400" />
-                        <span className="font-bold text-amber-300 text-sm">Step 1: Enter 4-Digit Session OTP</span>
+                        <KeyRound className="w-5 h-5 text-[#6D28D9]" />
+                        <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">Step 1: Enter 4-Digit Session OTP</h4>
                       </div>
-                      <p className="text-slate-400 text-[11px]">
-                        The client displays this 4-digit security OTP on their live dashboard. Enter the code below to verify arrival, stop live tracking, and start the official session timer.
+                      <p className="text-slate-600 text-xs leading-relaxed">
+                        Ask the client for their confidential 4-digit security OTP shown on their screen. Entering this code verifies meeting arrival, stops live GPS tracking, and starts the official session timer.
                       </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <input
-                          type="text"
-                          maxLength={6}
-                          placeholder="4-digit Session OTP"
+
+                      {/* 4 Individual Numeric Boxes */}
+                      <div className="py-1">
+                        <FourDigitOtpInput
                           value={startOtpInputs[b.id] || ''}
-                          onChange={e => setStartOtpInputs({ ...startOtpInputs, [b.id]: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                          className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono font-bold text-amber-400 text-sm"
+                          onChange={val => setStartOtpInputs({ ...startOtpInputs, [b.id]: val })}
                         />
+                      </div>
+
+                      {/* Late Delay Input with Clear Guard */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                          <span>Late delay (minutes):</span>
+                          <span className="text-[11px] font-normal text-slate-500">Enter 0 if reached on time</span>
+                        </label>
                         <input
                           type="number"
                           min={0}
@@ -4498,15 +4602,21 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                           placeholder="Late delay mins (0 if on time)"
                           value={delayMinutesInputs[b.id] ?? ''}
                           onChange={e => setDelayMinutesInputs({ ...delayMinutesInputs, [b.id]: Math.max(0, parseInt(e.target.value, 10) || 0) })}
-                          className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono text-slate-200 text-xs"
+                          className="w-full min-h-[44px] px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-center font-mono font-bold text-slate-900 text-sm focus:border-purple-600 outline-none"
                         />
-                        <button
-                          onClick={() => handleVerifyStartOtp(b.id)}
-                          className="px-4 py-2 bg-amber-400 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-500 transition-colors"
-                        >
-                          Verify & Start Session
-                        </button>
+                        <p className="text-[11px] text-slate-500">
+                          Companions arriving late incur per-minute deduction. The client receives their full booked time.
+                        </p>
                       </div>
+
+                      {/* Prominent Full-Width Verify & Start Button */}
+                      <button
+                        onClick={() => handleVerifyStartOtp(b.id)}
+                        className="w-full min-h-[48px] py-3 px-4 bg-gradient-to-r from-[#6D28D9] to-indigo-600 hover:from-purple-800 hover:to-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-md shadow-purple-900/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      >
+                        <Play className="w-4 h-4 fill-white" />
+                        <span>Verify & Start Session</span>
+                      </button>
                     </div>
                   )}
 
@@ -4517,28 +4627,29 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                       <MeetingCountdown booking={b} />
 
                       {/* COMPLETION OTP INPUT FORM */}
-                      <div className="p-4 rounded-xl bg-slate-950 border border-emerald-500/30 space-y-3">
+                      <div className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-emerald-50/80 border-2 border-emerald-200 shadow-sm space-y-3.5">
                         <div className="flex items-center gap-2">
-                          <KeyRound className="w-4 h-4 text-emerald-400" />
-                          <span className="font-bold text-emerald-300 text-sm">Step 2: Enter Meeting Ending OTP</span>
+                          <KeyRound className="w-5 h-5 text-emerald-600" />
+                          <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">Step 2: Enter Meeting Ending OTP</h4>
                         </div>
-                        <p className="text-slate-400 text-[11px]">
-                          Once the scheduled slot finishes, ask the client for their 6-digit Completion OTP (unlocked automatically on their dashboard) to finalize the session and claim your earnings.
+                        <p className="text-slate-600 text-xs leading-relaxed">
+                          Once the scheduled slot finishes, ask the client for their 6-digit Completion OTP (unlocked automatically on their dashboard) to finalize the session and claim your 85% earnings.
                         </p>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2.5">
                           <input
                             type="text"
                             maxLength={6}
                             placeholder="6-digit Ending OTP"
                             value={endOtpInputs[b.id] || ''}
                             onChange={e => setEndOtpInputs({ ...endOtpInputs, [b.id]: e.target.value.replace(/\D/g, '').slice(0, 6) })}
-                            className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-center font-mono font-bold text-emerald-400 text-sm max-w-[200px]"
+                            className="w-full sm:w-auto flex-1 min-h-[44px] px-4 py-2.5 bg-white border-2 border-emerald-300 rounded-xl text-center font-mono font-black text-emerald-950 text-base focus:border-emerald-600 outline-none"
                           />
                           <button
                             onClick={() => handleCompleteBooking(b.id)}
-                            className="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl hover:bg-emerald-400 transition-colors"
+                            className="min-h-[48px] px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md shadow-emerald-600/25 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
                           >
-                            Complete Session & Claim Earnings
+                            <Check className="w-4 h-4" />
+                            <span>Complete Session & Claim Earnings</span>
                           </button>
                         </div>
                       </div>

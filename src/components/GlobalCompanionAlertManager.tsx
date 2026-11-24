@@ -67,6 +67,7 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const ringtoneTimerRef = useRef<any>(null);
   const pulseTimerRef = useRef<any>(null);
+  const synthIntervalRef = useRef<any>(null);
 
   // Reliable companion detection: Only active when user is logged in and active as a COMPANION
   const isCompanion = Boolean(
@@ -75,6 +76,41 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
       (user.role === 'DUAL' && user.activeRole === 'COMPANION')
     )
   );
+
+  // Play a reliable two-tone ringtone chime via Web Audio API
+  const playSynthAlertChime = useCallback(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      // Tone 1: 880Hz (A5)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.35, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.22);
+
+      // Tone 2: 1320Hz (E6)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1320, now + 0.12);
+      gain2.gain.setValueAtTime(0.4, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.38);
+    } catch {}
+  }, []);
 
   // Close any ongoing system notifications
   const closeAllCallNotifications = useCallback(() => {
@@ -96,6 +132,10 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
   // Stop ringtone and restore background keepalive audio
   const stopRingtone = useCallback(() => {
     try {
+      if (synthIntervalRef.current) {
+        clearInterval(synthIntervalRef.current);
+        synthIntervalRef.current = null;
+      }
       if (ringtoneTimerRef.current) {
         clearInterval(ringtoneTimerRef.current);
         ringtoneTimerRef.current = null;
@@ -140,6 +180,10 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
     try {
       stopRingtone();
 
+      // Trigger instant chime & repeat every 1.5s
+      playSynthAlertChime();
+      synthIntervalRef.current = setInterval(playSynthAlertChime, 1500);
+
       if (!backgroundAudioRef.current && typeof window !== 'undefined') {
         const audio = new Audio('/assets/ringtone.wav');
         audio.loop = true;
@@ -178,7 +222,7 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
     } catch (e) {
       console.warn('startRingtone error', e);
     }
-  }, [stopRingtone]);
+  }, [stopRingtone, playSynthAlertChime]);
 
   // Initialize and register Web Push Subscription via Service Worker & VAPID
   const setupWebPush = useCallback(async () => {
@@ -573,83 +617,83 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
         </div>
       )}
 
-      {/* Global Urgent Incoming Booking Modal (Displays across ALL pages: Home, About, Dashboard, etc.) */}
+      {/* Global Urgent Incoming Booking Modal (Rapido Captain-Style UX) */}
       {incomingBooking && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-          <div className="relative w-full max-w-md bg-slate-900 border-2 border-pink-500 rounded-3xl shadow-2xl p-6 text-slate-100 space-y-4">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-md bg-white border-2 border-pink-500 rounded-3xl shadow-2xl p-6 text-slate-800 space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 rounded-full bg-pink-500/20 border-2 border-pink-500 flex items-center justify-center text-pink-400 animate-pulse shrink-0">
+                <div className="w-12 h-12 rounded-full bg-pink-50 border-2 border-pink-500 flex items-center justify-center text-pink-600 animate-pulse shrink-0">
                   <Bell className="w-6 h-6 animate-bounce" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-1.5">
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-1.5">
                     <span>🚨 Urgent Booking Call!</span>
                   </h3>
-                  <p className="text-xs text-pink-400 font-semibold truncate">
+                  <p className="text-xs text-pink-600 font-extrabold truncate">
                     {incomingBooking.clientName || 'A Client'} is waiting
                   </p>
                 </div>
               </div>
-              <div className="px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-extrabold text-xs shrink-0 animate-pulse">
+              <div className="px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 font-black text-xs shrink-0 animate-pulse">
                 ⏱️ {countdown}s
               </div>
             </div>
 
             {/* Details Box */}
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2.5">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2.5 text-slate-700">
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">Service:</span>
-                <span className="font-bold text-slate-100 text-sm">{incomingBooking.serviceName || 'Companion Session'}</span>
+                <span className="text-slate-500 font-bold">Service:</span>
+                <span className="font-extrabold text-slate-900 text-sm">{incomingBooking.serviceName || 'Companion Session'}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-400 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-slate-500" /> Date & Time:
+                <span className="text-slate-500 font-bold flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-purple-600" /> Date & Time:
                 </span>
-                <span className="font-semibold text-slate-200">
+                <span className="font-bold text-slate-800">
                   {incomingBooking.date} ({incomingBooking.startTime || '14:00'} - {incomingBooking.endTime || '16:00'})
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-400 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-slate-500" /> Duration:
+                <span className="text-slate-500 font-bold flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-amber-600" /> Duration:
                 </span>
-                <span className="font-semibold text-slate-200">{incomingBooking.durationHours || 1} Hour(s)</span>
+                <span className="font-bold text-slate-800">{incomingBooking.durationHours || 1} Hour(s)</span>
               </div>
               <div className="flex justify-between items-start gap-2">
-                <span className="text-slate-400 flex items-center gap-1 shrink-0">
-                  <MapPin className="w-3.5 h-3.5 text-slate-500" /> Venue:
+                <span className="text-slate-500 font-bold flex items-center gap-1 shrink-0">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500" /> Venue:
                 </span>
-                <span className="font-semibold text-slate-200 text-right truncate max-w-[220px]">
+                <span className="font-bold text-slate-900 text-right truncate max-w-[220px]">
                   {incomingBooking.meetingLocation || 'Client Venue'}
                 </span>
               </div>
               {incomingBooking.notes && (
-                <div className="pt-2 border-t border-slate-800/80">
-                  <span className="text-slate-400 block mb-0.5">Client Notes:</span>
-                  <span className="text-slate-300 italic">"{incomingBooking.notes}"</span>
+                <div className="pt-2 border-t border-slate-200">
+                  <span className="text-slate-400 block mb-0.5 font-bold">Client Notes:</span>
+                  <span className="text-slate-700 italic">"{incomingBooking.notes}"</span>
                 </div>
               )}
-              <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
-                <span className="text-slate-300 font-bold flex items-center gap-1">
-                  <DollarSign className="w-4 h-4 text-emerald-400" /> Your Net Earnings (85%):
+              <div className="pt-2 border-t border-slate-200 flex justify-between items-center">
+                <span className="text-slate-700 font-extrabold flex items-center gap-1">
+                  <DollarSign className="w-4 h-4 text-emerald-600" /> Your Net Earnings (85%):
                 </span>
-                <span className="text-emerald-400 font-extrabold text-base">
+                <span className="text-emerald-700 font-black text-lg">
                   ₹{(totalEarningsPaise / 100).toFixed(2)}
                 </span>
               </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons (Touch targets min-h-[48px]) */}
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 type="button"
                 onClick={handleDecline}
                 disabled={isProcessing}
-                className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="min-h-[48px] py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs border border-slate-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                <X className="w-4 h-4 text-rose-400" />
+                <X className="w-4 h-4 text-rose-500" />
                 <span>Decline / Busy</span>
               </button>
 
@@ -657,7 +701,7 @@ export const GlobalCompanionAlertManager: React.FC<GlobalCompanionAlertManagerPr
                 type="button"
                 onClick={handleAccept}
                 disabled={isProcessing}
-                className="py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-extrabold text-xs shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+                className="min-h-[48px] py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
               >
                 <Check className="w-4 h-4" />
                 <span>{isProcessing ? 'Accepting...' : `Accept (${countdown}s)`}</span>
