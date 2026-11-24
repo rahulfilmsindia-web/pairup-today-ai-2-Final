@@ -4581,7 +4581,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                           style={{
                             left: b.status === 'COMPANION_ARRIVED' ? '70%' : '18%',
                             top: b.status === 'COMPANION_ARRIVED' ? '28%' : '56%',
-                            transition: 'left 1.2s cubic-bezier(0.25, 0.1, 0.25, 1), top 1.2s cubic-bezier(0.25, 0.1, 0.25, 1)'
+                            transition: 'left 1.5s linear, top 1.5s linear'
                           }}
                         >
                           <CartoonMapMarker
@@ -4590,6 +4590,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                             role="companion"
                             sublabel={b.status === 'COMPANION_ARRIVED' ? 'At Venue' : 'En Route'}
                             isMoving={b.status !== 'COMPANION_ARRIVED'}
+                            state={b.status === 'COMPANION_ARRIVED' ? 'waiting' : 'walking'}
                             size="sm"
                           />
                         </div>
@@ -4605,6 +4606,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                             role="client"
                             sublabel="Waiting at Venue ♥"
                             isMoving={false}
+                            state="waiting"
                             size="sm"
                           />
                         </div>
@@ -4637,7 +4639,11 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {/* 1. Start Turn-by-Turn Navigation (Google Maps) */}
                         <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation || b.bookingLocationName || b.booking_location_name || '')}&travelmode=driving`}
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${
+                            (b.venueLat && b.venueLng) ? `${b.venueLat},${b.venueLng}` :
+                            (b.latitude && b.longitude) ? `${b.latitude},${b.longitude}` :
+                            encodeURIComponent(b.meetingLocation || b.bookingLocationName || b.booking_location_name || '')
+                          }&travelmode=driving`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="min-h-[48px] py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 text-center"

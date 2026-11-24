@@ -486,7 +486,7 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
             style={{ 
               left: isArrived ? '72%' : '26%', 
               top: isArrived ? '24%' : '56%',
-              transition: 'left 1.2s cubic-bezier(0.25, 0.1, 0.25, 1), top 1.2s cubic-bezier(0.25, 0.1, 0.25, 1)'
+              transition: 'left 1.5s linear, top 1.5s linear'
             }}
           >
             <CartoonMapMarker
@@ -495,6 +495,7 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
               role="companion"
               sublabel={isArrived ? 'Arrived at Venue ♥' : `Arriving in ~${liveEtaMins}m`}
               isMoving={!isArrived}
+              state={isArrived ? 'waiting' : 'walking'}
               size="md"
             />
           </div>
