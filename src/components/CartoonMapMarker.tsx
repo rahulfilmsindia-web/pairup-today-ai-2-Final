@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { normalizeGender } from '../utils/gender';
 
 export type GenderType = 'MALE' | 'FEMALE' | 'OTHER' | 'NEUTRAL';
 
@@ -25,14 +26,10 @@ export const CartoonMapMarker: React.FC<CartoonMapMarkerProps> = ({
 }) => {
   const [imgError, setImgError] = useState(false);
 
-  // Normalize gender safely
+  // Normalize gender safely using exact matching & name fallback (avoids 'female'.includes('mal') bug)
   const normalizedGender: 'MALE' | 'FEMALE' = useMemo(() => {
-    const g = String(gender || '').toUpperCase();
-    if (g.includes('MAL') || g.includes('MEN') || g.includes('BOY') || g.includes('MR')) {
-      return 'MALE';
-    }
-    return 'FEMALE';
-  }, [gender]);
+    return normalizeGender(gender, name);
+  }, [gender, name]);
 
   // Determine motion state: walking or waiting
   const motionMode: 'walking' | 'waiting' = useMemo(() => {

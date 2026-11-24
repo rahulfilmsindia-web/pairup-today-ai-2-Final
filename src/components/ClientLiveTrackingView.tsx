@@ -490,7 +490,7 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
             }}
           >
             <CartoonMapMarker
-              gender={booking.companionGender || booking.companion_gender || booking.companion?.gender || 'FEMALE'}
+              gender={booking.companionGender || booking.companion_gender || booking.companion?.gender}
               name={booking.companionName || 'Companion Host'}
               role="companion"
               sublabel={isArrived ? 'Arrived at Venue ♥' : `Arriving in ~${liveEtaMins}m`}
@@ -500,17 +500,20 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
             />
           </div>
 
-          {/* Meeting Point Destination Pin */}
+          {/* Waiting Client Destination Marker at Venue Endpoint */}
           <div
             className="absolute pointer-events-auto flex flex-col items-center"
-            style={{ left: '75%', top: '22%' }}
+            style={{ left: '75%', top: '15%' }}
           >
-            <div className="w-10 h-10 rounded-full bg-emerald-500 ring-4 ring-emerald-400/40 shadow-xl shadow-emerald-500/50 flex items-center justify-center text-white">
-              <MapPin className="w-5 h-5 animate-bounce" />
-            </div>
-            <span className="mt-1 px-2.5 py-0.5 rounded-full bg-slate-900/90 text-[10px] font-bold text-emerald-300 border border-emerald-500/30 whitespace-nowrap shadow-sm">
-              Meeting Spot
-            </span>
+            <CartoonMapMarker
+              gender={user?.gender || booking.clientGender || booking.client_gender || booking.client?.gender}
+              name={user?.profileName || user?.legalName || booking.clientName || 'You'}
+              role="client"
+              sublabel="You (Waiting at Venue) ♥"
+              isMoving={false}
+              state="waiting"
+              size="sm"
+            />
           </div>
         </div>
 

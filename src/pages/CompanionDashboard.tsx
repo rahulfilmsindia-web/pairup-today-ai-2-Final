@@ -4585,8 +4585,8 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                           }}
                         >
                           <CartoonMapMarker
-                            gender={user?.gender || 'MALE'}
-                            name={user?.name?.split(' ')[0] || 'You'}
+                            gender={user?.gender || b.companionGender || b.companion_gender || user?.kycGender}
+                            name={user?.profileName || user?.legalName || user?.name || 'You'}
                             role="companion"
                             sublabel={b.status === 'COMPANION_ARRIVED' ? 'At Venue' : 'En Route'}
                             isMoving={b.status !== 'COMPANION_ARRIVED'}
@@ -4601,10 +4601,10 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                           style={{ right: '8%', top: '15%' }}
                         >
                           <CartoonMapMarker
-                            gender={b.clientGender || b.client_gender || b.client?.gender || 'FEMALE'}
-                            name={b.clientName?.split(' ')[0] || 'Client'}
+                            gender={b.clientGender || b.client_gender || b.client?.gender}
+                            name={b.clientName || 'Client'}
                             role="client"
-                            sublabel="Waiting at Venue ♥"
+                            sublabel={`${(b.clientName || 'Client').split(' ')[0]} • Venue ♥`}
                             isMoving={false}
                             state="waiting"
                             size="sm"

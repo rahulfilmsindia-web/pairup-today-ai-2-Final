@@ -19,6 +19,7 @@ import {
   verifyRazorpayWebhookSignature
 } from '../server/services/razorpay.js';
 import { hashPassword, verifyPassword } from '../server/services/passwords.js';
+import { normalizeGender } from '../src/utils/gender.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1217,6 +1218,27 @@ await runScenario(42, 'Late-Start Dynamic End-Time, Per-Minute Companion Penalty
   const clientDashSrc = fs.readFileSync(path.join(rootDir, 'src/pages/ClientDashboard.tsx'), 'utf-8');
   assert(clientDashSrc.includes('aspect-[4/3]'), 'ClientDashboard services tab must use aspect-[4/3]');
   assert(clientDashSrc.includes('object-top'), 'ClientDashboard services tab must use object-top');
+});
+
+await runScenario(43, 'Accurate Gender-to-Avatar Detection & Client/Companion Normalization', () => {
+  assert(normalizeGender('female', 'Priti Biswas') === 'FEMALE', 'Explicit female must return FEMALE');
+  assert(normalizeGender('FEMALE', 'Priti Biswas') === 'FEMALE', 'Uppercase FEMALE must return FEMALE');
+  assert(normalizeGender('f', 'Priti Biswas') === 'FEMALE', 'f must return FEMALE');
+  assert(normalizeGender(null, 'Priti Biswas') === 'FEMALE', 'Priti Biswas must resolve to FEMALE');
+  assert(normalizeGender(undefined, 'Sayantika Ghosh') === 'FEMALE', 'Sayantika Ghosh must resolve to FEMALE');
+  assert(normalizeGender('male', 'Rahul Mondal') === 'MALE', 'Explicit male must return MALE');
+  assert(normalizeGender('MALE', 'Arjun Chauhan') === 'MALE', 'Uppercase MALE must return MALE');
+  assert(normalizeGender(null, 'Arjun Chauhan') === 'MALE', 'Arjun Chauhan must resolve to MALE');
+
+  // Verify CartoonMapMarker uses normalizeGender and no longer contains the bug
+  const markerSrc = fs.readFileSync(path.join(rootDir, 'src/components/CartoonMapMarker.tsx'), 'utf-8');
+  assert(markerSrc.includes('normalizeGender'), 'CartoonMapMarker must import and use normalizeGender');
+  assert(!markerSrc.includes("g.includes('MAL')"), 'CartoonMapMarker must not have the bug where female matches MAL');
+
+  // Verify server.ts populates clientGender and companionGender
+  const serverSrc = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+  assert(serverSrc.includes('copy.clientGender = resolveGender'), 'server.ts must populate copy.clientGender');
+  assert(serverSrc.includes('copy.companionGender = resolveGender'), 'server.ts must populate copy.companionGender');
 });
 
 console.log('\n===============================================================');
