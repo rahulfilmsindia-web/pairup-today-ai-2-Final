@@ -1591,7 +1591,7 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
   }
 
   async createUser(user: any): Promise<any> {
-    const { data, error } = await db.users().insert({
+    const baseRow = {
       id: user.id,
       phone: user.phone,
       password_hash: user.passwordHash,
@@ -1608,7 +1608,18 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       state: user.state || null,
       address: user.address || null,
       created_at: user.createdAt || new Date().toISOString()
-    }).select().single();
+    };
+    const rowWithReferrals = {
+      ...baseRow,
+      referral_code: user.referralCode || null,
+      referred_by: user.referredBy || null
+    };
+    let { data, error } = await db.users().insert(rowWithReferrals).select().single();
+    if (error && (error.code === '42703' || String(error.message).includes('column'))) {
+      const retry = await db.users().insert(baseRow).select().single();
+      data = retry.data;
+      error = retry.error;
+    }
     if (error) throw error;
     return this.mapUser(data);
   }

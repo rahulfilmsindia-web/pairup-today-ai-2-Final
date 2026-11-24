@@ -112,10 +112,10 @@ export const TrustReviewsAndFaq: React.FC = () => {
         {/* 1. TESTIMONIALS SECTION */}
         <div>
           <div className="text-center max-w-3xl mx-auto mb-10">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-bold mb-3">
-              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold mb-3">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               <span>
-                {language === 'bn' ? '১০,০০০+ যাচাইকৃত বুকিংয়ে ৪.৯/৫ রেটিং' : language === 'hi' ? '10,000+ सत्यापित बुकिंग पर 4.9/5 रेटिंग' : '4.9/5 Rating Across 10,000+ Verified Bookings'}
+                {language === 'bn' ? '১০০% সরকারি আইডি যাচাইকৃত • সুরক্ষিত ও প্লেটোনিক কমিউনিটি' : language === 'hi' ? '100% सरकारी आईडी सत्यापित • सुरक्षित और प्लेटोनिक समुदाय' : '100% Government ID Verified • Safe & Platonic Community'}
               </span>
             </div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AdminAuthProvider } from './context/AdminAuthContext';
@@ -25,7 +26,8 @@ import { TrustReviewsAndFaq } from './components/TrustReviewsAndFaq';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalCompanionAlertManager } from './components/GlobalCompanionAlertManager';
 import { apiFetch } from './utils/api';
-import { AlertTriangle, PowerOff, Loader2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, PowerOff, Loader2, ShieldAlert, Compass, CalendarCheck, Gift, User } from 'lucide-react';
+import { captureReferralFromUrl } from './services/referralService';
 
 const pageToPath = (page: string): string => {
   switch (page) {
@@ -79,6 +81,13 @@ const getInitialPage = (): string => {
 const MainAppContent: React.FC = () => {
   const { user, activeRole, openAuthModal, selectActiveRole, logout } = useAuth();
   const { language, t } = useLanguage();
+  const isNative = Capacitor.isNativePlatform();
+  const [nativeActiveTab, setNativeActiveTab] = useState<'explore' | 'bookings' | 'referrals' | 'profile'>('explore');
+
+  // Auto-capture ?ref= URL parameter into localStorage on initial load
+  useEffect(() => {
+    captureReferralFromUrl();
+  }, []);
   
   const [currentPage, setCurrentPageState] = useState<string>(() => {
     const init = getInitialPage();
@@ -553,13 +562,66 @@ const MainAppContent: React.FC = () => {
         )}
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 w-full overflow-x-hidden">
+        <main className={`flex-1 w-full overflow-x-hidden ${isNative ? 'pb-20' : ''}`}>
           {renderCustomerPage()}
         </main>
 
-        {/* Footer on public pages only */}
-        {!['client-dashboard', 'companion-dashboard'].includes(currentPage) && (
+        {/* Footer on Web public pages only (Hidden on Native App for true mobile feel) */}
+        {!isNative && !['client-dashboard', 'companion-dashboard'].includes(currentPage) && (
           <Footer setCurrentPage={navigateToPage} />
+        )}
+
+        {/* Native Android/iOS Fixed Bottom Navigation Bar */}
+        {isNative && (
+          <nav
+            aria-label="Mobile Bottom Navigation"
+            className="fixed bottom-0 inset-x-0 z-[1200] bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/90 px-2 py-1.5 pb-[env(safe-area-inset-bottom,6px)] shadow-2xl"
+          >
+            <div className="max-w-lg mx-auto grid grid-cols-4 gap-1">
+              {[
+                { id: 'explore' as const, label: 'Explore', icon: Compass },
+                { id: 'bookings' as const, label: 'Bookings', icon: CalendarCheck },
+                { id: 'referrals' as const, label: 'Refer & Earn', icon: Gift },
+                { id: 'profile' as const, label: user ? 'Dashboard' : 'Profile', icon: User }
+              ].map(tab => {
+                const Icon = tab.icon;
+                const isActive =
+                  (tab.id === 'explore' && currentPage === 'home') ||
+                  (tab.id !== 'explore' && nativeActiveTab === tab.id && ['client-dashboard', 'companion-dashboard'].includes(currentPage));
+
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setNativeActiveTab(tab.id);
+                      if (tab.id === 'explore') {
+                        navigateToPage('home');
+                        return;
+                      }
+                      if (!user) {
+                        openAuthModal(tab.id === 'referrals' ? 'signin' : 'login');
+                        return;
+                      }
+                      const targetDashboard = activeRole === 'COMPANION' ? 'companion-dashboard' : 'client-dashboard';
+                      const targetTab = tab.id === 'bookings' ? 'bookings' : tab.id === 'referrals' ? 'referrals' : 'profile';
+                      sessionStorage.setItem('pairup_target_tab', targetTab);
+                      window.dispatchEvent(new CustomEvent('pairup:switch-tab', { detail: targetTab }));
+                      navigateToPage(targetDashboard);
+                    }}
+                    className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all cursor-pointer active:scale-95 ${
+                      isActive
+                        ? 'text-pink-400 bg-pink-500/10'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 mb-0.5 ${isActive ? 'text-pink-400' : 'text-slate-400'}`} />
+                    <span className="text-[10px] font-bold tracking-tight leading-none">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
         )}
 
         {/* Modals & Wizards */}

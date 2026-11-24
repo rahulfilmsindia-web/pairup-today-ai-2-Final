@@ -2038,9 +2038,16 @@ app.post('/api/auth/request-otp', async (req: Request, res: Response) => {
   });
 });
 
+function buildDynamicReferralCode(name: string | undefined, userId: string): string {
+  const letters = (name || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+  const prefix = (letters.slice(0, 4) || 'PAIR').padEnd(4, 'X');
+  const idChars = (userId || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4).padEnd(4, '0');
+  return `${prefix}${idChars}`;
+}
+
 // Verify OTP & Register New Account
 app.post('/api/auth/register-with-otp', async (req: Request, res: Response) => {
-  const { phone, otp, password } = req.body;
+  const { phone, otp, password, referralCode: rawRefCode, name } = req.body;
   const normalizedPhone = normalizeIndianPhone(phone);
 
   if (!normalizedPhone) {
@@ -2080,15 +2087,52 @@ app.post('/api/auth/register-with-otp', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No valid OTP request was found. Please request a new OTP.' });
     }
 
+    const newUserId = crypto.randomUUID();
+    const generatedRefCode = buildDynamicReferralCode(typeof name === 'string' ? name : undefined, newUserId);
+
+    // Resolve optional referral code if provided at registration
+    let referredByUserId: string | null = null;
+    const cleanInputRef = typeof rawRefCode === 'string' ? rawRefCode.trim().toUpperCase() : '';
+    if (cleanInputRef.length >= 4 && cleanInputRef !== generatedRefCode) {
+      try {
+        let referrer: any = null;
+        if (getDatabaseType() === 'supabase') {
+          const { data: refData } = await supabaseDb.users().select('id').ilike('referral_code', cleanInputRef).maybeSingle();
+          referrer = refData;
+        } else {
+          const all = await databaseAdapter.listUsers();
+          referrer = all.find((u: any) => u.referralCode && u.referralCode.toUpperCase() === cleanInputRef);
+        }
+        if (referrer?.id && referrer.id !== newUserId) {
+          referredByUserId = referrer.id;
+        }
+      } catch (_) {}
+    }
+
     const newUser = {
-      id: crypto.randomUUID(),
+      id: newUserId,
       phone: normalizedPhone,
       passwordHash: await hashPassword(password),
       role: 'DUAL',
       kycStatus: 'NOT_SUBMITTED',
+      referralCode: generatedRefCode,
+      referredBy: referredByUserId,
       createdAt: new Date().toISOString()
     };
     const createdUser = await databaseAdapter.createUser(newUser);
+
+    if (referredByUserId && getDatabaseType() === 'supabase') {
+      try {
+        await supabaseDb.referrals().insert({
+          id: crypto.randomUUID(),
+          referrer_id: referredByUserId,
+          referee_id: newUserId,
+          role: req.body?.role === 'COMPANION' ? 'companion' : 'client',
+          status: 'pending'
+        });
+      } catch (_) {}
+    }
+
     const user = publicAuthUser(createdUser);
     return res.json({
       success: true,
@@ -3237,12 +3281,11 @@ app.get('/api/referrals/my-status', async (req: Request, res: Response) => {
     const user = await databaseAdapter.getUser(userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
-    // Auto-generate referral code if missing
+    // Auto-generate or personalize referral code using name + user ID
     let refCode = user.referralCode || user.referral_code;
-    if (!refCode) {
-      const prefix = ((user.legalName || user.name || 'PAIR').replace(/[^a-zA-Z]/g, '').slice(0, 4) || 'PAIR').toUpperCase().padEnd(4, 'X');
-      const suffix = Math.floor(1000 + Math.random() * 9000);
-      refCode = `${prefix}${suffix}`;
+    const realName = user.legalName || user.name || user.profileName;
+    if (!refCode || (refCode.startsWith('PAIR') && realName && !user.successfulReferralsCount)) {
+      refCode = buildDynamicReferralCode(realName, userId);
       await databaseAdapter.updateUser(userId, { referralCode: refCode, referral_code: refCode }).catch(() => null);
     }
 

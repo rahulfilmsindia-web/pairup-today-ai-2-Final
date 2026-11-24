@@ -79,6 +79,19 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
   const [activeTab, setActiveTab] = useState<ClientTab>('overview');
   const [trackedBooking, setTrackedBooking] = useState<any | null>(null);
 
+  useEffect(() => {
+    const applyTab = (tab: string | null) => {
+      if (tab === 'bookings' || tab === 'referrals' || tab === 'profile') {
+        setActiveTab(tab as ClientTab);
+        sessionStorage.removeItem('pairup_target_tab');
+      }
+    };
+    applyTab(sessionStorage.getItem('pairup_target_tab'));
+    const handler = (e: Event) => applyTab((e as CustomEvent).detail);
+    window.addEventListener('pairup:switch-tab', handler);
+    return () => window.removeEventListener('pairup:switch-tab', handler);
+  }, []);
+
   // Tab scroll ref for desktop Left/Right arrow navigation
   const tabsNavRef = useRef<HTMLDivElement>(null);
   const scrollTabs = (dir: 'left' | 'right') => {

@@ -6,6 +6,7 @@ import {
 import { 
   getReferralStatus, 
   generateWhatsAppShareUrl, 
+  generateDynamicReferralCode,
   ReferralStatusResponse, 
   ReferredUserItem 
 } from '../services/referralService';
@@ -31,7 +32,7 @@ export const ReferAndEarnPage: React.FC<ReferAndEarnPageProps> = ({ user, role =
     }
   }, [user?.id]);
 
-  const referralCode = data?.referralCode || user?.referralCode || user?.referral_code || 'PAIRUP2026';
+  const referralCode = data?.referralCode || user?.referralCode || user?.referral_code || generateDynamicReferralCode(user?.profileName || user?.legalName, user?.id);
   const verifiedCount = data?.verifiedCount || 0;
   const currentProgress = data?.currentMilestoneProgress || (verifiedCount % 5);
   const nextTarget = data?.nextMilestoneTarget || (Math.floor(verifiedCount / 5 + 1) * 5);

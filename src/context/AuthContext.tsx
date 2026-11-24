@@ -16,7 +16,7 @@ interface AuthContextType {
   openKycWizard: () => void;
   closeKycWizard: () => void;
   requestOtp: (phone: string, purpose?: string) => Promise<{ success: boolean; message?: string; devCode?: string; error?: string }>;
-  registerWithOtp: (phone: string, otp: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => Promise<{ success: boolean; isFirstTime?: boolean; error?: string }>;
+  registerWithOtp: (phone: string, otp: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION', referralCode?: string) => Promise<{ success: boolean; isFirstTime?: boolean; error?: string }>;
   loginWithPassword: (phone: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION', keepModalOpen?: boolean) => Promise<{ success: boolean; isNotRegistered?: boolean; error?: string; user?: any }>;
   selectActiveRole: (role: 'CLIENT' | 'COMPANION') => Promise<{ success: boolean; error?: string }>;
   submitKyc: (formData: any) => Promise<{ success: boolean; mandatoryLogout?: boolean; error?: string }>;
@@ -185,17 +185,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const registerWithOtp = async (phone: string, otp: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION') => {
+  const registerWithOtp = async (phone: string, otp: string, password: string, selectedRole?: 'CLIENT' | 'COMPANION', referralCode?: string) => {
     try {
+      const effectiveReferralCode = (referralCode || localStorage.getItem('pairup_pending_referral_code') || '').trim().toUpperCase();
       const res = await apiFetch('/api/auth/register-with-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp, password, role: selectedRole })
+        body: JSON.stringify({
+          phone,
+          otp,
+          password,
+          role: selectedRole,
+          referralCode: effectiveReferralCode || undefined
+        })
       });
       const parsed = await safeJsonParse(res);
       if (!parsed.ok) {
         return { success: false, error: parsed.error || parsed.data?.error || 'Registration failed' };
       }
+      localStorage.removeItem('pairup_pending_referral_code');
       const data = parsed.data;
       setUser(data.user);
       setToken(data.token);

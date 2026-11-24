@@ -10,6 +10,55 @@
 
 import { apiFetch } from '../utils/api';
 
+export const PENDING_REFERRAL_STORAGE_KEY = 'pairup_pending_referral_code';
+
+/**
+ * Generates a unique user-specific referral code using the first 4 uppercase
+ * letters of their name + 4 alphanumeric characters derived from their user ID.
+ */
+export const generateDynamicReferralCode = (name?: string, userId?: string): string => {
+  const cleanLetters = (name || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+  const prefix = (cleanLetters.slice(0, 4) || 'PAIR').padEnd(4, 'X');
+  const cleanId = (userId || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  const suffix = cleanId.length >= 4
+    ? cleanId.slice(0, 4)
+    : Math.floor(1000 + Math.random() * 9000).toString();
+  return `${prefix}${suffix}`;
+};
+
+/**
+ * Reads `?ref=` from the current URL and stores it in localStorage for auto-apply on signup.
+ */
+export const captureReferralFromUrl = (): string | null => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref')?.trim().toUpperCase();
+    if (ref && ref.length >= 4) {
+      localStorage.setItem(PENDING_REFERRAL_STORAGE_KEY, ref);
+      return ref;
+    }
+    return localStorage.getItem(PENDING_REFERRAL_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const getPendingReferralCode = (): string => {
+  try {
+    return localStorage.getItem(PENDING_REFERRAL_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+export const clearPendingReferralCode = (): void => {
+  try {
+    localStorage.removeItem(PENDING_REFERRAL_STORAGE_KEY);
+  } catch {
+    // ignore storage errors
+  }
+};
+
 export interface ReferredUserItem {
   id: string;
   refereeName: string;
@@ -52,7 +101,7 @@ export const getReferralStatus = async (userId: string): Promise<ReferralStatusR
 
       return {
         success: true,
-        referralCode: data.referralCode || 'PAIRUP2026',
+        referralCode: data.referralCode || generateDynamicReferralCode(undefined, userId),
         successfulReferralsCount: verified,
         totalInvitedCount: Number(data.totalInvitedCount || 0),
         pendingCount: Number(data.pendingCount || 0),
@@ -76,7 +125,7 @@ export const getReferralStatus = async (userId: string): Promise<ReferralStatusR
   // Graceful fallback defaults
   return {
     success: false,
-    referralCode: 'PAIRUP2026',
+    referralCode: generateDynamicReferralCode(undefined, userId),
     successfulReferralsCount: 0,
     totalInvitedCount: 0,
     pendingCount: 0,

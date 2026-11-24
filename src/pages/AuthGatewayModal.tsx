@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { ShieldCheck, Phone, Lock, KeyRound, X, AlertCircle, CheckCircle, ArrowRight, ArrowLeft, UserCheck, Sparkles } from 'lucide-react';
+import { ShieldCheck, Phone, Lock, KeyRound, X, AlertCircle, CheckCircle, ArrowRight, ArrowLeft, UserCheck, Sparkles, Gift } from 'lucide-react';
+import { captureReferralFromUrl, getPendingReferralCode } from '../services/referralService';
 
 interface AuthGatewayModalProps {
   onNavigateToDashboard?: (page: string) => void;
@@ -29,6 +30,7 @@ export const AuthGatewayModal: React.FC<AuthGatewayModalProps> = ({ onNavigateTo
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
+  const [referralCode, setReferralCode] = useState(() => captureReferralFromUrl() || getPendingReferralCode());
   const [otpSent, setOtpSent] = useState(false);
   const [forgotStep, setForgotStep] = useState<'phone_otp' | 'set_password' | 'success'>('phone_otp');
   const [countdown, setCountdown] = useState(0);
@@ -51,6 +53,10 @@ export const AuthGatewayModal: React.FC<AuthGatewayModalProps> = ({ onNavigateTo
     setSuccessMsg(null);
     setUnregisteredError(false);
     setForgotStep('phone_otp');
+    const capturedRef = captureReferralFromUrl() || getPendingReferralCode();
+    if (capturedRef) {
+      setReferralCode(capturedRef);
+    }
   }, [authModalTab, showAuthModal]);
 
   // 60s countdown timer
@@ -161,7 +167,7 @@ export const AuthGatewayModal: React.FC<AuthGatewayModalProps> = ({ onNavigateTo
     }
 
     setLoading(true);
-    const result = await registerWithOtp(phone, otp, password, selectedRole);
+    const result = await registerWithOtp(phone, otp, password, selectedRole, referralCode);
     setLoading(false);
 
     if (result.success) {
@@ -737,10 +743,33 @@ export const AuthGatewayModal: React.FC<AuthGatewayModalProps> = ({ onNavigateTo
                 </div>
               </div>
 
+              {/* Optional Referral Code Input */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>Referral Code (Optional)</span>
+                  {referralCode && (
+                    <span className="text-[10px] text-emerald-400 font-bold">Auto-applied ✓</span>
+                  )}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-pink-400">
+                    <Gift className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    value={referralCode}
+                    onChange={e => setReferralCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                    placeholder="Enter friend's referral code (e.g. RAHU492A)"
+                    maxLength={16}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 uppercase font-mono tracking-wider focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+              </div>
+
               {/* Role Selection Option for Registration */}
               <div className="space-y-1.5 pt-1">
                 <label className="block text-xs font-semibold text-slate-300">
-                  {t.loginAs}
+                  {t.registerAs || 'Register As:'}
                 </label>
                 <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 border border-slate-700/80 rounded-xl">
                   <button

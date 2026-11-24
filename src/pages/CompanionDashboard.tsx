@@ -249,6 +249,19 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     | 'settings';
 
   const [activeTab, setActiveTab] = useState<CompanionTab>('overview');
+
+  useEffect(() => {
+    const applyTab = (tab: string | null) => {
+      if (tab === 'bookings' || tab === 'referrals' || tab === 'profile') {
+        setActiveTab(tab as CompanionTab);
+        sessionStorage.removeItem('pairup_target_tab');
+      }
+    };
+    applyTab(sessionStorage.getItem('pairup_target_tab'));
+    const handler = (e: Event) => applyTab((e as CustomEvent).detail);
+    window.addEventListener('pairup:switch-tab', handler);
+    return () => window.removeEventListener('pairup:switch-tab', handler);
+  }, []);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusData, setStatusData] = useState<any | null>(null);

@@ -255,6 +255,7 @@ export interface TranslationDictionary {
   searchAndFilters: string;
   discoverCompanionsPlaceholder: string;
   loginAs: string;
+  registerAs: string;
   asClient: string;
   asCompanion: string;
   goBack: string;
@@ -774,6 +775,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     searchAndFilters: "Search & Filters",
     discoverCompanionsPlaceholder: "Discover Companions...",
     loginAs: "Login As",
+    registerAs: "Register As:",
     asClient: "As a Client",
     asCompanion: "As a Companion",
     goBack: "Back",
@@ -1029,7 +1031,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
 
   bn: {
     // Navigation
-    navPairUpToday: "পেয়ারআপটুডে",
+    navPairUpToday: "PairUpToday",
     navAbout: "আমাদের সম্পর্কে",
     navHowItWorks: "কীভাবে কাজ করে",
     navSafetyTrust: "নিরাপত্তা ও বিশ্বাস",
@@ -1282,6 +1284,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     searchAndFilters: "অনুসন্ধান ও ফিল্টার",
     discoverCompanionsPlaceholder: "সঙ্গী খুঁজুন...",
     loginAs: "কী হিসেবে লগইন করবেন",
+    registerAs: "নিবন্ধন করুন:",
     asClient: "গ্রাহক হিসেবে",
     asCompanion: "কম্প্যানিয়ন হিসেবে",
     goBack: "ফিরে যান",
@@ -1537,7 +1540,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
 
   hi: {
     // Navigation
-    navPairUpToday: "पेयरअपटुडे",
+    navPairUpToday: "PairUpToday",
     navAbout: "हमारे बारे में",
     navHowItWorks: "यह कैसे काम करता है",
     navSafetyTrust: "सुरक्षा एवं विश्वास",
@@ -1790,6 +1793,7 @@ export const TRANSLATIONS: Record<Language, TranslationDictionary> = {
     searchAndFilters: "खोज और फ़िल्टर",
     discoverCompanionsPlaceholder: "साथी खोजें...",
     loginAs: "लॉगिन करें",
+    registerAs: "पंजीकरण करें:",
     asClient: "क्लाइंट के रूप में",
     asCompanion: "साथी के रूप में",
     goBack: "वापस जाएं",
