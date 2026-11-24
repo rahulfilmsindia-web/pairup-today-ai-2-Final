@@ -1241,6 +1241,58 @@ await runScenario(43, 'Accurate Gender-to-Avatar Detection & Client/Companion No
   assert(serverSrc.includes('copy.companionGender = resolveGender'), 'server.ts must populate copy.companionGender');
 });
 
+await runScenario(44, 'Production Monetization, Milestone-Based Referral, and First-User Free Coupon System', () => {
+  // 1. Verify Migration 012 exists and contains all required anti-fraud and milestone schema definitions
+  const migPath = path.join(rootDir, 'supabase/migrations/012_monetization_referrals_and_free_coupon.sql');
+  assert(fs.existsSync(migPath), 'Migration 012 must exist');
+  const migSql = fs.readFileSync(migPath, 'utf-8');
+  assert(migSql.includes('used_trial_phones'), 'Migration must create used_trial_phones table');
+  assert(migSql.includes('referrals'), 'Migration must create referrals table');
+  assert(migSql.includes('redeem_first_user_coupon'), 'Migration must define redeem_first_user_coupon RPC');
+  assert(migSql.includes('reward_referral_milestone'), 'Migration must define reward_referral_milestone');
+  assert(migSql.includes('FIRST3FREE'), 'Migration must validate FIRST3FREE code');
+  assert(migSql.includes('has_10_percent_booking_discount'), 'Migration must include has_10_percent_booking_discount');
+  assert(migSql.includes('has_verified_referrer_badge'), 'Migration must include has_verified_referrer_badge');
+
+  // 2. Verify paymentService.ts conforms to Google Play Billing and Capacitor 6
+  const paymentSrc = fs.readFileSync(path.join(rootDir, 'src/services/paymentService.ts'), 'utf-8');
+  assert(paymentSrc.includes('@capacitor/core'), 'paymentService must import Capacitor');
+  assert(paymentSrc.includes('@revenuecat/purchases-capacitor'), 'paymentService must import RevenueCat Purchases');
+  assert(paymentSrc.includes('companion_monthly_449'), 'paymentService must reference companion_monthly_449 product');
+  assert(paymentSrc.includes('isNativePlatform'), 'paymentService must export isNativePlatform helper');
+
+  // 3. Verify referralService.ts
+  const refSrc = fs.readFileSync(path.join(rootDir, 'src/services/referralService.ts'), 'utf-8');
+  assert(refSrc.includes('generateWhatsAppShareUrl'), 'referralService must export generateWhatsAppShareUrl');
+  assert(refSrc.includes('redeemFirstUserCoupon'), 'referralService must export redeemFirstUserCoupon');
+  assert(refSrc.includes('FIRST3FREE'), 'referralService must reference FIRST3FREE');
+
+  // 4. Verify UI Components and Wiring
+  const memPageSrc = fs.readFileSync(path.join(rootDir, 'src/components/MembershipPage.tsx'), 'utf-8');
+  assert(memPageSrc.includes('FIRST3FREE'), 'MembershipPage must support FIRST3FREE coupon');
+  assert(memPageSrc.includes('449'), 'MembershipPage must display ₹449/mo membership');
+
+  const refPageSrc = fs.readFileSync(path.join(rootDir, 'src/components/ReferAndEarnPage.tsx'), 'utf-8');
+  assert(refPageSrc.includes('Verified Friends'), 'ReferAndEarnPage must show milestone progress');
+  assert(refPageSrc.includes('WhatsApp'), 'ReferAndEarnPage must include WhatsApp share action');
+
+  // 5. Verify CompanionDashboard & ClientDashboard wiring
+  const compDashSrc = fs.readFileSync(path.join(rootDir, 'src/pages/CompanionDashboard.tsx'), 'utf-8');
+  assert(compDashSrc.includes('<MembershipPage'), 'CompanionDashboard must render MembershipPage');
+  assert(compDashSrc.includes('<ReferAndEarnPage'), 'CompanionDashboard must render ReferAndEarnPage');
+
+  const clientDashSrc = fs.readFileSync(path.join(rootDir, 'src/pages/ClientDashboard.tsx'), 'utf-8');
+  assert(clientDashSrc.includes('<ReferAndEarnPage'), 'ClientDashboard must render ReferAndEarnPage');
+  assert(clientDashSrc.includes('10% Referral Reward Applied'), 'ClientDashboard must show 10% referral discount in checkout');
+
+  // 6. Verify Backend Endpoints in server.ts
+  const srvSrc = fs.readFileSync(path.join(rootDir, 'server.ts'), 'utf-8');
+  assert(srvSrc.includes('/api/membership/redeem-coupon'), 'server.ts must have redeem-coupon endpoint');
+  assert(srvSrc.includes('/api/membership/sync-revenuecat'), 'server.ts must have sync-revenuecat endpoint');
+  assert(srvSrc.includes('/api/referrals/apply-code'), 'server.ts must have apply-code endpoint');
+  assert(srvSrc.includes('/api/referrals/my-status'), 'server.ts must have my-status endpoint');
+});
+
 console.log('\n===============================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`  RESULTS: ${passedCount} / ${results.length} SCENARIOS PASSED`);

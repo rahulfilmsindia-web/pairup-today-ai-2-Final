@@ -52,7 +52,9 @@ export const db = {
   companionWallets: () => supabase.from('companion_wallets'),
   paymentWebhookEvents: () => supabase.from('payment_webhook_events'),
   userLocations: () => supabase.from('user_locations'),
-  userPresence: () => supabase.from('user_presence')
+  userPresence: () => supabase.from('user_presence'),
+  usedTrialPhones: () => supabase.from('used_trial_phones'),
+  referrals: () => supabase.from('referrals')
 };
 
 // Check if Supabase is configured

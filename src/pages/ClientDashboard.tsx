@@ -8,6 +8,7 @@ import { PAN_INDIA_CITIES } from '../constants/cities';
 import { compressImageFile, compressBase64 } from '../utils/image';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ClientLiveTrackingView } from '../components/ClientLiveTrackingView';
+import { ReferAndEarnPage } from '../components/ReferAndEarnPage';
 import { TimeframeFilter, TimeframeFilterBar, matchesTimeframe, formatFullDateTime } from '../utils/timeframeFilters';
 import { 
   Search, MapPin, Filter, Star, Clock, Calendar, ShieldCheck, 
@@ -15,7 +16,7 @@ import {
   CreditCard, KeyRound, AlertTriangle, ChevronRight, UserCheck, X,
   Bell, Settings, LifeBuoy, LogOut, Heart, Sparkles, User, FileText,
   DollarSign, Compass, CheckCircle2, Sliders, Shield, Eye, ChevronLeft,
-  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users, ChevronDown, Home, XCircle, RotateCcw, Building2, Copy
+  CalendarCheck, Upload, Lock, Trash2, Camera, ShieldAlert, Menu, Users, ChevronDown, Home, XCircle, RotateCcw, Building2, Copy, Gift
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -71,6 +72,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     | 'chat' 
     | 'notifications' 
     | 'payments' 
+    | 'referrals'
     | 'help-safety' 
     | 'settings';
 
@@ -1149,11 +1151,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
       const { booking, payment } = activeBookingResponse;
       let orderToPay: any = { ...(payment || {}) };
 
+      const hasDiscount = Boolean(user?.has10PercentBookingDiscount || user?.has_10_percent_booking_discount);
+      const effectiveBase = (booking.bookingAmountPaise || 49900) * (hasDiscount ? 0.90 : 1.0);
+      const effectiveTotalPaise = Math.round(effectiveBase * 1.18);
+
       if (forceTestMode) {
         orderToPay.isTestMode = true;
         orderToPay.keyId = 'rzp_test_pairuptoday';
         orderToPay.orderId = `ord_test_${booking.id.replace(/-/g, '').slice(0, 16)}`;
-        orderToPay.amountPaise = booking.totalPayablePaise || Math.round((booking.bookingAmountPaise || 49900) * 1.18);
+        orderToPay.amountPaise = booking.totalPayablePaise || effectiveTotalPaise;
         orderToPay.currency = 'INR';
       } else {
         // Ensure keyId is always present
@@ -1349,6 +1355,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
     { id: 'chat', label: 'Secure Chat', icon: MessageSquare, badge: paidChatBookingsCount > 0 ? (paidChatBookingsCount > 9 ? '9+' : paidChatBookingsCount) : undefined, badgeColor: 'bg-pink-500' },
     { id: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.length > 0 ? (notifications.length > 9 ? '9+' : notifications.length) : undefined, badgeColor: 'bg-rose-500' },
     { id: 'payments', label: 'Payments', icon: CreditCard },
+    { id: 'referrals', label: 'Refer & Earn', icon: Gift, badge: (user?.has10PercentBookingDiscount || user?.has_10_percent_booking_discount) ? '10% OFF' : 'Earn', badgeColor: 'bg-emerald-500' },
     { id: 'help-safety', label: 'Help & Safety', icon: ShieldAlert },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -3592,6 +3599,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           </div>
         )}
 
+        {/* TAB 13B: REFER & EARN (MILESTONE SYSTEM & 10% DISCOUNT) */}
+        {activeTab === 'referrals' && (
+          <ReferAndEarnPage
+            user={user}
+            role="CLIENT"
+          />
+        )}
+
         {/* TAB 14: HELP & SAFETY */}
         {activeTab === 'help-safety' && (
           <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6">
@@ -4533,10 +4548,13 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
             {bookingStep === 'accepted' && (() => {
               const basePaise = (selectedCompanion.rates?.hourlyPaise ?? 49900) * bookingDurationHours;
               const baseAmount = basePaise / 100;
-              const cgst = baseAmount * 0.09;
-              const sgst = baseAmount * 0.09;
+              const hasDiscount = Boolean(user?.has10PercentBookingDiscount || user?.has_10_percent_booking_discount);
+              const discountAmount = hasDiscount ? (baseAmount * 0.10) : 0;
+              const discountedBase = baseAmount - discountAmount;
+              const cgst = discountedBase * 0.09;
+              const sgst = discountedBase * 0.09;
               const totalGst = cgst + sgst;
-              const totalPayable = baseAmount + totalGst;
+              const totalPayable = discountedBase + totalGst;
 
               const isDateUnavailable = companionSchedule?.isAvailableOnDate === false;
               const isOutsideWorkingHours = (() => {
@@ -4568,6 +4586,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
                       <span>Booking Fee ({bookingDurationHours}h):</span>
                       <span className="text-slate-200 font-semibold">₹{baseAmount.toFixed(2)}</span>
                     </div>
+                    {hasDiscount && (
+                      <div className="flex justify-between items-center text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1.5 rounded-xl text-[11px] font-bold">
+                        <span>🎉 10% Referral Reward Applied:</span>
+                        <span>-₹{discountAmount.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-slate-400">
                       <span>CGST (9%):</span>
                       <span className="text-slate-200">₹{cgst.toFixed(2)}</span>

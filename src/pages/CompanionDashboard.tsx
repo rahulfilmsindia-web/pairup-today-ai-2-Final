@@ -13,11 +13,13 @@ import {
   User, Calendar, DollarSign, Bell, Settings, LifeBuoy, LogOut,
   Pause, Power, Shield, FileText, CheckSquare, Star, ArrowLeft,
   Upload, Lock, Trash2, Camera, ShieldAlert, MapPin, KeyRound, Menu, Heart, UserCheck, Home,
-  TrendingUp, CalendarCheck
+  TrendingUp, CalendarCheck, Gift
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { CartoonMapMarker } from '../components/CartoonMapMarker';
+import { MembershipPage } from '../components/MembershipPage';
+import { ReferAndEarnPage } from '../components/ReferAndEarnPage';
 import { getRealtimeClient } from '../utils/supabaseRealtime';
 import { TimeframeFilter, TimeframeFilterBar, matchesTimeframe, formatFullDateTime } from '../utils/timeframeFilters';
 
@@ -234,6 +236,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     | 'rates'
     | 'availability'
     | 'membership'
+    | 'referrals'
     | 'bank'
     | 'requests'
     | 'upcoming'
@@ -2458,6 +2461,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         { id: 'wallet' as CompanionTab, label: 'Earnings & Wallet', icon: Wallet },
         { id: 'locked-earnings' as CompanionTab, label: 'Locked Escrow (48h)', icon: Lock },
         { id: 'membership' as CompanionTab, label: 'Membership Plan', icon: CreditCard, badge: conditions.membershipValid ? undefined : 'Renew', badgeColor: 'bg-rose-500' },
+        { id: 'referrals' as CompanionTab, label: 'Refer & Earn', icon: Gift, badge: 'Milestones', badgeColor: 'bg-emerald-500' },
         { id: 'bank' as CompanionTab, label: 'Bank Verification', icon: Landmark, badge: conditions.bankVerified ? undefined : 'Unverified', badgeColor: 'bg-rose-500' },
         { id: 'kyc-status' as CompanionTab, label: 'KYC Status', icon: ShieldCheck, badge: conditions.kycApproved ? undefined : 'Pending', badgeColor: 'bg-amber-500' },
       ]
@@ -3965,83 +3969,19 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
 
         {/* TAB 7: MEMBERSHIP */}
         {activeTab === 'membership' && (
-          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-6 text-xs">
-            <div>
-              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-amber-400" />
-                Companion Membership Plans
-              </h3>
-              <p className="text-slate-400 mt-0.5">Activation Gate 2: A valid paid membership is mandatory for companions to receive bookings.</p>
-            </div>
+          <MembershipPage
+            user={user}
+            onMembershipUpdated={refreshUserData}
+            onNavigateTab={setActiveTab}
+          />
+        )}
 
-            {/* Current Membership status banner */}
-            {statusData?.profile?.membership?.isActive ? (
-              <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-sm block">Active Plan: {statusData.profile.membership.plan}</span>
-                  <span className="text-[11px] text-slate-400">
-                    Valid from {new Date(statusData.profile.membership.startDate).toLocaleDateString()} to {new Date(statusData.profile.membership.expiryDate).toLocaleDateString()}
-                  </span>
-                </div>
-                <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 font-bold">Active ✓</span>
-              </div>
-            ) : (
-              <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 text-amber-300">
-                No active membership on record. Select a plan below to activate your hosting capabilities.
-              </div>
-            )}
-
-            {/* Exact authoritative 3 plans */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* STARTER */}
-              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between hover:border-pink-500/50 transition-colors">
-                <div>
-                  <span className="text-xs uppercase font-bold text-slate-400">Starter</span>
-                  <div className="text-2xl font-extrabold text-amber-400 my-2">₹449 <span className="text-xs font-normal text-slate-400">/ 1 month</span></div>
-                  <p className="text-slate-400 text-[11px]">Ideal for beginning companion hosts. 30 days active hosting profile on PairUp Verified Network.</p>
-                </div>
-                <button
-                  onClick={() => handleSubscribePlan('STARTER')}
-                  disabled={subscribingPlan !== null}
-                  className="mt-4 w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold"
-                >
-                  {subscribingPlan === 'STARTER' ? 'Processing...' : 'Subscribe STARTER'}
-                </button>
-              </div>
-
-              {/* PROFESSIONAL */}
-              <div className="p-5 rounded-2xl bg-slate-950 border-2 border-pink-500/60 flex flex-col justify-between shadow-lg shadow-pink-500/10">
-                <div>
-                  <span className="text-xs uppercase font-bold text-pink-400">Professional (Popular)</span>
-                  <div className="text-2xl font-extrabold text-amber-400 my-2">₹1,099 <span className="text-xs font-normal text-slate-400">/ 3 months</span></div>
-                  <p className="text-slate-400 text-[11px]">Best value for active hosts. 90 days active hosting with priority discovery placement.</p>
-                </div>
-                <button
-                  onClick={() => handleSubscribePlan('PROFESSIONAL')}
-                  disabled={subscribingPlan !== null}
-                  className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 font-extrabold"
-                >
-                  {subscribingPlan === 'PROFESSIONAL' ? 'Processing...' : 'Subscribe PROFESSIONAL'}
-                </button>
-              </div>
-
-              {/* PREMIUM */}
-              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between hover:border-pink-500/50 transition-colors">
-                <div>
-                  <span className="text-xs uppercase font-bold text-slate-400">Premium</span>
-                  <div className="text-2xl font-extrabold text-amber-400 my-2">₹5,999 <span className="text-xs font-normal text-slate-400">/ 1 year</span></div>
-                  <p className="text-slate-400 text-[11px]">365 days unlimited hosting, VIP verification badge, zero platform renewal interruption.</p>
-                </div>
-                <button
-                  onClick={() => handleSubscribePlan('PREMIUM')}
-                  disabled={subscribingPlan !== null}
-                  className="mt-4 w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold"
-                >
-                  {subscribingPlan === 'PREMIUM' ? 'Processing...' : 'Subscribe PREMIUM'}
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* TAB 7B: REFER & EARN (MILESTONE SYSTEM) */}
+        {activeTab === 'referrals' && (
+          <ReferAndEarnPage
+            user={user}
+            role="COMPANION"
+          />
         )}
 
         {/* TAB 8: BANK VERIFICATION */}

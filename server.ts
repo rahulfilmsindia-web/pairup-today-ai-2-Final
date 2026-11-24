@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { sendApitxtOtp, verifyApitxtBankAccount, compareLegalAndBankNames, formatPhoneForApitxt, isApitxtConfigured } from './server/services/apitxt.ts';
 import { createRazorpayOrder, createRazorpayRefund, fetchRazorpayPayment, fetchRazorpayPaymentRefunds, verifyRazorpayPaymentSignature, verifyRazorpayWebhookSignature } from './server/services/razorpay.ts';
 import { databaseAdapter, getDatabaseType, type OtpReservation } from './server/services/database.ts';
+import { db, supabase, isSupabaseConfigured } from './server/services/supabase.ts';
 import { updateUserLocation, getUserLocation, startLocationSharing, stopLocationSharing, setUserPresence, getUserPresence, isFirebaseConfigured } from './server/services/firebase.ts';
 import { sendToMultipleDevices } from './server/services/fcm.ts';
 import { getPlaceAutocomplete, geocodeAddress, reverseGeocode, getDistanceMatrix, calculateDistance, isGoogleMapsConfigured, getDirectionsRoute } from './server/services/googlemaps.ts';
@@ -1588,6 +1589,10 @@ function apiRequiresRole(req: Request): 'CLIENT' | 'COMPANION' | null {
   // are open to any authenticated user (client upgrading to companion or dual)
   if (
     route === 'POST /api/companion/membership/subscribe' ||
+    route === 'POST /api/membership/redeem-coupon' ||
+    route === 'POST /api/membership/sync-revenuecat' ||
+    route === 'POST /api/referrals/apply-code' ||
+    route === 'GET /api/referrals/my-status' ||
     route.startsWith('GET /api/companion/status/') ||
     route === 'POST /api/companion/services-rates' ||
     route === 'POST /api/companion/bank/verify'
@@ -1690,6 +1695,10 @@ function isSupabaseBackedProductionRoute(req: Request): boolean {
     route === 'POST /api/kyc/submit' ||
     route === 'POST /api/companion/services-rates' ||
     route === 'POST /api/companion/membership/subscribe' ||
+    route === 'POST /api/membership/redeem-coupon' ||
+    route === 'POST /api/membership/sync-revenuecat' ||
+    route === 'POST /api/referrals/apply-code' ||
+    route === 'GET /api/referrals/my-status' ||
     route === 'POST /api/companion/bank/verify' ||
     route === 'POST /api/companion/availability/toggle' ||
     route === 'GET /api/companion/wallet' ||
@@ -2993,6 +3002,266 @@ app.post('/api/companion/membership/subscribe', async (req: Request, res: Respon
   }
 });
 
+// First-User Free Trial Coupon Redemption (FIRST3FREE)
+app.post('/api/membership/redeem-coupon', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const userId = authUser?.id || req.body?.userId;
+  const rawCode = typeof req.body?.code === 'string' ? req.body.code.trim().toUpperCase() : '';
+  const rawPhone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : (authUser?.phone || '');
+
+  if (!userId) return res.status(401).json({ error: 'Authentication required.' });
+  if (rawCode !== 'FIRST3FREE') {
+    return res.status(400).json({ error: 'Invalid coupon code. Please enter FIRST3FREE.' });
+  }
+
+  try {
+    const user = await databaseAdapter.getUser(userId);
+    if (!user) return res.status(404).json({ error: 'User account not found.' });
+    const userPhone = user.phone || rawPhone;
+
+    // Check anti-fraud table & user status
+    if (user.hasUsedFreeTrial || user.has_used_free_trial) {
+      return res.status(400).json({ error: 'You have already redeemed your first-user free trial.' });
+    }
+
+    if (getDatabaseType() === 'supabase') {
+      // Check used_trial_phones table
+      try {
+        const { data: usedPhone } = await db.usedTrialPhones().select('phone').eq('phone', userPhone).maybeSingle();
+        if (usedPhone) {
+          return res.status(400).json({ error: 'This phone number has already redeemed the first-user free trial offer.' });
+        }
+      } catch (_) {}
+
+      // Try RPC if migration 012 applied
+      try {
+        const { data: rpcRes, error: rpcErr } = await db.rpc('redeem_first_user_coupon', {
+          p_user_id: userId,
+          p_phone: userPhone,
+          p_code: rawCode
+        });
+        if (!rpcErr && rpcRes && (rpcRes as any).success) {
+          await databaseAdapter.getUser(userId); // refresh cache
+          return res.json({ success: true, message: (rpcRes as any).message || 'Free 90-day trial activated successfully!' });
+        }
+      } catch (_) {
+        // Fallback to direct table writes
+      }
+
+      // Direct write fallback
+      try {
+        await db.usedTrialPhones().insert({ phone: userPhone, used_at: new Date().toISOString() });
+      } catch (_) {}
+    }
+
+    // Set 90 days expiry
+    const expiry = new Date(Date.now() + 90 * 86400000).toISOString();
+    await databaseAdapter.updateUser(userId, {
+      hasUsedFreeTrial: true,
+      has_used_free_trial: true,
+      isCompanionActive: true,
+      is_companion_active: true,
+      membershipType: 'free_trial',
+      membership_type: 'free_trial',
+      membershipExpiry: expiry,
+      membership_expiry: expiry,
+      role: user.role === 'CLIENT' ? 'DUAL' : user.role,
+      activeRole: 'COMPANION'
+    });
+
+    return res.json({
+      success: true,
+      message: 'Congratulations! 90 Days Free Companion Membership activated successfully.'
+    });
+  } catch (err: any) {
+    console.error('Error redeeming first-user coupon:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to redeem coupon.' });
+  }
+});
+
+// Google Play Billing (RevenueCat) In-App Subscription Synchronization
+app.post('/api/membership/sync-revenuecat', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const userId = authUser?.id || req.body?.userId;
+
+  if (!userId) return res.status(401).json({ error: 'Authentication required.' });
+
+  try {
+    const user = await databaseAdapter.getUser(userId);
+    if (!user) return res.status(404).json({ error: 'User account not found.' });
+
+    const expiry = new Date(Date.now() + 30 * 86400000).toISOString();
+    await databaseAdapter.updateUser(userId, {
+      isCompanionActive: true,
+      is_companion_active: true,
+      membershipType: 'paid',
+      membership_type: 'paid',
+      membershipExpiry: expiry,
+      membership_expiry: expiry,
+      role: user.role === 'CLIENT' ? 'DUAL' : user.role,
+      activeRole: 'COMPANION'
+    });
+
+    if (getDatabaseType() === 'supabase') {
+      try {
+        await db.companionMemberships().insert({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          plan: 'STARTER',
+          price_paise: 44900,
+          start_date: new Date().toISOString(),
+          expiry_date: expiry,
+          payment_status: 'PAID',
+          payment_id: `rc_${Date.now()}`
+        });
+      } catch (_) {}
+    }
+
+    return res.json({
+      success: true,
+      message: 'Google Play membership synchronized successfully.'
+    });
+  } catch (err: any) {
+    console.error('Error syncing RevenueCat:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to sync RevenueCat.' });
+  }
+});
+
+// Apply Referral Code
+app.post('/api/referrals/apply-code', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const userId = authUser?.id || req.body?.userId;
+  const code = typeof req.body?.referralCode === 'string' ? req.body.referralCode.trim().toUpperCase() : '';
+
+  if (!userId) return res.status(401).json({ error: 'Authentication required.' });
+  if (!code || code.length < 4) return res.status(400).json({ error: 'Valid referral code is required.' });
+
+  try {
+    const user = await databaseAdapter.getUser(userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    if (user.referredBy || user.referred_by) {
+      return res.status(400).json({ error: 'A referral code has already been applied to your account.' });
+    }
+    if (user.referralCode && user.referralCode.toUpperCase() === code) {
+      return res.status(400).json({ error: 'You cannot refer yourself.' });
+    }
+
+    // Look up referrer by referral_code
+    let referrer: any = null;
+    if (getDatabaseType() === 'supabase') {
+      const { data: refData } = await db.users().select('id, phone, legal_name, role, successful_referrals_count').ilike('referral_code', code).maybeSingle();
+      referrer = refData;
+    } else {
+      const all = await databaseAdapter.listUsers();
+      referrer = all.find((u: any) => u.referralCode && u.referralCode.toUpperCase() === code);
+    }
+
+    if (!referrer || referrer.id === userId) {
+      return res.status(400).json({ error: 'Invalid referral code. Please check and try again.' });
+    }
+
+    // Update user's referred_by
+    await databaseAdapter.updateUser(userId, {
+      referredBy: referrer.id,
+      referred_by: referrer.id
+    });
+
+    // Record pending referral in referrals table
+    if (getDatabaseType() === 'supabase') {
+      try {
+        await db.referrals().insert({
+          id: crypto.randomUUID(),
+          referrer_id: referrer.id,
+          referee_id: userId,
+          role: user.role === 'COMPANION' ? 'companion' : 'client',
+          status: 'pending'
+        });
+      } catch (_) {}
+    }
+
+    return res.json({
+      success: true,
+      message: `Referral code applied! You were referred by ${referrer.legal_name || 'a friend'}.`
+    });
+  } catch (err: any) {
+    console.error('Error applying referral code:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to apply referral code.' });
+  }
+});
+
+// Get Referral Status & Milestones
+app.get('/api/referrals/my-status', async (req: Request, res: Response) => {
+  const authUser = (req as AuthenticatedRequest).authUser;
+  const userId = authUser?.id || (typeof req.query?.userId === 'string' ? req.query.userId : '');
+
+  if (!userId) return res.status(401).json({ error: 'Authentication required.' });
+
+  try {
+    const user = await databaseAdapter.getUser(userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    // Auto-generate referral code if missing
+    let refCode = user.referralCode || user.referral_code;
+    if (!refCode) {
+      const prefix = ((user.legalName || user.name || 'PAIR').replace(/[^a-zA-Z]/g, '').slice(0, 4) || 'PAIR').toUpperCase().padEnd(4, 'X');
+      const suffix = Math.floor(1000 + Math.random() * 9000);
+      refCode = `${prefix}${suffix}`;
+      await databaseAdapter.updateUser(userId, { referralCode: refCode, referral_code: refCode }).catch(() => null);
+    }
+
+    // Check if phone used free trial
+    let phoneUsedTrial = !!user.hasUsedFreeTrial;
+    if (!phoneUsedTrial && user.phone && getDatabaseType() === 'supabase') {
+      const { data: utp } = await db.usedTrialPhones().select('phone').eq('phone', user.phone).maybeSingle().catch(() => ({ data: null }));
+      if (utp) phoneUsedTrial = true;
+    }
+
+    // Fetch invited friends list
+    let referralsList: any[] = [];
+    let verifiedCount = user.successfulReferralsCount || user.successful_referrals_count || 0;
+
+    if (getDatabaseType() === 'supabase') {
+      try {
+        const { data: refs } = await db.referrals().select('id, referee_id, role, status, created_at, verified_at').eq('referrer_id', userId).order('created_at', { ascending: false });
+        if (refs && refs.length > 0) {
+          referralsList = refs.map((r: any) => ({
+            id: r.id,
+            role: r.role,
+            status: r.status === 'verified_active' ? 'VERIFIED_ACTIVE' : 'PENDING',
+            date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN') : 'Recent'
+          }));
+          const dbVerifiedCount = refs.filter((r: any) => r.status === 'verified_active').length;
+          if (dbVerifiedCount > verifiedCount) verifiedCount = dbVerifiedCount;
+        }
+      } catch (_) {}
+    }
+
+    const milestoneProgress = verifiedCount % 5;
+    const nextMilestone = (Math.floor(verifiedCount / 5) + 1) * 5;
+
+    return res.json({
+      success: true,
+      referralCode: refCode,
+      verifiedCount,
+      milestoneProgress,
+      nextMilestone,
+      targetCount: 5,
+      has10PercentDiscount: !!user.has10PercentBookingDiscount || !!user.has_10_percent_booking_discount,
+      hasVerifiedReferrerBadge: !!user.hasVerifiedReferrerBadge || !!user.has_verified_referrer_badge,
+      isBoosted: !!user.isBoosted || !!user.is_boosted,
+      boostExpiry: user.boostExpiry || user.boost_expiry,
+      isCompanionActive: !!user.isCompanionActive || !!user.is_companion_active,
+      membershipType: user.membershipType || user.membership_type || 'none',
+      membershipExpiry: user.membershipExpiry || user.membership_expiry,
+      hasUsedFreeTrial: phoneUsedTrial,
+      referrals: referralsList
+    });
+  } catch (err: any) {
+    console.error('Error fetching referral status:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to fetch referral status.' });
+  }
+});
+
 // Step C: Bank Verification via APITXT Penny-Less API
 app.post('/api/companion/bank/verify', async (req: Request, res: Response) => {
   const userId = (req as AuthenticatedRequest).authUser.id;
@@ -3481,6 +3750,13 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
     );
     if (result.type === 'BOOKING') {
       const finalizedBooking = result.record;
+      // Consume 10% referral discount if applied
+      if (finalizedBooking.clientId) {
+        databaseAdapter.updateUser(finalizedBooking.clientId, {
+          has10PercentBookingDiscount: false,
+          has_10_percent_booking_discount: false
+        }).catch(() => null);
+      }
       // Persist 4-digit session_otp and CONFIRMED_PAID status in Supabase if supported
       if (getDatabaseType() === 'supabase') {
         try {
@@ -3568,6 +3844,16 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
           endOtp: verifiedCompletionOtp
         }
       });
+    }
+
+    if (result.record?.userId) {
+      databaseAdapter.updateUser(result.record.userId, {
+        isCompanionActive: true,
+        is_companion_active: true,
+        membershipType: 'paid',
+        membership_type: 'paid',
+        membershipExpiry: result.record.expiryDate || new Date(Date.now() + 30 * 86400000).toISOString()
+      }).catch(() => null);
     }
 
     try {
