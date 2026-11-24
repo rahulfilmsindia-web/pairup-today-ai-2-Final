@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
 import { getRealtimeClient } from '../utils/supabaseRealtime';
+import { CartoonMapMarker } from './CartoonMapMarker';
 import { 
   MapPin, Navigation, MessageSquare, ShieldCheck, Clock, Send, 
   Phone, Star, AlertCircle, ChevronDown, ChevronUp, Lock, CheckCircle2,
@@ -75,6 +76,7 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const chatSectionRef = useRef<HTMLDivElement>(null);
+  const lastGeocodedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   // Clock tick every second for real-time session countdown
   useEffect(() => {
@@ -121,9 +123,30 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
         .on('broadcast', { event: 'companion_location' }, ({ payload }: any) => {
           if (payload?.lat && payload?.lng) {
             setCompanionCoords({ lat: payload.lat, lng: payload.lng });
-            if (payload.area) setCompanionCurrentArea(payload.area);
 
-            // Compute distance & ETA locally using Haversine formula
+            // Only reverse-geocode when moved > 80m (0.08 km) to strictly conserve API quota
+            if (
+              !lastGeocodedCoordsRef.current ||
+              haversineDistanceKm(lastGeocodedCoordsRef.current.lat, lastGeocodedCoordsRef.current.lng, payload.lat, payload.lng) > 0.08
+            ) {
+              lastGeocodedCoordsRef.current = { lat: payload.lat, lng: payload.lng };
+              if (payload.area) {
+                setCompanionCurrentArea(payload.area);
+              } else {
+                apiFetch(`/api/location/reverse-geocode?lat=${payload.lat}&lng=${payload.lng}`)
+                  .then(r => r.ok ? r.json() : null)
+                  .then(data => {
+                    if (data?.road || data?.area || data?.formatted) {
+                      setCompanionCurrentArea(data.road || data.area || data.formatted);
+                    }
+                  })
+                  .catch(() => {});
+              }
+            } else if (payload.area) {
+              setCompanionCurrentArea(payload.area);
+            }
+
+            // Compute distance & ETA locally using Haversine formula ($0 Cost)
             const dist = haversineDistanceKm(payload.lat, payload.lng, venueCoords.lat, venueCoords.lng);
             setLiveDistanceKm(dist);
             // Average urban speed ~20 km/h
@@ -429,18 +452,14 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
             </span>
           </div>
 
-          <a
-            href={externalNavUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-blue-600/25 transition-all cursor-pointer min-h-[44px]"
-          >
-            <Navigation className="w-3.5 h-3.5" />
-            <span>Open Maps Directions</span>
-          </a>
+          {/* Client Dashboard is strictly VIEW-ONLY (No external navigation buttons for Client) */}
+          <div className="px-3.5 py-2 rounded-full bg-purple-50 border border-purple-200 text-[#6D28D9] text-xs font-black flex items-center gap-1.5 shadow-sm">
+            <Radio className="w-3.5 h-3.5 text-pink-600 animate-pulse" />
+            <span>Live Companion Tracking (View Only)</span>
+          </div>
         </div>
 
-        {/* Interactive SVG Map with Polyline & Markers */}
+        {/* Interactive SVG Map with Polyline & Cartoon Marker */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <svg className="w-full h-full opacity-70" viewBox="0 0 800 400" preserveAspectRatio="none">
             <defs>
@@ -453,7 +472,7 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
             <path
               d="M 180 280 Q 320 220 460 210 T 620 120"
               fill="none"
-              stroke="#38bdf8"
+              stroke="#ec4899"
               strokeWidth="5"
               strokeLinecap="round"
               strokeDasharray="8 6"
@@ -461,28 +480,31 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
             />
           </svg>
 
-          {/* Live Companion Marker */}
+          {/* Live Companion Gender-Based Cartoon Marker with Floating Love Bubbles */}
           <div
-            className="absolute transition-all duration-1000 ease-linear pointer-events-auto flex flex-col items-center"
-            style={{ left: isArrived ? '70%' : '28%', top: isArrived ? '28%' : '65%' }}
+            className="absolute pointer-events-auto flex flex-col items-center"
+            style={{ 
+              left: isArrived ? '72%' : '26%', 
+              top: isArrived ? '24%' : '56%',
+              transition: 'left 1.2s cubic-bezier(0.25, 0.1, 0.25, 1), top 1.2s cubic-bezier(0.25, 0.1, 0.25, 1)'
+            }}
           >
-            <div className="relative">
-              <div className="w-11 h-11 rounded-full bg-pink-500 ring-4 ring-pink-400/40 shadow-xl shadow-pink-500/50 flex items-center justify-center text-white">
-                <Navigation className="w-5 h-5 -rotate-45" />
-              </div>
-              <span className="w-11 h-11 rounded-full bg-pink-400 absolute inset-0 animate-ping opacity-40" />
-            </div>
-            <span className="mt-1 px-2.5 py-0.5 rounded-full bg-slate-900/90 text-[10px] font-bold text-pink-300 border border-pink-500/30 whitespace-nowrap shadow-sm">
-              {booking.companionName || 'Companion'}
-            </span>
+            <CartoonMapMarker
+              gender={booking.companionGender || booking.companion_gender || booking.companion?.gender || 'FEMALE'}
+              name={booking.companionName || 'Companion Host'}
+              role="companion"
+              sublabel={isArrived ? 'Arrived at Venue ♥' : `Arriving in ~${liveEtaMins}m`}
+              isMoving={!isArrived}
+              size="md"
+            />
           </div>
 
           {/* Meeting Point Destination Pin */}
           <div
             className="absolute pointer-events-auto flex flex-col items-center"
-            style={{ left: '75%', top: '25%' }}
+            style={{ left: '75%', top: '22%' }}
           >
-            <div className="w-11 h-11 rounded-full bg-emerald-500 ring-4 ring-emerald-400/40 shadow-xl shadow-emerald-500/50 flex items-center justify-center text-white">
+            <div className="w-10 h-10 rounded-full bg-emerald-500 ring-4 ring-emerald-400/40 shadow-xl shadow-emerald-500/50 flex items-center justify-center text-white">
               <MapPin className="w-5 h-5 animate-bounce" />
             </div>
             <span className="mt-1 px-2.5 py-0.5 rounded-full bg-slate-900/90 text-[10px] font-bold text-emerald-300 border border-emerald-500/30 whitespace-nowrap shadow-sm">
@@ -491,8 +513,8 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
           </div>
         </div>
 
-        {/* Bottom Floating Info Banner */}
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200 text-xs shadow-md">
+        {/* Bottom Floating Info Banner: Shows Real Road / Locality Name & Meeting Spot */}
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-2xl bg-white/95 backdrop-blur-md border border-slate-200 text-xs shadow-md">
           <div className="flex items-center gap-2.5 min-w-0">
             <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
             <div className="truncate">
@@ -500,9 +522,12 @@ export const ClientLiveTrackingView: React.FC<ClientLiveTrackingViewProps> = ({
               <span className="font-extrabold text-slate-900 truncate block">{venueAddress}</span>
             </div>
           </div>
-          <span className="text-[11px] text-sky-700 bg-sky-50 px-3 py-1 rounded-full border border-sky-200 font-bold shrink-0">
-            📍 {companionCurrentArea}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-purple-900 bg-purple-50 px-3 py-1.5 rounded-full border border-purple-200 font-extrabold shadow-xs flex items-center gap-1.5 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
+              <span>📍 Live on: <strong className="text-pink-600">{companionCurrentArea}</strong></span>
+            </span>
+          </div>
         </div>
       </div>
 

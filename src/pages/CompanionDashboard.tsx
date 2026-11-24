@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { CartoonMapMarker } from '../components/CartoonMapMarker';
+import { getRealtimeClient } from '../utils/supabaseRealtime';
 import { TimeframeFilter, TimeframeFilterBar, matchesTimeframe, formatFullDateTime } from '../utils/timeframeFilters';
 
 const MeetingCountdown: React.FC<{ booking: any }> = ({ booking }) => {
@@ -1426,8 +1428,51 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
     if (!activeBooking || !user || typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     let watchId: number | null = null;
+    let lastBroadCoords: { lat: number; lng: number } | null = null;
+    let realtimeChannel: any = null;
+
+    // Ephemeral Supabase Realtime Channel (Zero Database Write Cost)
+    getRealtimeClient().then(client => {
+      if (client) {
+        realtimeChannel = client.channel(`tracking:${activeBooking.id}`);
+        realtimeChannel.subscribe();
+      }
+    }).catch(() => {});
+
     const sendCoords = (lat: number, lng: number, acc: number = 8) => {
-      // 1. Send to companion/live-coords for privacy-preserving reverse geocoded ETA calculation
+      // Distance throttling: skip if moved < 15 meters (0.015 km) to strictly conserve Supabase Realtime & DB
+      if (lastBroadCoords) {
+        const R = 6371;
+        const dLat = (lat - lastBroadCoords.lat) * Math.PI / 180;
+        const dLng = (lng - lastBroadCoords.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lastBroadCoords.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+                  Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distKm = R * c;
+        if (distKm < 0.015) {
+          return; // Moved < 15 meters, skip update
+        }
+      }
+      lastBroadCoords = { lat, lng };
+
+      // 1. Supabase Realtime Ephemeral Broadcast (Zero DB writes!)
+      if (realtimeChannel) {
+        try {
+          realtimeChannel.send({
+            type: 'broadcast',
+            event: 'companion_location',
+            payload: {
+              lat,
+              lng,
+              accuracy: acc,
+              timestamp: Date.now()
+            }
+          });
+        } catch {}
+      }
+
+      // 2. Send to companion/live-coords for privacy-preserving reverse geocoded ETA calculation
       apiFetch('/api/companion/live-coords', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1439,7 +1484,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         })
       }).catch(() => {});
 
-      // 2. Also keep location service updated
+      // 3. Keep location service updated
       apiFetch('/api/location/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1472,7 +1517,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
           { enableHighAccuracy: true, timeout: 6000, maximumAge: 4000 }
         );
       } catch {}
-    }, 4000);
+    }, 6000);
 
     return () => {
       if (watchId !== null) {
@@ -1481,6 +1526,11 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         } catch {}
       }
       clearInterval(locInterval);
+      if (realtimeChannel) {
+        try {
+          realtimeChannel.unsubscribe();
+        } catch {}
+      }
     };
   }, [bookings, user?.id]);
 
@@ -4492,48 +4542,122 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                     </div>
                   )}
 
+                  {/* COMPANION INTERACTIVE ROUTE MAP & DESTINATION WAITING CLIENT CARTOON MARKER */}
+                  {['CONFIRMED', 'CONFIRMED_PAID', 'COMPANION_ARRIVED'].includes(b.status) && (
+                    <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-purple-950 via-slate-900 to-slate-950 border border-purple-800/40 p-4 text-white shadow-inner">
+                      {/* Top Header */}
+                      <div className="flex items-center justify-between pb-3 border-b border-purple-800/40 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                          <span className="font-extrabold text-emerald-300">Transit Route to Venue</span>
+                        </div>
+                        <span className="text-[11px] font-bold text-purple-300 bg-purple-900/50 px-2.5 py-0.5 rounded-full border border-purple-700/50">
+                          {b.status === 'COMPANION_ARRIVED' ? 'Arrived at Venue' : 'En Route to Client'}
+                        </span>
+                      </div>
+
+                      {/* Map Simulation Canvas with Route Polyline */}
+                      <div className="relative h-48 w-full my-3 flex items-center justify-center">
+                        <svg className="w-full h-full opacity-60" viewBox="0 0 600 240" preserveAspectRatio="none">
+                          <defs>
+                            <linearGradient id="routeGradientComp" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#ec4899" />
+                              <stop offset="100%" stopColor="#8b5cf6" />
+                            </linearGradient>
+                          </defs>
+                          <path
+                            d="M 60 180 Q 220 120 360 140 T 520 60"
+                            fill="none"
+                            stroke="url(#routeGradientComp)"
+                            strokeWidth="5"
+                            strokeLinecap="round"
+                            strokeDasharray="8 6"
+                          />
+                        </svg>
+
+                        {/* Companion Cartoon Marker (Moving en route) */}
+                        <div
+                          className="absolute pointer-events-auto flex flex-col items-center"
+                          style={{
+                            left: b.status === 'COMPANION_ARRIVED' ? '70%' : '18%',
+                            top: b.status === 'COMPANION_ARRIVED' ? '28%' : '56%',
+                            transition: 'left 1.2s cubic-bezier(0.25, 0.1, 0.25, 1), top 1.2s cubic-bezier(0.25, 0.1, 0.25, 1)'
+                          }}
+                        >
+                          <CartoonMapMarker
+                            gender={user?.gender || 'MALE'}
+                            name={user?.name?.split(' ')[0] || 'You'}
+                            role="companion"
+                            sublabel={b.status === 'COMPANION_ARRIVED' ? 'At Venue' : 'En Route'}
+                            isMoving={b.status !== 'COMPANION_ARRIVED'}
+                            size="sm"
+                          />
+                        </div>
+
+                        {/* Waiting Client Cartoon Marker at Destination Endpoint */}
+                        <div
+                          className="absolute pointer-events-auto flex flex-col items-center"
+                          style={{ right: '8%', top: '15%' }}
+                        >
+                          <CartoonMapMarker
+                            gender={b.clientGender || b.client_gender || b.client?.gender || 'FEMALE'}
+                            name={b.clientName?.split(' ')[0] || 'Client'}
+                            role="client"
+                            sublabel="Waiting at Venue ♥"
+                            isMoving={false}
+                            size="sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Venue Address Tag */}
+                      <div className="flex items-center gap-2 pt-2 border-t border-purple-800/30 text-xs">
+                        <MapPin className="w-4 h-4 text-pink-400 shrink-0" />
+                        <span className="font-bold text-slate-200 truncate">
+                          {b.meetingLocation || b.bookingLocationName || b.booking_location_name || 'Booked Meeting Venue'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* MEETING VENUE & MOBILE-FIRST ACTION BUTTONS */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-slate-50 border border-slate-200 space-y-3">
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-pink-600 shrink-0" />
                       <div className="min-w-0 flex-1">
                         <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Booked Meeting Venue</span>
-                        <span className="text-xs font-bold text-slate-900 truncate block">
+                        <span className="text-xs sm:text-sm font-bold text-slate-900 truncate block">
                           {b.meetingLocation || b.bookingLocationName || b.booking_location_name || 'Specified Meeting Venue'}
                         </span>
                       </div>
                     </div>
 
-                    {/* Action Buttons: Row 1: Chat + Location (grid-cols-2), Row 2: Cancel (if unverified) */}
+                    {/* Action Buttons: Turn-by-Turn Navigation + Chat with Client */}
                     <div className="space-y-2 pt-1">
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {/* 1. Start Turn-by-Turn Navigation (Google Maps) */}
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation || b.bookingLocationName || b.booking_location_name || '')}&travelmode=driving`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="min-h-[48px] py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 text-center"
+                        >
+                          <Navigation className="w-4 h-4 shrink-0" />
+                          <span>Start Navigation (Google Maps)</span>
+                        </a>
+
+                        {/* 2. Chat with Client */}
                         <button
                           type="button"
                           onClick={() => {
                             setActiveChatBooking(b);
                             setActiveTab('chat');
                           }}
-                          className="min-h-[44px] py-2.5 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-extrabold text-xs shadow-md shadow-pink-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                          className="min-h-[48px] py-2.5 px-4 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-[#6D28D9] font-extrabold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                         >
-                          <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">Chat with Client</span>
+                          <MessageSquare className="w-4 h-4 shrink-0" />
+                          <span>Chat with Client</span>
                         </button>
-
-                        {(b.meetingLocation || b.bookingLocationName || b.booking_location_name) ? (
-                          <a
-                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.meetingLocation || b.bookingLocationName || b.booking_location_name)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="min-h-[44px] py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 text-center"
-                          >
-                            <Navigation className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">Get Location</span>
-                          </a>
-                        ) : (
-                          <div className="min-h-[44px] py-2.5 px-3 rounded-xl bg-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center">
-                            No Venue Coords
-                          </div>
-                        )}
                       </div>
 
                       {!b.startOtpVerified && b.status !== 'ONGOING' && b.status !== 'COMPLETED' && (
@@ -4543,7 +4667,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
                             setCancellingBooking(b);
                             setCancellationError(null);
                           }}
-                          className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
                         >
                           <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
                           <span>Cancel Booking</span>
@@ -4554,18 +4678,20 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
 
                   {/* 0. ARRIVAL TRIGGER (If still in CONFIRMED status) */}
                   {b.status === 'CONFIRMED' && (
-                    <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-amber-50/90 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-sm">
                       <div className="space-y-0.5">
-                        <span className="font-extrabold text-amber-950 block">Have you arrived at the venue?</span>
+                        <span className="font-extrabold text-amber-950 text-sm block">Have you arrived at the venue?</span>
                         <span className="text-amber-800 text-[11px]">
                           Click to record your arrival and notify the client to prepare their 4-digit session OTP.
                         </span>
                       </div>
                       <button
+                        type="button"
                         onClick={() => handleSlideMeetingArrived(b.id)}
-                        className="min-h-[44px] px-5 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-black hover:bg-amber-500 shrink-0 text-xs transition-colors shadow-sm cursor-pointer active:scale-95"
+                        className="min-h-[48px] px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black shrink-0 text-xs transition-all shadow-md shadow-amber-500/20 cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
                       >
-                        I Have Arrived at Location
+                        <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                        <span>Mark Arrived at Venue</span>
                       </button>
                     </div>
                   )}
