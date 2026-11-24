@@ -26,6 +26,58 @@ export const COMPANION_MONTHLY_PRODUCT_ID = 'companion_monthly_449';
 export const MEMBERSHIP_PRICE_INR = 449;
 export const MEMBERSHIP_PRICE_PAISE = 44900;
 
+export type CompanionMembershipPlan = 'STARTER' | 'PROFESSIONAL' | 'PREMIUM';
+
+export interface MembershipTierConfig {
+  plan: CompanionMembershipPlan;
+  name: string;
+  priceInr: number;
+  amountPaise: number;
+  durationDays: number;
+  productId: string;
+  fallbackProductId?: string;
+  planTier: 'starter' | 'professional' | 'premium';
+  isBoosted: boolean;
+  hasVipBadge: boolean;
+}
+
+export const MEMBERSHIP_TIERS: Record<CompanionMembershipPlan, MembershipTierConfig> = {
+  STARTER: {
+    plan: 'STARTER',
+    name: 'Starter',
+    priceInr: 449,
+    amountPaise: 44900,
+    durationDays: 30,
+    productId: 'companion_starter_449',
+    fallbackProductId: 'companion_monthly_449',
+    planTier: 'starter',
+    isBoosted: false,
+    hasVipBadge: false
+  },
+  PROFESSIONAL: {
+    plan: 'PROFESSIONAL',
+    name: 'Professional',
+    priceInr: 1099,
+    amountPaise: 109900,
+    durationDays: 90,
+    productId: 'companion_pro_1099',
+    planTier: 'professional',
+    isBoosted: true,
+    hasVipBadge: false
+  },
+  PREMIUM: {
+    plan: 'PREMIUM',
+    name: 'Premium',
+    priceInr: 5999,
+    amountPaise: 599900,
+    durationDays: 365,
+    productId: 'companion_premium_5999',
+    planTier: 'premium',
+    isBoosted: true,
+    hasVipBadge: true
+  }
+};
+
 let isPurchasesConfigured = false;
 
 /**
@@ -110,29 +162,35 @@ export interface MembershipPurchaseResult {
 }
 
 /**
- * Purchases Companion Monthly Membership (₹449/mo).
- * Automatically switches between Google Play Billing (Native) and Razorpay (Web).
+ * Purchases Companion Membership (STARTER ₹449/30d, PROFESSIONAL ₹1,099/90d, PREMIUM ₹5,999/365d).
+ * Automatically switches between Google Play Billing (Native App) and Razorpay (Web).
  */
 export const purchaseCompanionMembership = async (
-  user: any
+  user: any,
+  plan: CompanionMembershipPlan = 'STARTER'
 ): Promise<MembershipPurchaseResult> => {
+  const tier = MEMBERSHIP_TIERS[plan] || MEMBERSHIP_TIERS.STARTER;
+
   // ─── 1. NATIVE ANDROID / IOS FLOW (Google Play Billing / RevenueCat) ───
   if (isNativePlatform()) {
     try {
       await initRevenueCat(user?.id);
 
       // Fetch official products from Google Play Billing
+      const targetIds = [tier.productId];
+      if (tier.fallbackProductId) targetIds.push(tier.fallbackProductId);
+
       const { products } = await Purchases.getProducts({
-        productIdentifiers: [COMPANION_MONTHLY_PRODUCT_ID]
+        productIdentifiers: targetIds
       });
 
-      const monthlyProduct = products.find(p => p.identifier === COMPANION_MONTHLY_PRODUCT_ID) || products[0];
+      const matchedProduct = products.find(p => targetIds.includes(p.identifier)) || products[0];
 
-      if (!monthlyProduct) {
+      if (!matchedProduct) {
         // Fallback: Check offerings if product list is structured as offering package
         const offerings = await Purchases.getOfferings();
         const availablePackage = offerings.current?.availablePackages.find(
-          pkg => pkg.product.identifier === COMPANION_MONTHLY_PRODUCT_ID
+          pkg => targetIds.includes(pkg.product.identifier)
         ) || offerings.current?.availablePackages[0];
 
         if (!availablePackage) {
@@ -149,6 +207,7 @@ export const purchaseCompanionMembership = async (
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: user.id,
+            plan: tier.plan,
             entitlements: purchaseResult.customerInfo.entitlements.active,
             productId: availablePackage.product.identifier,
             transactionId: purchaseResult.customerInfo.originalAppUserId
@@ -160,14 +219,14 @@ export const purchaseCompanionMembership = async (
         return {
           success: true,
           membershipType: 'paid',
-          expiryDate: syncData?.membershipExpiry || new Date(Date.now() + 30 * 86400000).toISOString(),
+          expiryDate: syncData?.membershipExpiry || new Date(Date.now() + tier.durationDays * 86400000).toISOString(),
           source: 'google_play'
         };
       }
 
       // Purchase store product directly
       const purchaseResult = await Purchases.purchaseStoreProduct({
-        product: monthlyProduct
+        product: matchedProduct
       });
 
       // Synchronize with Supabase
@@ -176,8 +235,9 @@ export const purchaseCompanionMembership = async (
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
+          plan: tier.plan,
           entitlements: purchaseResult.customerInfo.entitlements.active,
-          productId: monthlyProduct.identifier,
+          productId: matchedProduct.identifier,
           transactionId: purchaseResult.customerInfo.originalAppUserId
         })
       });
@@ -187,7 +247,7 @@ export const purchaseCompanionMembership = async (
       return {
         success: true,
         membershipType: 'paid',
-        expiryDate: syncData?.membershipExpiry || new Date(Date.now() + 30 * 86400000).toISOString(),
+        expiryDate: syncData?.membershipExpiry || new Date(Date.now() + tier.durationDays * 86400000).toISOString(),
         source: 'google_play'
       };
     } catch (err: any) {
@@ -207,7 +267,7 @@ export const purchaseCompanionMembership = async (
     const orderRes = await apiFetch('/api/companion/membership/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: 'STARTER', durationMonths: 1 })
+      body: JSON.stringify({ plan: tier.plan, durationDays: tier.durationDays })
     });
 
     if (!orderRes.ok) {
@@ -219,11 +279,11 @@ export const purchaseCompanionMembership = async (
 
     const paymentResponse = await openRazorpayCheckout({
       orderId: orderData.orderId,
-      amountPaise: orderData.amountPaise || MEMBERSHIP_PRICE_PAISE,
+      amountPaise: orderData.amountPaise || tier.amountPaise,
       currency: orderData.currency || 'INR',
       keyId: orderData.keyId,
-      name: 'PairUpToday Companion Membership',
-      description: '1 Month Verified Companion Membership (₹449)',
+      name: `PairUpToday ${tier.name} Membership`,
+      description: `${tier.name} Companion Membership (₹${tier.priceInr})`,
       prefill: {
         name: user.profileName || user.legalName || '',
         email: user.email || '',
@@ -239,7 +299,7 @@ export const purchaseCompanionMembership = async (
         razorpay_order_id: paymentResponse.razorpay_order_id,
         razorpay_payment_id: paymentResponse.razorpay_payment_id,
         razorpay_signature: paymentResponse.razorpay_signature,
-        membershipPlan: 'STARTER',
+        membershipPlan: tier.plan,
         userId: user.id
       })
     });
@@ -254,7 +314,7 @@ export const purchaseCompanionMembership = async (
     return {
       success: true,
       membershipType: 'paid',
-      expiryDate: verifyData?.membershipExpiry || new Date(Date.now() + 30 * 86400000).toISOString(),
+      expiryDate: verifyData?.membershipExpiry || new Date(Date.now() + tier.durationDays * 86400000).toISOString(),
       source: 'razorpay_web'
     };
   } catch (err: any) {

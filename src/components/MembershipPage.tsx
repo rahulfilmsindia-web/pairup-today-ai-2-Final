@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Sparkles, CheckCircle2, ShieldCheck, Crown, Clock, Gift, 
-  ArrowRight, AlertCircle, Copy, Check, Lock, Smartphone, RefreshCw 
+  Sparkles, CheckCircle2, Crown, Clock, Gift, 
+  ArrowRight, AlertCircle, Check, RefreshCw, Zap, Award
 } from 'lucide-react';
-import { purchaseCompanionMembership, isNativePlatform, MEMBERSHIP_PRICE_INR } from '../services/paymentService';
+import { 
+  purchaseCompanionMembership, 
+  isNativePlatform, 
+  MEMBERSHIP_TIERS,
+  CompanionMembershipPlan,
+  MEMBERSHIP_PRICE_INR
+} from '../services/paymentService';
 import { redeemFirstUserCoupon, getReferralStatus } from '../services/referralService';
 
 interface MembershipPageProps {
@@ -14,14 +20,13 @@ interface MembershipPageProps {
 
 export const MembershipPage: React.FC<MembershipPageProps> = ({
   user,
-  onMembershipUpdated,
-  onNavigateTab
+  onMembershipUpdated
 }) => {
   const [couponCode, setCouponCode] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponFeedback, setCouponFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentLoadingPlan, setPaymentLoadingPlan] = useState<CompanionMembershipPlan | null>(null);
   const [paymentFeedback, setPaymentFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [referralData, setReferralData] = useState<{
@@ -35,7 +40,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
 
   const isNative = isNativePlatform();
 
-  // Load latest anti-fraud trial status
+  // Load anti-fraud trial status
   useEffect(() => {
     if (user?.id) {
       getReferralStatus(user.id).then(status => {
@@ -48,10 +53,13 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
     }
   }, [user?.id]);
 
-  const isFreeTrialUsed = referralData.hasUsedFreeTrial || referralData.isTrialPhoneUsed;
+  const isFreeTrialUsed = referralData.hasUsedFreeTrial || referralData.isTrialPhoneUsed || Boolean(user?.hasUsedFreeTrial || user?.has_used_free_trial);
   const isCompanionActive = Boolean(user?.isCompanionActive || user?.is_companion_active);
+  const planTier = (user?.planTier || user?.plan_tier || (isCompanionActive ? 'starter' : 'none')).toLowerCase();
   const membershipType = user?.membershipType || user?.membership_type || (isCompanionActive ? 'paid' : 'none');
   const membershipExpiry = user?.membershipExpiry || user?.membership_expiry || referralData.membershipExpiry;
+  const isBoosted = Boolean(user?.isBoosted || user?.is_boosted);
+  const hasVipBadge = Boolean(user?.hasVipBadge || user?.has_vip_badge);
 
   const expiryFormatted = membershipExpiry 
     ? new Date(membershipExpiry).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -61,18 +69,18 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
     ? Math.max(0, Math.ceil((new Date(membershipExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  // 1. Paid Monthly Membership Trigger (₹449)
-  const handlePurchaseMembership = async () => {
-    setPaymentLoading(true);
+  // 1. Plan Purchase Handler (STARTER, PROFESSIONAL, PREMIUM)
+  const handlePurchasePlan = async (plan: CompanionMembershipPlan) => {
+    setPaymentLoadingPlan(plan);
     setPaymentFeedback(null);
     setCouponFeedback(null);
 
     try {
-      const result = await purchaseCompanionMembership(user);
+      const result = await purchaseCompanionMembership(user, plan);
       if (result.success) {
         setPaymentFeedback({
           type: 'success',
-          message: 'Membership activated successfully! Your Companion profile is now active on PairUp Verified Network.'
+          message: `🎉 ${plan} membership activated successfully! Your Companion profile is now active on PairUp Verified Network.`
         });
         if (onMembershipUpdated) onMembershipUpdated();
       } else if (!result.cancelled) {
@@ -87,7 +95,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
         message: err.message || 'Payment failed. Please try again.'
       });
     } finally {
-      setPaymentLoading(false);
+      setPaymentLoadingPlan(null);
     }
   };
 
@@ -110,7 +118,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
       if (result.success) {
         setPaymentFeedback({
           type: 'success',
-          message: result.message || '🎉 Congratulations! 3 Months Free Companion Membership activated successfully!'
+          message: result.message || '🎉 Congratulations! 3 Months (90 Days) Free Companion Membership activated successfully!'
         });
         setReferralData(prev => ({
           ...prev,
@@ -137,217 +145,320 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* ─── HEADER ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
-            <Crown className="w-6 h-6 text-amber-500" />
-            <span>Companion Membership</span>
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-            Activate your hosting capability to accept real-world companion bookings across your city.
-          </p>
-        </div>
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* ─── ACTIVE MEMBERSHIP BANNER ─── */}
+      {isCompanionActive && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 border border-purple-500/30 text-slate-100 shadow-lg space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-pink-500/20 text-pink-400">
+                <Crown className="w-4 h-4" />
+              </span>
+              <div>
+                <span className="text-xs font-black uppercase tracking-wider text-pink-400">
+                  {membershipType === 'free_trial' || planTier === 'free_trial'
+                    ? '🎁 3-Month Free Trial Active'
+                    : `👑 ${planTier.toUpperCase()} Membership Active`}
+                </span>
+                <span className="text-xs text-slate-400 ml-2">
+                  {daysRemaining > 0 ? `(${daysRemaining} days remaining)` : ''}
+                </span>
+              </div>
+            </div>
+            {expiryFormatted && (
+              <span className="self-start sm:self-auto text-xs bg-white/10 px-3 py-1 rounded-full font-bold border border-white/10 text-slate-200">
+                Expires {expiryFormatted}
+              </span>
+            )}
+          </div>
 
-        {/* Live Status Badge */}
-        {isCompanionActive ? (
-          <span className="self-start sm:self-auto px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 text-xs font-black flex items-center gap-1.5 shadow-xs">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>
-              {membershipType === 'free_trial' ? 'Free Trial Active' : 'Membership Active'}
-              {daysRemaining > 0 ? ` (${daysRemaining}d left)` : ''}
+          <div className="flex flex-wrap items-center gap-3 pt-2 text-[11px] text-slate-300">
+            <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+              <Check className="w-3.5 h-3.5" /> 85% Net Payout Active
             </span>
-          </span>
-        ) : (
-          <span className="self-start sm:self-auto px-3.5 py-1.5 rounded-full bg-rose-50 border border-rose-300 text-rose-700 text-xs font-black flex items-center gap-1.5 shadow-xs">
-            <Clock className="w-4 h-4 text-rose-600" />
-            <span>Membership Inactive</span>
-          </span>
-        )}
+            {isBoosted && (
+              <span className="flex items-center gap-1 text-amber-400 font-semibold">
+                <Zap className="w-3.5 h-3.5" /> Priority Discovery Placement
+              </span>
+            )}
+            {hasVipBadge && (
+              <span className="flex items-center gap-1 text-purple-400 font-semibold">
+                <Award className="w-3.5 h-3.5" /> VIP Verification Badge
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── FEEDBACK MESSAGES ─── */}
+      {paymentFeedback && (
+        <div className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 shadow-md ${
+          paymentFeedback.type === 'success'
+            ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+            : 'bg-rose-500/10 text-rose-300 border border-rose-500/30'
+        }`}>
+          <div className="flex items-center gap-2">
+            {paymentFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+            )}
+            <span>{paymentFeedback.message}</span>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setPaymentFeedback(null)} 
+            className="text-slate-400 hover:text-white text-xs px-2 py-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ─── HEADER ─── */}
+      <div className="text-center space-y-1">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-pink-300 text-xs font-bold">
+          <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+          <span>PairUp Verified Network</span>
+        </div>
+        <h2 className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight">
+          Choose Your Membership Plan
+        </h2>
+        <p className="text-slate-400 text-xs max-w-md mx-auto leading-relaxed">
+          A paid membership is mandatory before you can receive bookings. Select a plan below to activate your Companion profile on PairUp Verified Network.
+        </p>
       </div>
 
-      {/* Active Membership Banner */}
-      {isCompanionActive && expiryFormatted && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-900 to-indigo-900 text-white shadow-md space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-purple-200">
-              {membershipType === 'free_trial' ? '🎁 3-Month Promotional Free Trial' : '👑 Paid Monthly Membership'}
-            </span>
-            <span className="text-xs bg-white/20 px-2.5 py-0.5 rounded-full font-bold">
-              Expires {expiryFormatted}
-            </span>
-          </div>
-          <p className="text-xs text-purple-100 leading-relaxed">
-            Your hosting badge is live. You earn <strong>85% Net Payout</strong> on every completed booking with zero platform commission deduction from your earnings.
-          </p>
-        </div>
-      )}
-
-      {/* Notifications / Feedback */}
-      {paymentFeedback && (
-        <div className={`p-4 rounded-2xl text-xs font-extrabold flex items-center gap-2 shadow-sm ${
-          paymentFeedback.type === 'success'
-            ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-            : 'bg-rose-50 text-rose-800 border border-rose-300'
-        }`}>
-          {paymentFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />}
-          <span>{paymentFeedback.message}</span>
-        </div>
-      )}
-
-      {/* ─── 1. PROMINENT ₹449/MONTH PAID MEMBERSHIP CARD (TOP) ─── */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white border-2 border-purple-200 shadow-md relative overflow-hidden space-y-5">
-        <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-600 to-pink-600 text-white text-[11px] font-black px-4 py-1 rounded-bl-2xl uppercase tracking-wider shadow-sm">
-          Recommended
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-xs font-black uppercase text-purple-700 tracking-wider block">Starter Hosting Plan</span>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">
-              ₹{MEMBERSHIP_PRICE_INR} <span className="text-sm font-semibold text-slate-500">/ month</span>
-            </h3>
-            <p className="text-xs text-slate-600">
-              Standard 30-day verified host access with instant booking activation.
-            </p>
+      {/* ─── THREE-TIER MEMBERSHIP PRICING CARDS ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* 1. STARTER (₹449 / 1 month) */}
+        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between hover:border-pink-500/50 transition-colors shadow-lg">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase font-extrabold text-slate-400 tracking-wider">Starter</span>
+              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                1 Month
+              </span>
+            </div>
+            <div className="text-2xl font-extrabold text-amber-400 my-2">
+              ₹{MEMBERSHIP_TIERS.STARTER.priceInr} <span className="text-xs font-normal text-slate-400">/ 1 month</span>
+            </div>
+            <ul className="text-[11px] text-slate-400 space-y-2 mt-4">
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>30 days active hosting profile</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Listed on PairUp Verified Network</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>85% gross earning share</span>
+              </li>
+            </ul>
           </div>
 
-          {/* Primary Action Button: Platform-Aware Trigger */}
           <button
             type="button"
-            onClick={handlePurchaseMembership}
-            disabled={paymentLoading}
-            className="min-h-[52px] px-8 py-3.5 rounded-2xl bg-gradient-to-r from-purple-700 via-pink-600 to-rose-600 hover:from-purple-800 hover:to-pink-700 text-white font-black text-sm shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+            onClick={() => handlePurchasePlan('STARTER')}
+            disabled={paymentLoadingPlan !== null}
+            className="mt-6 w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-black disabled:opacity-60 transition-all flex items-center justify-center gap-2 shadow-md shadow-pink-600/20 active:scale-95 cursor-pointer"
           >
-            {paymentLoading ? (
+            {paymentLoadingPlan === 'STARTER' ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 <span>Processing...</span>
               </>
             ) : (
               <>
-                <span>{isNative ? 'Subscribe via Google Play' : `Pay ₹${MEMBERSHIP_PRICE_INR} / Month`}</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>{isNative ? 'Subscribe via Google Play' : 'Subscribe STARTER'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
           </button>
         </div>
 
-        {/* Benefits Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-slate-100 text-xs">
-          <div className="flex items-center gap-2 text-slate-700">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="font-bold">Verified Host Blue Tick</span>
+        {/* 2. PROFESSIONAL (₹1,099 / 3 months - HIGHLIGHTED) */}
+        <div className="p-5 rounded-2xl bg-slate-900 border-2 border-pink-500/60 flex flex-col justify-between shadow-xl shadow-pink-500/10 relative">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+            <span className="px-3 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-400 to-rose-400 text-slate-950 uppercase tracking-wider shadow-sm">
+              MOST POPULAR
+            </span>
           </div>
-          <div className="flex items-center gap-2 text-slate-700">
-            <Sparkles className="w-4 h-4 text-pink-600 shrink-0" />
-            <span className="font-bold">85% Guaranteed Net Payout</span>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase font-extrabold text-pink-400 tracking-wider">Professional</span>
+              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-300 border border-pink-500/30">
+                3 Months
+              </span>
+            </div>
+            <div className="text-2xl font-extrabold text-amber-400 my-2">
+              ₹{MEMBERSHIP_TIERS.PROFESSIONAL.priceInr.toLocaleString('en-IN')}{' '}
+              <span className="text-xs font-normal text-slate-400">/ 3 months</span>
+            </div>
+            <ul className="text-[11px] text-slate-400 space-y-2 mt-4">
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>90 days active hosting</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="text-pink-300 font-bold">Priority discovery placement</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>85% gross earning share</span>
+              </li>
+            </ul>
           </div>
-          <div className="flex items-center gap-2 text-slate-700">
-            <Smartphone className="w-4 h-4 text-purple-600 shrink-0" />
-            <span className="font-bold">Rapido-Style Live Navigation</span>
-          </div>
+
+          <button
+            type="button"
+            onClick={() => handlePurchasePlan('PROFESSIONAL')}
+            disabled={paymentLoadingPlan !== null}
+            className="mt-6 w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 text-xs font-black disabled:opacity-60 transition-all flex items-center justify-center gap-2 shadow-md shadow-amber-400/20 active:scale-95 cursor-pointer"
+          >
+            {paymentLoadingPlan === 'PROFESSIONAL' ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <>
+                <span>{isNative ? 'Subscribe via Google Play' : 'Subscribe PROFESSIONAL'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </>
+            )}
+          </button>
         </div>
 
-        {/* Google Play Policy Compliance: No external web payment links shown in native app */}
-        {!isNative && (
-          <p className="text-[11px] text-slate-400 italic">
-            * Secured by Razorpay 256-bit SSL encryption. Auto-renews monthly; cancel anytime from your settings.
-          </p>
-        )}
+        {/* 3. PREMIUM (₹5,999 / 1 year) */}
+        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between hover:border-pink-500/50 transition-colors shadow-lg">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase font-extrabold text-slate-400 tracking-wider">Premium</span>
+              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                1 Year
+              </span>
+            </div>
+            <div className="text-2xl font-extrabold text-amber-400 my-2">
+              ₹{MEMBERSHIP_TIERS.PREMIUM.priceInr.toLocaleString('en-IN')}{' '}
+              <span className="text-xs font-normal text-slate-400">/ 1 year</span>
+            </div>
+            <ul className="text-[11px] text-slate-400 space-y-2 mt-4">
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>365 days unlimited hosting</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="text-amber-300 font-bold">VIP verification badge</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Zero renewal interruption</span>
+              </li>
+            </ul>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handlePurchasePlan('PREMIUM')}
+            disabled={paymentLoadingPlan !== null}
+            className="mt-6 w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-black disabled:opacity-60 transition-all flex items-center justify-center gap-2 shadow-md shadow-pink-600/20 active:scale-95 cursor-pointer"
+          >
+            {paymentLoadingPlan === 'PREMIUM' ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <>
+                <span>{isNative ? 'Subscribe via Google Play' : 'Subscribe PREMIUM'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* ─── 2. FIRST-USER 3-MONTH FREE TRIAL OFFER CARD (`FIRST3FREE`) ─── */}
-      {/* ONLY rendered if user has not used free trial; hidden immediately once applied or if already used */}
+      {/* ─── FIRST-USER 3-MONTH FREE COUPON CARD (FIRST3FREE) ─── */}
       {!isFreeTrialUsed && (
-        <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-pink-50/60 border-2 border-amber-300 shadow-sm space-y-4 animate-fade-in">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400 text-slate-950 font-black text-[11px] uppercase tracking-wider shadow-xs">
-                <Gift className="w-3.5 h-3.5" />
-                <span>First User Offer</span>
-              </span>
-              <h4 className="text-base sm:text-lg font-black text-slate-900 pt-1">
-                Activate 3 Months (90 Days) Free Membership!
-              </h4>
-              <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-                Apply code <strong className="text-amber-900 font-black font-mono">FIRST3FREE</strong> for 3 Months Free Membership (First-time registration only).
-              </p>
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-purple-950/40 to-slate-900 border border-pink-500/30 shadow-xl space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-pink-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400 shrink-0">
+                <Gift className="w-5 h-5 text-pink-400" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-pink-400 flex items-center gap-1.5">
+                  <span>First-Time Companion Offer</span>
+                  <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-[10px] text-pink-300 font-bold">
+                    Free 90 Days
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                  Have a promo code? Apply <code className="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 font-mono font-bold">FIRST3FREE</code> to activate 3 Months (90 Days) Starter Membership for FREE!
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Coupon Input Form */}
-          <form onSubmit={handleRedeemCoupon} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+          {couponFeedback && (
+            <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+              couponFeedback.type === 'success'
+                ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                : 'bg-rose-500/10 text-rose-300 border border-rose-500/30'
+            }`}>
+              {couponFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              )}
+              <span>{couponFeedback.message}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleRedeemCoupon} className="flex flex-col sm:flex-row gap-2 pt-1">
             <div className="relative flex-1">
               <input
                 type="text"
                 value={couponCode}
                 onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                placeholder="Enter Code (FIRST3FREE)"
-                className="w-full min-h-[48px] px-4 py-2.5 bg-white border-2 border-amber-300 rounded-xl text-xs sm:text-sm font-mono font-black text-slate-900 uppercase tracking-widest placeholder:text-slate-400 focus:outline-none focus:border-amber-500 shadow-inner"
+                placeholder="Enter promo code (e.g. FIRST3FREE)"
+                disabled={couponLoading}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-pink-500 text-slate-100 placeholder-slate-600 text-xs uppercase font-mono tracking-wider focus:outline-none transition-colors"
               />
-              <button
-                type="button"
-                onClick={() => setCouponCode('FIRST3FREE')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-amber-800 bg-amber-200/80 hover:bg-amber-300 px-2.5 py-1 rounded-lg transition cursor-pointer"
-              >
-                Insert Code
-              </button>
             </div>
-
             <button
               type="submit"
               disabled={couponLoading || !couponCode.trim()}
-              className="min-h-[48px] px-8 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-black text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-black text-xs shadow-md shadow-pink-600/20 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
             >
               {couponLoading ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Verifying...</span>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Validating...</span>
                 </>
               ) : (
-                <span>Apply</span>
+                <>
+                  <span>Apply Code</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
               )}
             </button>
           </form>
-
-          {couponFeedback && (
-            <div className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
-              couponFeedback.type === 'success'
-                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                : 'bg-rose-100 text-rose-900 border border-rose-300'
-            }`}>
-              {couponFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" /> : <AlertCircle className="w-4 h-4 shrink-0 text-rose-700" />}
-              <span>{couponFeedback.message}</span>
-            </div>
-          )}
-
-          <div className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-1">
-            <Lock className="w-3.5 h-3.5 text-slate-400" />
-            <span>Strict Anti-Fraud: Valid once per verified phone number. After 90 days, standard ₹449/mo plan applies.</span>
-          </div>
         </div>
       )}
 
-      {/* ─── 3. REFERRAL REWARD SHORTCUT BANNER ─── */}
-      <div className="p-5 rounded-2xl sm:rounded-3xl bg-purple-50 border border-purple-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <span className="text-xs font-black text-purple-950 block">Want Free Membership Every Month?</span>
-          <p className="text-xs text-slate-600">
-            Invite 5 verified friends to join PairUpToday. Every 5 verified referrals awards you <strong>+30 Days Free Membership</strong> and a <strong>15-Day Profile Boost</strong>!
-          </p>
-        </div>
-        {onNavigateTab && (
-          <button
-            type="button"
-            onClick={() => onNavigateTab('referrals')}
-            className="min-h-[44px] px-5 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-extrabold text-xs shadow-md shadow-purple-700/20 transition-all shrink-0 cursor-pointer active:scale-95"
-          >
-            Refer & Earn →
-          </button>
-        )}
-      </div>
+      {/* ─── PLATFORM-AWARE COMPLIANCE FOOTER NOTE ─── */}
+      <p className="text-center text-[11px] text-slate-500 pt-2">
+        {isNative
+          ? 'All payments are processed securely via Google Play. Your profile will be activated immediately after payment confirmation.'
+          : 'All payments are processed securely via Razorpay. Your profile will be activated immediately after payment confirmation.'}
+      </p>
     </div>
   );
 };

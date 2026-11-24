@@ -1529,7 +1529,7 @@ function invalidateUserCache(userId: string, phone?: string) {
 
 // Strict Column Projections to eliminate Supabase Egress & Disk IO bloat
 const BASE_USER_PROJECTION_COLUMNS = 'id, phone, password_hash, legal_name, email, role, active_role, dob, age, kyc_status, kyc_submitted_at, kyc_decided_at, kyc_decided_by, kyc_rejection_reason, profile_photo, bio, photos, city, state, address, created_at, updated_at, kyc_decided_by_admin_id';
-const USER_PROJECTION_COLUMNS = 'id, phone, password_hash, legal_name, email, role, active_role, dob, age, kyc_status, kyc_submitted_at, kyc_decided_at, kyc_decided_by, kyc_rejection_reason, profile_photo, bio, photos, city, state, address, referral_code, referred_by, successful_referrals_count, has_10_percent_booking_discount, is_companion_active, membership_expiry, membership_type, has_used_free_trial, is_boosted, boost_expiry, has_verified_referrer_badge, created_at, updated_at, kyc_decided_by_admin_id';
+const USER_PROJECTION_COLUMNS = 'id, phone, password_hash, legal_name, email, role, active_role, dob, age, kyc_status, kyc_submitted_at, kyc_decided_at, kyc_decided_by, kyc_rejection_reason, profile_photo, bio, photos, city, state, address, referral_code, referred_by, successful_referrals_count, has_10_percent_booking_discount, is_companion_active, membership_expiry, membership_type, plan_tier, has_vip_badge, has_used_free_trial, is_boosted, boost_expiry, has_verified_referrer_badge, created_at, updated_at, kyc_decided_by_admin_id';
 const KYC_LIST_COLUMNS = 'id, user_id, submission_role, legal_name, dob, id_type, id_reference, status, submitted_at, reviewed_at, rejection_reason, reviewed_by_admin_id, profile_bio, created_at, updated_at';
 const COMPANION_PROFILE_COLUMNS = 'id, user_id, services, rates, availability, is_live, rating, total_bookings, address, state, latitude, longitude, is_initial_listing, is_paused, created_at, updated_at';
 const BOOKING_PROJECTION_COLUMNS = 'id, booking_code, client_id, companion_id, service_id, service_name, booking_date, start_time, end_time, duration_hours, meeting_location, meeting_address, latitude, longitude, notes, amount_paise, status, payment_order_id, payment_id, payment_status, start_otp_hash, completion_otp_hash, start_otp_encrypted, completion_otp_encrypted, companion_arrived_at, started_at, completed_at, delay_minutes, admin_platform_fee_paise, companion_gross_share_paise, companion_net_share_paise, late_penalty_paise, client_refund_penalty_paise, settlement_status, settlement_unlock_at, start_otp_attempts, completion_otp_attempts, start_otp_verified, completion_otp_verified, payout_id, created_at, updated_at';
@@ -1679,6 +1679,8 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       isCompanionActive: user.is_companion_active !== undefined ? !!user.is_companion_active : (user.isCompanionActive !== undefined ? !!user.isCompanionActive : false),
       membershipExpiry: user.membership_expiry || user.membershipExpiry || null,
       membershipType: user.membership_type || user.membershipType || 'none',
+      planTier: user.plan_tier || user.planTier || 'none',
+      hasVipBadge: user.has_vip_badge !== undefined ? !!user.has_vip_badge : (user.hasVipBadge !== undefined ? !!user.hasVipBadge : false),
       hasUsedFreeTrial: user.has_used_free_trial !== undefined ? !!user.has_used_free_trial : (user.hasUsedFreeTrial !== undefined ? !!user.hasUsedFreeTrial : false),
       isBoosted: user.is_boosted !== undefined ? !!user.is_boosted : (user.isBoosted !== undefined ? !!user.isBoosted : false),
       boostExpiry: user.boost_expiry || user.boostExpiry || null,
@@ -1720,6 +1722,10 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
       isCompanionActive: 'is_companion_active',
       membershipExpiry: 'membership_expiry',
       membershipType: 'membership_type',
+      planTier: 'plan_tier',
+      plan_tier: 'plan_tier',
+      hasVipBadge: 'has_vip_badge',
+      has_vip_badge: 'has_vip_badge',
       hasUsedFreeTrial: 'has_used_free_trial',
       isBoosted: 'is_boosted',
       boostExpiry: 'boost_expiry',

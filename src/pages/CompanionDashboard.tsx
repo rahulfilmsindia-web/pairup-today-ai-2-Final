@@ -2145,7 +2145,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         </div>
 
         {/* Activation progress steps */}
-        <div className="max-w-3xl mx-auto w-full px-4 pt-6 pb-8">
+        <div className="max-w-4xl mx-auto w-full px-4 pt-6 pb-8">
           <div className="flex items-center gap-2 text-xs mb-6">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
               <CheckCircle2 className="w-3.5 h-3.5" />

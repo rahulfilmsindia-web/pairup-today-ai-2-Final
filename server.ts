@@ -3063,6 +3063,12 @@ app.post('/api/membership/redeem-coupon', async (req: Request, res: Response) =>
       is_companion_active: true,
       membershipType: 'free_trial',
       membership_type: 'free_trial',
+      planTier: 'free_trial',
+      plan_tier: 'free_trial',
+      isBoosted: false,
+      is_boosted: false,
+      hasVipBadge: false,
+      has_vip_badge: false,
       membershipExpiry: expiry,
       membership_expiry: expiry,
       role: user.role === 'CLIENT' ? 'DUAL' : user.role,
@@ -3090,12 +3096,43 @@ app.post('/api/membership/sync-revenuecat', async (req: Request, res: Response) 
     const user = await databaseAdapter.getUser(userId);
     if (!user) return res.status(404).json({ error: 'User account not found.' });
 
-    const expiry = new Date(Date.now() + 30 * 86400000).toISOString();
+    const reqPlan = String(req.body?.plan || '').toUpperCase();
+    const reqProduct = String(req.body?.productId || '');
+    let targetPlan: 'STARTER' | 'PROFESSIONAL' | 'PREMIUM' = 'STARTER';
+    let durationDays = 30;
+    let planTier = 'starter';
+    let isBoosted = false;
+    let hasVipBadge = false;
+    let pricePaise = 44900;
+
+    if (reqPlan === 'PREMIUM' || reqProduct.includes('premium') || reqProduct.includes('5999')) {
+      targetPlan = 'PREMIUM';
+      durationDays = 365;
+      planTier = 'premium';
+      isBoosted = true;
+      hasVipBadge = true;
+      pricePaise = 599900;
+    } else if (reqPlan === 'PROFESSIONAL' || reqProduct.includes('pro') || reqProduct.includes('1099')) {
+      targetPlan = 'PROFESSIONAL';
+      durationDays = 90;
+      planTier = 'professional';
+      isBoosted = true;
+      hasVipBadge = false;
+      pricePaise = 109900;
+    }
+
+    const expiry = new Date(Date.now() + durationDays * 86400000).toISOString();
     await databaseAdapter.updateUser(userId, {
       isCompanionActive: true,
       is_companion_active: true,
       membershipType: 'paid',
       membership_type: 'paid',
+      planTier,
+      plan_tier: planTier,
+      isBoosted,
+      is_boosted: isBoosted,
+      hasVipBadge,
+      has_vip_badge: hasVipBadge,
       membershipExpiry: expiry,
       membership_expiry: expiry,
       role: user.role === 'CLIENT' ? 'DUAL' : user.role,
@@ -3107,8 +3144,8 @@ app.post('/api/membership/sync-revenuecat', async (req: Request, res: Response) 
         await supabaseDb.companionMemberships().insert({
           id: crypto.randomUUID(),
           user_id: userId,
-          plan: 'STARTER',
-          price_paise: 44900,
+          plan: targetPlan,
+          price_paise: pricePaise,
           start_date: new Date().toISOString(),
           expiry_date: expiry,
           payment_status: 'PAID',
@@ -3847,12 +3884,39 @@ app.post('/api/payments/razorpay/verify-payment', async (req: Request, res: Resp
     }
 
     if (result.record?.userId) {
+      const planName = String(membershipPlan || result.record.plan || result.record.planType || 'STARTER').toUpperCase();
+      let planTier = 'starter';
+      let isBoosted = false;
+      let hasVipBadge = false;
+      let durationDays = 30;
+
+      if (planName === 'PREMIUM') {
+        planTier = 'premium';
+        isBoosted = true;
+        hasVipBadge = true;
+        durationDays = 365;
+      } else if (planName === 'PROFESSIONAL') {
+        planTier = 'professional';
+        isBoosted = true;
+        hasVipBadge = false;
+        durationDays = 90;
+      }
+
+      const calculatedExpiry = result.record.expiryDate || new Date(Date.now() + durationDays * 86400000).toISOString();
+
       databaseAdapter.updateUser(result.record.userId, {
         isCompanionActive: true,
         is_companion_active: true,
         membershipType: 'paid',
         membership_type: 'paid',
-        membershipExpiry: result.record.expiryDate || new Date(Date.now() + 30 * 86400000).toISOString()
+        planTier,
+        plan_tier: planTier,
+        isBoosted,
+        is_boosted: isBoosted,
+        hasVipBadge,
+        has_vip_badge: hasVipBadge,
+        membershipExpiry: calculatedExpiry,
+        membership_expiry: calculatedExpiry
       }).catch(() => null);
     }
 
