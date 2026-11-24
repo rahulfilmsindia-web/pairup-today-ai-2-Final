@@ -4657,50 +4657,15 @@ app.get('/api/companions/search', async (req: Request, res: Response) => {
       .filter((entry): entry is { companion: any; coordinates: { lat: number; lng: number } } => Boolean(entry.coordinates));
     
     if (located.length > 0) {
-      let scoredCompanions: any[] = [];
-      try {
-        if (isGoogleMapsConfigured()) {
-          const distances = await getDistanceMatrix(
-            [searchLocation],
-            located.map(entry => entry.coordinates)
-          );
-          scoredCompanions = located.map((entry, index) => {
-            const result = distances[0]?.[index];
-            if (!result || result.status !== 'OK') {
-              const fallbackDist = Math.round(calculateDistance(searchLocation.lat, searchLocation.lng, entry.coordinates.lat, entry.coordinates.lng) * 10) / 10;
-              return {
-                ...entry.companion,
-                distanceKm: fallbackDist,
-                travelDurationMinutes: Math.round(fallbackDist * 2.5)
-              };
-            }
-            return {
-              ...entry.companion,
-              distanceKm: Math.round(result.distance.value / 100) / 10,
-              travelDurationMinutes: Math.ceil(result.duration.value / 60)
-            };
-          });
-        } else {
-          scoredCompanions = located.map(entry => {
-            const dist = Math.round(calculateDistance(searchLocation.lat, searchLocation.lng, entry.coordinates.lat, entry.coordinates.lng) * 10) / 10;
-            return {
-              ...entry.companion,
-              distanceKm: dist,
-              travelDurationMinutes: Math.round(dist * 2.5)
-            };
-          });
-        }
-      } catch (error) {
-        console.warn('Distance lookup using Haversine fallback:', error);
-        scoredCompanions = located.map(entry => {
-          const dist = Math.round(calculateDistance(searchLocation.lat, searchLocation.lng, entry.coordinates.lat, entry.coordinates.lng) * 10) / 10;
-          return {
-            ...entry.companion,
-            distanceKm: dist,
-            travelDurationMinutes: Math.round(dist * 2.5)
-          };
-        });
-      }
+      // Use zero-cost instant Haversine distance for companion discovery sorting (avoids costly Distance Matrix API calls on every search)
+      const scoredCompanions = located.map(entry => {
+        const dist = Math.round(calculateDistance(searchLocation.lat, searchLocation.lng, entry.coordinates.lat, entry.coordinates.lng) * 10) / 10;
+        return {
+          ...entry.companion,
+          distanceKm: dist,
+          travelDurationMinutes: Math.round(dist * 2.5)
+        };
+      });
 
       // Sort by distance in ascending order so closest companions are at the very top!
       scoredCompanions.sort((a, b) => (a.distanceKm ?? 99999) - (b.distanceKm ?? 99999));
@@ -9511,10 +9476,10 @@ app.post('/api/admin/refund-requests/:id/process', async (req: Request, res: Res
   }
 });
 
-// Check every 60 seconds
+// Check every 5 minutes to minimize idle Supabase queries
 setInterval(() => {
   checkAndAutoCancelExpiredSlots().catch(() => {});
-}, 60000);
+}, 300000);
 
 app.post('/api/bookings/auto-cancel-expired', async (_req: Request, res: Response) => {
   const count = await checkAndAutoCancelExpiredSlots();

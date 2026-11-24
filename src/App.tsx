@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -7,24 +7,25 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { Hero } from './components/Hero';
 import { ServicesGrid } from './components/ServicesGrid';
-import { AboutPage } from './pages/AboutPage';
-import { HowItWorksPage } from './pages/HowItWorksPage';
-import { SafetyTrustPage } from './pages/SafetyTrustPage';
-import { TermsPage } from './pages/TermsPage';
-import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
-import { RefundPolicyPage } from './pages/RefundPolicyPage';
-import { ClientDashboard } from './pages/ClientDashboard';
-import { CompanionDashboard } from './pages/CompanionDashboard';
 import { AuthGatewayModal } from './pages/AuthGatewayModal';
 import { KycWizardModal } from './pages/KycWizardModal';
 import { RoleSelectionModal } from './pages/RoleSelectionModal';
-import { AdminPortal } from './admin/AdminPortal';
 import { ServiceItem } from './constants/services';
 import { CompanionListing } from './components/CompanionListing';
 import { PartnerRecruitmentBanner } from './components/PartnerRecruitmentBanner';
 import { TrustReviewsAndFaq } from './components/TrustReviewsAndFaq';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalCompanionAlertManager } from './components/GlobalCompanionAlertManager';
+
+const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })));
+const HowItWorksPage = lazy(() => import('./pages/HowItWorksPage').then(m => ({ default: m.HowItWorksPage })));
+const SafetyTrustPage = lazy(() => import('./pages/SafetyTrustPage').then(m => ({ default: m.SafetyTrustPage })));
+const TermsPage = lazy(() => import('./pages/TermsPage').then(m => ({ default: m.TermsPage })));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then(m => ({ default: m.PrivacyPolicyPage })));
+const RefundPolicyPage = lazy(() => import('./pages/RefundPolicyPage').then(m => ({ default: m.RefundPolicyPage })));
+const ClientDashboard = lazy(() => import('./pages/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
+const CompanionDashboard = lazy(() => import('./pages/CompanionDashboard').then(m => ({ default: m.CompanionDashboard })));
+const AdminPortal = lazy(() => import('./admin/AdminPortal').then(m => ({ default: m.AdminPortal })));
 import { apiFetch } from './utils/api';
 import { AlertTriangle, PowerOff, Loader2, ShieldAlert, Compass, CalendarCheck, Gift, User } from 'lucide-react';
 import { captureReferralFromUrl } from './services/referralService';
@@ -487,7 +488,9 @@ const MainAppContent: React.FC = () => {
   if (isAdminHostMode) {
     return (
       <div className="w-full min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden">
-        <AdminPortal />
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading Admin Desk...</div>}>
+          <AdminPortal />
+        </Suspense>
       </div>
     );
   }
@@ -563,7 +566,9 @@ const MainAppContent: React.FC = () => {
 
         {/* Dynamic Page Content */}
         <main className={`flex-1 w-full overflow-x-hidden ${isNative ? 'pb-20' : ''}`}>
-          {renderCustomerPage()}
+          <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-slate-400 text-sm">Loading...</div>}>
+            {renderCustomerPage()}
+          </Suspense>
         </main>
 
         {/* Footer on Web public pages only (Hidden on Native App for true mobile feel) */}

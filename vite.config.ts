@@ -20,6 +20,19 @@ export default defineConfig(() => {
           main: path.resolve(rootDir, 'index.html'),
           admin: path.resolve(rootDir, 'admin.html'),
         },
+        output: {
+          manualChunks: (id) => {
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('node_modules/lucide-react')) {
+              return 'vendor-icons';
+            }
+            if (id.includes('node_modules/motion')) {
+              return 'vendor-motion';
+            }
+          },
+        },
       },
     },
     server: {
