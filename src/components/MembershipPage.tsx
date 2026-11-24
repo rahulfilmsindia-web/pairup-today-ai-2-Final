@@ -108,9 +108,9 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
       );
 
       if (result.success) {
-        setCouponFeedback({
+        setPaymentFeedback({
           type: 'success',
-          message: result.message || 'Congratulations! 3 Months Free Companion Membership activated!'
+          message: result.message || '🎉 Congratulations! 3 Months Free Companion Membership activated successfully!'
         });
         setReferralData(prev => ({
           ...prev,
@@ -259,19 +259,20 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
       </div>
 
       {/* ─── 2. FIRST-USER 3-MONTH FREE TRIAL OFFER CARD (`FIRST3FREE`) ─── */}
-      {!isFreeTrialUsed ? (
-        <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-pink-50/60 border-2 border-amber-300 shadow-sm space-y-4">
+      {/* ONLY rendered if user has not used free trial; hidden immediately once applied or if already used */}
+      {!isFreeTrialUsed && (
+        <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-pink-50/60 border-2 border-amber-300 shadow-sm space-y-4 animate-fade-in">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400 text-slate-950 font-black text-[11px] uppercase tracking-wider shadow-xs">
                 <Gift className="w-3.5 h-3.5" />
-                <span>Special First-User Offer</span>
+                <span>First User Offer</span>
               </span>
               <h4 className="text-base sm:text-lg font-black text-slate-900 pt-1">
                 Activate 3 Months (90 Days) Free Membership!
               </h4>
               <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-                New companions can experience PairUpToday 100% free for 90 days. Apply code <strong className="text-amber-900 font-black font-mono">FIRST3FREE</strong> to unlock full hosting privileges immediately.
+                Apply code <strong className="text-amber-900 font-black font-mono">FIRST3FREE</strong> for 3 Months Free Membership (First-time registration only).
               </p>
             </div>
           </div>
@@ -298,7 +299,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
             <button
               type="submit"
               disabled={couponLoading || !couponCode.trim()}
-              className="min-h-[48px] px-6 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-black text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+              className="min-h-[48px] px-8 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-black text-xs sm:text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
             >
               {couponLoading ? (
                 <>
@@ -306,7 +307,7 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
                   <span>Verifying...</span>
                 </>
               ) : (
-                <span>Apply Offer</span>
+                <span>Apply</span>
               )}
             </button>
           </form>
@@ -326,15 +327,6 @@ export const MembershipPage: React.FC<MembershipPageProps> = ({
             <Lock className="w-3.5 h-3.5 text-slate-400" />
             <span>Strict Anti-Fraud: Valid once per verified phone number. After 90 days, standard ₹449/mo plan applies.</span>
           </div>
-        </div>
-      ) : (
-        /* If trial already redeemed, show clean locked card */
-        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-500 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span className="font-semibold">First-user 3-month free trial offer has been utilized for this phone number.</span>
-          </div>
-          <span className="text-[11px] font-bold text-slate-400">Locked</span>
         </div>
       )}
 
