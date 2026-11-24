@@ -8,7 +8,7 @@ import crypto from 'crypto';
 import { sendApitxtOtp, verifyApitxtBankAccount, compareLegalAndBankNames, formatPhoneForApitxt, isApitxtConfigured } from './server/services/apitxt.ts';
 import { createRazorpayOrder, createRazorpayRefund, fetchRazorpayPayment, fetchRazorpayPaymentRefunds, verifyRazorpayPaymentSignature, verifyRazorpayWebhookSignature } from './server/services/razorpay.ts';
 import { databaseAdapter, getDatabaseType, type OtpReservation } from './server/services/database.ts';
-import { db, supabase, isSupabaseConfigured } from './server/services/supabase.ts';
+import { db as supabaseDb, supabase, isSupabaseConfigured } from './server/services/supabase.ts';
 import { updateUserLocation, getUserLocation, startLocationSharing, stopLocationSharing, setUserPresence, getUserPresence, isFirebaseConfigured } from './server/services/firebase.ts';
 import { sendToMultipleDevices } from './server/services/fcm.ts';
 import { getPlaceAutocomplete, geocodeAddress, reverseGeocode, getDistanceMatrix, calculateDistance, isGoogleMapsConfigured, getDirectionsRoute } from './server/services/googlemaps.ts';
@@ -3027,7 +3027,7 @@ app.post('/api/membership/redeem-coupon', async (req: Request, res: Response) =>
     if (getDatabaseType() === 'supabase') {
       // Check used_trial_phones table
       try {
-        const { data: usedPhone } = await db.usedTrialPhones().select('phone').eq('phone', userPhone).maybeSingle();
+        const { data: usedPhone } = await supabaseDb.usedTrialPhones().select('phone').eq('phone', userPhone).maybeSingle();
         if (usedPhone) {
           return res.status(400).json({ error: 'This phone number has already redeemed the first-user free trial offer.' });
         }
@@ -3035,7 +3035,7 @@ app.post('/api/membership/redeem-coupon', async (req: Request, res: Response) =>
 
       // Try RPC if migration 012 applied
       try {
-        const { data: rpcRes, error: rpcErr } = await db.rpc('redeem_first_user_coupon', {
+        const { data: rpcRes, error: rpcErr } = await supabaseDb.rpc('redeem_first_user_coupon', {
           p_user_id: userId,
           p_phone: userPhone,
           p_code: rawCode
@@ -3050,7 +3050,7 @@ app.post('/api/membership/redeem-coupon', async (req: Request, res: Response) =>
 
       // Direct write fallback
       try {
-        await db.usedTrialPhones().insert({ phone: userPhone, used_at: new Date().toISOString() });
+        await supabaseDb.usedTrialPhones().insert({ phone: userPhone, used_at: new Date().toISOString() });
       } catch (_) {}
     }
 
@@ -3104,7 +3104,7 @@ app.post('/api/membership/sync-revenuecat', async (req: Request, res: Response) 
 
     if (getDatabaseType() === 'supabase') {
       try {
-        await db.companionMemberships().insert({
+        await supabaseDb.companionMemberships().insert({
           id: crypto.randomUUID(),
           user_id: userId,
           plan: 'STARTER',
@@ -3149,7 +3149,7 @@ app.post('/api/referrals/apply-code', async (req: Request, res: Response) => {
     // Look up referrer by referral_code
     let referrer: any = null;
     if (getDatabaseType() === 'supabase') {
-      const { data: refData } = await db.users().select('id, phone, legal_name, role, successful_referrals_count').ilike('referral_code', code).maybeSingle();
+      const { data: refData } = await supabaseDb.users().select('id, phone, legal_name, role, successful_referrals_count').ilike('referral_code', code).maybeSingle();
       referrer = refData;
     } else {
       const all = await databaseAdapter.listUsers();
@@ -3169,7 +3169,7 @@ app.post('/api/referrals/apply-code', async (req: Request, res: Response) => {
     // Record pending referral in referrals table
     if (getDatabaseType() === 'supabase') {
       try {
-        await db.referrals().insert({
+        await supabaseDb.referrals().insert({
           id: crypto.randomUUID(),
           referrer_id: referrer.id,
           referee_id: userId,
@@ -3212,7 +3212,7 @@ app.get('/api/referrals/my-status', async (req: Request, res: Response) => {
     // Check if phone used free trial
     let phoneUsedTrial = !!user.hasUsedFreeTrial;
     if (!phoneUsedTrial && user.phone && getDatabaseType() === 'supabase') {
-      const { data: utp } = await db.usedTrialPhones().select('phone').eq('phone', user.phone).maybeSingle().catch(() => ({ data: null }));
+      const { data: utp } = await supabaseDb.usedTrialPhones().select('phone').eq('phone', user.phone).maybeSingle().catch(() => ({ data: null }));
       if (utp) phoneUsedTrial = true;
     }
 
@@ -3222,7 +3222,7 @@ app.get('/api/referrals/my-status', async (req: Request, res: Response) => {
 
     if (getDatabaseType() === 'supabase') {
       try {
-        const { data: refs } = await db.referrals().select('id, referee_id, role, status, created_at, verified_at').eq('referrer_id', userId).order('created_at', { ascending: false });
+        const { data: refs } = await supabaseDb.referrals().select('id, referee_id, role, status, created_at, verified_at').eq('referrer_id', userId).order('created_at', { ascending: false });
         if (refs && refs.length > 0) {
           referralsList = refs.map((r: any) => ({
             id: r.id,

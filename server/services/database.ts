@@ -1528,6 +1528,7 @@ function invalidateUserCache(userId: string, phone?: string) {
 }
 
 // Strict Column Projections to eliminate Supabase Egress & Disk IO bloat
+const BASE_USER_PROJECTION_COLUMNS = 'id, phone, password_hash, legal_name, email, role, active_role, dob, age, kyc_status, kyc_submitted_at, kyc_decided_at, kyc_decided_by, kyc_rejection_reason, profile_photo, bio, photos, city, state, address, created_at, updated_at, kyc_decided_by_admin_id';
 const USER_PROJECTION_COLUMNS = 'id, phone, password_hash, legal_name, email, role, active_role, dob, age, kyc_status, kyc_submitted_at, kyc_decided_at, kyc_decided_by, kyc_rejection_reason, profile_photo, bio, photos, city, state, address, referral_code, referred_by, successful_referrals_count, has_10_percent_booking_discount, is_companion_active, membership_expiry, membership_type, has_used_free_trial, is_boosted, boost_expiry, has_verified_referrer_badge, created_at, updated_at, kyc_decided_by_admin_id';
 const KYC_LIST_COLUMNS = 'id, user_id, submission_role, legal_name, dob, id_type, id_reference, status, submitted_at, reviewed_at, rejection_reason, reviewed_by_admin_id, profile_bio, created_at, updated_at';
 const COMPANION_PROFILE_COLUMNS = 'id, user_id, services, rates, availability, is_live, rating, total_bookings, address, state, latitude, longitude, is_initial_listing, is_paused, created_at, updated_at';
@@ -1543,7 +1544,12 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     const cached = userCacheById.get(id);
     if (cached && Date.now() < cached.expiresAt) return cached.user;
     try {
-      const { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('id', id).maybeSingle();
+      let { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('id', id).maybeSingle();
+      if (error && (error.code === '42703' || String(error.message).includes('column') || error.message?.includes('referral_code'))) {
+        const fallback = await db.users().select(BASE_USER_PROJECTION_COLUMNS).eq('id', id).maybeSingle();
+        data = fallback.data;
+        error = fallback.error;
+      }
       if (error) throw error;
       const user = data ? this.mapUser(data) : null;
       if (user) cacheUser(user);
@@ -1563,7 +1569,12 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
     const cached = userCacheByPhone.get(phone);
     if (cached && Date.now() < cached.expiresAt) return cached.user;
     try {
-      const { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('phone', phone).maybeSingle();
+      let { data, error } = await db.users().select(USER_PROJECTION_COLUMNS).eq('phone', phone).maybeSingle();
+      if (error && (error.code === '42703' || String(error.message).includes('column') || error.message?.includes('referral_code'))) {
+        const fallback = await db.users().select(BASE_USER_PROJECTION_COLUMNS).eq('phone', phone).maybeSingle();
+        data = fallback.data;
+        error = fallback.error;
+      }
       if (error) throw error;
       const user = data ? this.mapUser(data) : null;
       if (user) cacheUser(user);
@@ -1775,6 +1786,17 @@ class SupabaseDatabaseAdapter implements DatabaseAdapter {
           delete fallbackUpdates.warning_count;
           delete fallbackUpdates.last_warning_reason;
           delete fallbackUpdates.last_warning_at;
+          delete fallbackUpdates.referral_code;
+          delete fallbackUpdates.referred_by;
+          delete fallbackUpdates.successful_referrals_count;
+          delete fallbackUpdates.has_10_percent_booking_discount;
+          delete fallbackUpdates.is_companion_active;
+          delete fallbackUpdates.membership_expiry;
+          delete fallbackUpdates.membership_type;
+          delete fallbackUpdates.has_used_free_trial;
+          delete fallbackUpdates.is_boosted;
+          delete fallbackUpdates.boost_expiry;
+          delete fallbackUpdates.has_verified_referrer_badge;
           let retry = await db.users().update(fallbackUpdates).eq('id', id).select().maybeSingle();
           if (retry.error && (retry.error.code === '42703' || String(retry.error.message).includes('column'))) {
             // Progressively strip non-core columns if they trigger missing column errors
