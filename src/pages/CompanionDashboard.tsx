@@ -2145,7 +2145,7 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
         </div>
 
         {/* Activation progress steps */}
-        <div className="max-w-3xl mx-auto w-full px-4 pt-8 pb-2">
+        <div className="max-w-3xl mx-auto w-full px-4 pt-6 pb-8">
           <div className="flex items-center gap-2 text-xs mb-6">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -2163,91 +2163,12 @@ export const CompanionDashboard: React.FC<CompanionDashboardProps> = ({ onNaviga
             </div>
           </div>
 
-          <div className="text-center mb-8">
-            <h2 className="text-xl font-extrabold text-slate-100 mb-1">Choose Your Membership Plan</h2>
-            <p className="text-slate-400 text-xs max-w-md mx-auto">
-              A paid membership is mandatory before you can receive bookings. Select a plan below to activate your Companion profile on PairUp Verified Network.
-            </p>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-2xl">
+            <MembershipPage
+              user={user}
+              onMembershipUpdated={refreshUserData}
+            />
           </div>
-
-          {actionMsg && (
-            <div className="mb-4 p-3 rounded-xl bg-pink-500/10 border border-pink-500/30 text-xs text-pink-300 flex items-center justify-between">
-              <span>{actionMsg}</span>
-              <button onClick={() => setActionMsg(null)}><X className="w-4 h-4" /></button>
-            </div>
-          )}
-
-          {/* 3 membership plan cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* STARTER */}
-            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between hover:border-pink-500/50 transition-colors">
-              <div>
-                <span className="text-xs uppercase font-bold text-slate-400">Starter</span>
-                <div className="text-2xl font-extrabold text-amber-400 my-2">₹449 <span className="text-xs font-normal text-slate-400">/ 1 month</span></div>
-                <ul className="text-[11px] text-slate-400 space-y-1.5 mt-3">
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> 30 days active hosting profile</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> Listed on PairUp Verified Network</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> 85% gross earning share</li>
-                </ul>
-              </div>
-              <button
-                onClick={() => handleSubscribePlan('STARTER')}
-                disabled={subscribingPlan !== null}
-                className="mt-5 w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold disabled:opacity-60 transition-colors"
-              >
-                {subscribingPlan === 'STARTER' ? 'Processing...' : 'Subscribe STARTER'}
-              </button>
-            </div>
-
-            {/* PROFESSIONAL (highlighted) */}
-            <div className="p-5 rounded-2xl bg-slate-900 border-2 border-pink-500/60 flex flex-col justify-between shadow-xl shadow-pink-500/10 relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="px-3 py-0.5 rounded-full text-[10px] font-extrabold bg-gradient-to-r from-amber-400 to-rose-400 text-slate-950">
-                  MOST POPULAR
-                </span>
-              </div>
-              <div>
-                <span className="text-xs uppercase font-bold text-pink-400">Professional</span>
-                <div className="text-2xl font-extrabold text-amber-400 my-2">₹1,099 <span className="text-xs font-normal text-slate-400">/ 3 months</span></div>
-                <ul className="text-[11px] text-slate-400 space-y-1.5 mt-3">
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> 90 days active hosting</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> Priority discovery placement</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> 85% gross earning share</li>
-                </ul>
-              </div>
-              <button
-                onClick={() => handleSubscribePlan('PROFESSIONAL')}
-                disabled={subscribingPlan !== null}
-                className="mt-5 w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-500 hover:to-rose-500 text-slate-950 font-extrabold disabled:opacity-60 transition-colors"
-              >
-                {subscribingPlan === 'PROFESSIONAL' ? 'Processing...' : 'Subscribe PROFESSIONAL'}
-              </button>
-            </div>
-
-            {/* PREMIUM */}
-            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between hover:border-pink-500/50 transition-colors">
-              <div>
-                <span className="text-xs uppercase font-bold text-slate-400">Premium</span>
-                <div className="text-2xl font-extrabold text-amber-400 my-2">₹5,999 <span className="text-xs font-normal text-slate-400">/ 1 year</span></div>
-                <ul className="text-[11px] text-slate-400 space-y-1.5 mt-3">
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> 365 days unlimited hosting</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> VIP verification badge</li>
-                  <li className="flex items-center gap-1.5"><Check className="w-3 h-3 text-emerald-400 flex-shrink-0" /> Zero renewal interruption</li>
-                </ul>
-              </div>
-              <button
-                onClick={() => handleSubscribePlan('PREMIUM')}
-                disabled={subscribingPlan !== null}
-                className="mt-5 w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold disabled:opacity-60 transition-colors"
-              >
-                {subscribingPlan === 'PREMIUM' ? 'Processing...' : 'Subscribe PREMIUM'}
-              </button>
-            </div>
-          </div>
-
-          <p className="text-center text-[11px] text-slate-600 mt-6">
-            All payments are processed securely via Razorpay. Your profile will be activated immediately after payment confirmation.
-          </p>
         </div>
       </div>
     );

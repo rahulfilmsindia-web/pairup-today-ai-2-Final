@@ -411,3 +411,36 @@ export const payForInPersonBooking = async (
     };
   }
 };
+
+export interface BookingCheckoutParams {
+  orderId: string;
+  amountPaise: number;
+  currency?: string;
+  keyId: string;
+  description: string;
+  prefill?: { name?: string; email?: string; contact?: string };
+  has10PercentDiscount?: boolean;
+  isTestMode?: boolean;
+}
+
+/**
+ * Universal Booking Payment Checkout function.
+ * Seamlessly routes to native capacitor-razorpay on Android / iOS,
+ * and standard Razorpay checkout.js on Web browsers.
+ */
+export const openBookingPaymentCheckout = async (
+  params: BookingCheckoutParams
+) => {
+  return openRazorpayCheckout(
+    {
+      orderId: params.orderId,
+      amountPaise: params.amountPaise,
+      currency: params.currency || 'INR',
+      keyId: params.keyId,
+      isTestMode: params.isTestMode
+    },
+    params.description,
+    params.prefill
+  );
+};
+

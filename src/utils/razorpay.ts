@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core';
+import { Checkout } from 'capacitor-razorpay';
+
 export interface RazorpayOrder {
   orderId: string;
   amountPaise: number;
@@ -6,7 +9,7 @@ export interface RazorpayOrder {
   isTestMode?: boolean;
 }
 
-interface RazorpaySuccessResponse {
+export interface RazorpaySuccessResponse {
   razorpay_order_id: string;
   razorpay_payment_id: string;
   razorpay_signature: string;
@@ -94,6 +97,39 @@ export async function openRazorpayCheckout(
   if (!effectiveKeyId || !effectiveOrderId || !Number.isSafeInteger(effectiveAmount) || effectiveAmount <= 0) {
     throw new Error('The server returned invalid Razorpay checkout details.');
   }
+
+  // ─── Native Android / iOS App Checkout (via capacitor-razorpay) ───
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const nativeOptions = {
+        key: effectiveKeyId,
+        amount: String(effectiveAmount),
+        name: 'PairUpToday In-Person Service',
+        description,
+        order_id: effectiveOrderId,
+        currency: order.currency || 'INR',
+        prefill: {
+          name: prefill?.name || '',
+          email: prefill?.email || '',
+          contact: prefill?.contact || ''
+        },
+        theme: {
+          color: '#6D28D9'
+        }
+      };
+      const result = await Checkout.open(nativeOptions as any);
+      const parsed = typeof result?.response === 'string' ? JSON.parse(result.response) : result;
+      return {
+        razorpay_order_id: parsed?.razorpay_order_id || effectiveOrderId,
+        razorpay_payment_id: parsed?.razorpay_payment_id || '',
+        razorpay_signature: parsed?.razorpay_signature || ''
+      };
+    } catch (nativeErr: any) {
+      throw new Error(nativeErr?.message || 'In-app booking payment checkout was cancelled or failed.');
+    }
+  }
+
+  // ─── Standard Web Browser Checkout (via Razorpay checkout.js) ───
   await loadRazorpayCheckout();
   const Razorpay = window.Razorpay;
   if (!Razorpay) throw new Error('Razorpay checkout did not initialize.');

@@ -1228,7 +1228,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigateToPa
           bookingId: booking.id,
           orderId: checkoutResult.razorpay_order_id,
           paymentId: checkoutResult.razorpay_payment_id,
-          signature: checkoutResult.razorpay_signature
+          signature: checkoutResult.razorpay_signature,
+          has10PercentDiscount: hasDiscount
         })
       });
       const verification = await verifyRes.json();
