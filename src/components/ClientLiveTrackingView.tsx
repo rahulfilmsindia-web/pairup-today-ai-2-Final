@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
 import { getRealtimeClient } from '../utils/supabaseRealtime';
 import { 

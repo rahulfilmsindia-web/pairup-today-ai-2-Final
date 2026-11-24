@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/api';
 import { Bell, Check, X, MapPin, Calendar, Clock, DollarSign, AlertCircle } from 'lucide-react';
