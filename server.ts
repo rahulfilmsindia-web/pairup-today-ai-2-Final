@@ -9244,7 +9244,14 @@ async function startServer() {
       immutable: true
     }));
     app.use(express.static(distDir, {
-      maxAge: '1h'
+      maxAge: '1h',
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+      }
     }));
     app.get('*', (req, res) => {
       if (req.path.startsWith('/api') || req.originalUrl.startsWith('/api')) {
